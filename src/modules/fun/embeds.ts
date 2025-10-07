@@ -62,10 +62,12 @@ export default class Embeds extends GargoyleModule {
 
         let metaTags = '';
 
-        if (title) metaTags += `<meta property="og:title" content="${title}">\n`;
-        if (description) metaTags += `<meta property="og:description" content="${description}">\n`;
+        if (title) metaTags += `<meta property="og:title" content="${title}">\n<meta name="twitter:title" content="${title}">\n`;
+        if (description)
+            metaTags += `<meta property="og:description" content="${description}">\n<meta name="twitter:description" content="${description}">\n`;
         if (embedUrl) metaTags += `<meta property="og:url" content="${embedUrl}">\n`;
-        if (image) metaTags += `<meta property="og:image" content="${image}">\n<meta name="twitter:image:src" content="${image}">\n`;
+        if (image)
+            metaTags += `<meta property="og:image" content="${image}">\n<meta name="twitter:card" content="summary_large_image">\n<meta name="twitter:image:src" content="${image}">\n`;
         if (thumbnail) metaTags += `<meta property="og:image" content="${thumbnail}">\n`;
         if (color) metaTags += `<meta name="theme-color" content="${color}">\n`;
         if (author) metaTags += `<meta name="author" content="${author}">\n`;
@@ -76,6 +78,11 @@ export default class Embeds extends GargoyleModule {
         <head>
         ${metaTags}
         <title>${title || 'Embed'}</title>
+        <script>
+            setTimeout(function() {
+            window.location.href = "https://ceraia.com";
+            }, 2000);
+        </script>
         </head>
         <body>
         <p>This page is for generating Discord embeds.</p>
