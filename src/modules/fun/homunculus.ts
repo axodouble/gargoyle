@@ -28,6 +28,7 @@ class HomunculusMessageInteraction extends GargoyleEvent {
 
     public override event = Events.MessageCreate as const;
     public async execute(client: GargoyleClient, message: Message) {
+        if (!this.hasOllama) return;
         if (process.env.OLLAMA_API_ENDPOINT === undefined) {
             if (this.hasOllama) {
                 client.logger.info('OLLAMA_API_ENDPOINT is not defined, disabling Homunculus module.');
