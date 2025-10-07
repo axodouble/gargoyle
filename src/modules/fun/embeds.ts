@@ -65,8 +65,8 @@ export default class Embeds extends GargoyleModule {
         if (title) metaTags += `<meta property="og:title" content="${title}">\n`;
         if (description) metaTags += `<meta property="og:description" content="${description}">\n`;
         if (embedUrl) metaTags += `<meta property="og:url" content="${embedUrl}">\n`;
-        if (image) metaTags += `<meta property="og:image" content="${image}">\n`;
-        if (thumbnail) metaTags += `<meta property="og:image" content="${thumbnail}">\n`; // Discord uses og:image for both
+        if (image) metaTags += `<meta property="og:image" content="${image}">\n<meta name="twitter:image:src" content="${image}">\n`;
+        if (thumbnail) metaTags += `<meta property="og:image" content="${thumbnail}">\n`;
         if (color) metaTags += `<meta name="theme-color" content="${color}">\n`;
         if (author) metaTags += `<meta name="author" content="${author}">\n`;
         if (footer) metaTags += `<meta name="footer" content="${footer}">\n`;
