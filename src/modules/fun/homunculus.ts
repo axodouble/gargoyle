@@ -5,15 +5,33 @@ import GargoyleModule from '@src/system/backend/classes/gargoyleModule.js';
 import { Events, Message, TextChannel } from 'discord.js';
 import { Ollama } from 'ollama';
 
-export default class Fun extends GargoyleModule {
+export default class Homunculus extends GargoyleModule {
     public override category: string = 'fun';
     public override slashCommands: GargoyleSlashCommandBuilder[] = [];
-    public override events: GargoyleEvent[] = [new HomunculusMessageInteraction()];
+    private client: GargoyleClient | undefined = undefined;
+    public override init(client: GargoyleClient): void {
+        this.client = client;
+    }
+    public override events: GargoyleEvent[] = [new HomunculusMessageInteraction(this.client)];
 }
 
 class HomunculusMessageInteraction extends GargoyleEvent {
     private ollama = new Ollama({ host: process.env.OLLAMA_API_ENDPOINT });
     private brain: Map<string, OllamaMessage[]> = new Map();
+
+    constructor(client?: GargoyleClient) {
+        super();
+        if (process.env.OLLAMA_API_ENDPOINT === undefined || process.env.OLLAMA_API_ENDPOINT === '') {
+            client?.logger.info('OLLAMA_API_ENDPOINT is not defined, disabling Homunculus module.');
+            this.hasOllama = false;
+            return;
+        }
+        if (process.env.OLLAMA_MODEL === undefined || process.env.OLLAMA_MODEL === '') {
+            client?.logger.info('OLLAMA_MODEL is not defined, disabling Homunculus module.');
+            this.hasOllama = false;
+            return;
+        }
+    }
 
     private systemPrompt =
         `You are called Homunculus, you know nothing and should speak like a little homunculus.` +
@@ -27,14 +45,10 @@ class HomunculusMessageInteraction extends GargoyleEvent {
     private hasOllama = true;
 
     public override event = Events.MessageCreate as const;
+
     public async execute(client: GargoyleClient, message: Message) {
         if (!this.hasOllama) return;
-        if (process.env.OLLAMA_API_ENDPOINT === undefined) {
-            if (this.hasOllama) {
-                client.logger.info('OLLAMA_API_ENDPOINT is not defined, disabling Homunculus module.');
-                this.hasOllama = false;
-            }
-        }
+
         if (!message.mentions.has(client.user!) || message.author.bot) return;
 
         const messageContent = message.content.replaceAll('<@' + client.user!.id + '>', '').trim();
