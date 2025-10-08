@@ -23,14 +23,14 @@ export default class Ping extends GargoyleModule {
         const start = Date.now();
         await interaction.reply('Pong!');
         const end = Date.now();
-        await interaction.editReply(`Pong! Latency is ${end - start}ms.`);
+        await interaction.editReply(`Pong! API latency is ${end - start}ms.`);
     }
 
     public override executeTextCommand(_client: GargoyleClient, message: Message) {
         (message.channel as TextChannel).send('Pong!').then((sentMessage) => {
             const start = message.createdTimestamp;
             const end = sentMessage.createdTimestamp;
-            sentMessage.edit(`Pong! Latency is ${end - start}ms.`);
+            sentMessage.edit(`Pong! API latency is ${end - start}ms.`);
         });
     }
 }
