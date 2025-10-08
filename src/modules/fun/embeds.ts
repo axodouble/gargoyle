@@ -46,19 +46,42 @@ export default class Embeds extends GargoyleModule {
         });
     }
 
-    public override executeApiRequest(_client: GargoyleClient, _request: Request): Promise<Response> {
+    private escapeHtml(unsafe: string): string {
+        return unsafe.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+
+    private isValidHexColor(color: string): boolean {
+        return /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(color);
+    }
+
+    private isValidUrl(url: string): boolean {
+        try {
+            new URL(url);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    public override executeApiRequest(_client: GargoyleClient, request: Request): Promise<Response> {
         // https://gargoyle.axodouble.com/api/embeds/?title=&description=&color=&url=&footer=&image=&thumbnail=&author=
-        const url = new URL(_request.url);
+        const url = new URL(request.url);
         const params = url.searchParams;
 
-        const title = params.get('title') ?? '';
-        const description = params.get('description') ?? '';
-        const color = params.get('color') ?? '';
-        const embedUrl = params.get('url') ?? '';
-        const footer = params.get('footer') ?? '';
-        const image = params.get('image') ?? '';
-        const thumbnail = params.get('thumbnail') ?? '';
-        const author = params.get('author') ?? '';
+        let title = this.escapeHtml(params.get('title') ?? '');
+        let description = this.escapeHtml(params.get('description') ?? '');
+        let color = this.isValidHexColor(this.escapeHtml(params.get('color') ?? '')) ? this.escapeHtml(params.get('color') ?? '') : undefined;
+        let embedUrl = this.escapeHtml(params.get('url') ?? '');
+        let footer = this.escapeHtml(params.get('footer') ?? '');
+        let image = this.escapeHtml(params.get('image') ?? '');
+        let thumbnail = this.escapeHtml(params.get('thumbnail') ?? '');
+        let author = this.escapeHtml(params.get('author') ?? '');
+
+        if (embedUrl && !this.isValidUrl(embedUrl)) embedUrl = '';
+        if (image && !this.isValidUrl(image)) image = '';
+        if (thumbnail && !this.isValidUrl(thumbnail)) thumbnail = '';
+
+        if (color && !this.isValidHexColor(color)) color = '';
 
         let metaTags = '';
 

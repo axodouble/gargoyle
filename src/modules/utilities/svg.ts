@@ -12,7 +12,7 @@ import {
 } from 'discord.js';
 
 export default class Ceraia extends GargoyleModule {
-    public override category: string = 'ceraia';
+    public override category: string = 'utilities';
     public override slashCommands = [
         new GargoyleSlashCommandBuilder()
             .setName('svg')
