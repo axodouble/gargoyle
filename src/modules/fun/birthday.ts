@@ -516,20 +516,8 @@ export default class Birthday extends GargoyleModule {
         await interaction.reply({ content: 'Unknown button action.', flags: MessageFlags.Ephemeral });
     }
 
-    private async getBirthdayUsers(client: GargoyleClient) {
-        return await databaseUserBirthdays
-            .find({
-                month: new Date().getUTCMonth(),
-                day: new Date().getUTCDate()
-            })
-            .catch((err: Error) => {
-                client.logger.error(`Failed to fetch birthday users: ${err.stack}`);
-                return [];
-            });
-    }
-
     private async getGuildBirthdays(client: GargoyleClient, guild: Guild): Promise<GuildMember[]> {
-        const birthdayUsers = await this.getBirthdayUsers(client);
+        const birthdayUsers = await getBirthdayUsers(client);
         if (!birthdayUsers || birthdayUsers.length === 0) return [];
 
         const members: GuildMember[] = [];
@@ -642,6 +630,18 @@ export default class Birthday extends GargoyleModule {
             30 * 60 * 1000
         );
     }
+}
+
+export async function getBirthdayUsers(client: GargoyleClient) {
+    return await databaseUserBirthdays
+        .find({
+            month: new Date().getUTCMonth(),
+            day: new Date().getUTCDate()
+        })
+        .catch((err: Error) => {
+            client.logger.error(`Failed to fetch birthday users: ${err.stack}`);
+            return [];
+        });
 }
 
 const birthdayUserSchema = new Schema({
