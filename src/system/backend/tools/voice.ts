@@ -33,7 +33,7 @@ export async function playAudio(client: GargoyleClient, channel: VoiceChannel, m
         }
     });
 
-    const filePath = join(process.cwd(), 'media', media);
+    const filePath = join(process.cwd(), 'media', 'audio', media);
     const resource = createAudioResource(createReadStream(filePath));
     player.play(resource);
     connection.subscribe(player);
