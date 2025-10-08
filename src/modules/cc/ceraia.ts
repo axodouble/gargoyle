@@ -7,7 +7,7 @@ import GargoyleModule from '@src/system/backend/classes/gargoyleModule.js';
 import GargoyleEvent from '@src/system/backend/classes/gargoyleEvent.js';
 import { createBanner, FontWeight } from '@src/system/backend/tools/banners.js';
 import client from '@src/system/botClient.js';
-import { createCanvas, Image, registerFont } from 'canvas';
+import { createCanvas, Image } from 'canvas';
 import {
     ActionRowBuilder,
     AnySelectMenuInteraction,
@@ -40,8 +40,6 @@ import {
     User
 } from 'discord.js';
 import { model, Schema } from 'mongoose';
-import { readdirSync } from 'node:fs';
-import path from 'node:path';
 import Emojis from '@src/system/backend/tools/emojis.js';
 
 const ceraiaGuild = '1394893354763817040'; // Ceraia guild ID
@@ -1109,51 +1107,3 @@ async function createCommissionaryCommission(commissionData: {
     const commission = new databaseCommissionaryCommission(commissionData);
     return await commission.save();
 }
-
-function registerLocalFonts(family: string) {
-    for (const file of readdirSync(path.join(process.cwd(), 'media', 'fonts'))) {
-        // Get the weight if it exists like so
-        // Font-Weight.ttf
-        const match = file.match(/^(.+?)-(.+?)\.ttf$/);
-        if (match) {
-            const [, fontFamily, descriptor] = match;
-
-            // Parse weight and style from descriptor (e.g., "BoldItalic", "Medium", "LightItalic")
-            let weight = 'normal';
-            let style = 'normal';
-
-            const descriptorLower = descriptor.toLowerCase();
-
-            // Check for italic first
-            if (descriptorLower.includes('italic')) {
-                style = 'italic';
-            }
-
-            // Check for weight
-            if (descriptorLower.includes('thin')) weight = '100';
-            else if (descriptorLower.includes('extralight') || descriptorLower.includes('ultralight')) weight = '200';
-            else if (descriptorLower.includes('light')) weight = '300';
-            else if (descriptorLower.includes('medium')) weight = '500';
-            else if (descriptorLower.includes('semibold') || descriptorLower.includes('demibold')) weight = '600';
-            else if (descriptorLower.includes('bold')) weight = '700';
-            else if (descriptorLower.includes('extrabold') || descriptorLower.includes('ultrabold')) weight = '800';
-            else if (descriptorLower.includes('black') || descriptorLower.includes('heavy')) weight = '900';
-            else if (descriptorLower.includes('regular') || descriptorLower.includes('normal')) weight = '400';
-
-            client.logger.trace(`Registering font ${file} with family: ${fontFamily}, weight: ${weight}, style: ${style}`);
-            registerFont(path.join(process.cwd(), 'media', 'fonts', file), {
-                family: fontFamily,
-                weight: weight,
-                style: style
-            });
-        } else {
-            client.logger.trace(`Registering font ${file} without specific weight/style`);
-            registerFont(path.join(process.cwd(), 'media', 'fonts', file), {
-                family: family
-            });
-        }
-    }
-    return true;
-}
-
-registerLocalFonts('Montserrat');
