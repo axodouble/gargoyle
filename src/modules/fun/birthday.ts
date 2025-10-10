@@ -79,6 +79,7 @@ export default class Birthday extends GargoyleModule {
                     .setDescription('View your or another users birthday (optional)')
                     .addUserOption((option) => option.setName('user').setDescription('The user to view the birthday of').setRequired(false))
             )
+            .addSubcommand((subcommand) => subcommand.setName('today').setDescription('View who has a birthday today'))
             .addSubcommandGroup((subcommandGroup) =>
                 subcommandGroup
                     .setName('guild')
@@ -120,277 +121,290 @@ export default class Birthday extends GargoyleModule {
     private lastChange: Map<string, Date> = new Map();
 
     public override async executeSlashCommand(client: GargoyleClient, interaction: ChatInputCommandInteraction): Promise<void> {
-        if (interaction.commandName === 'birthday') {
-            if (!client.db) {
-                await interaction.reply({ content: 'Database connection is not available.', flags: MessageFlags.Ephemeral });
+        if (!client.db) {
+            await interaction.reply({ content: 'Database connection is not available.', flags: MessageFlags.Ephemeral });
+            return;
+        }
+        if (interaction.options.getSubcommandGroup(false) === 'guild') {
+            if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+                await interaction.reply({
+                    content: 'You need the `Manage Guild` permission to use this command.',
+                    flags: MessageFlags.Ephemeral
+                });
                 return;
             }
-            if (interaction.options.getSubcommandGroup(false) === 'guild') {
-                if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+            let dbGuild = await databaseGuildBirthdays.findOne({ guildId: interaction.guildId! }).catch((err: Error) => {
+                client.logger.error(`Failed to fetch guild birthday settings for guild ${interaction.guildId}: ${err.stack}`);
+            });
+
+            if (!dbGuild) {
+                dbGuild = new databaseGuildBirthdays({
+                    guildId: interaction.guildId!,
+                    channelId: null,
+                    birthdayRoleId: null,
+                    mentionRoleId: null
+                });
+                await dbGuild.save().catch((err: Error) => {
+                    client.logger.error(`Failed to create guild birthday settings for guild ${interaction.guildId}: ${err.stack}`);
+                });
+            }
+
+            if (interaction.options.getSubcommand() === 'channel') {
+                const channel = interaction.options.getChannel('channel', false);
+                if (!channel) {
                     await interaction.reply({
-                        content: 'You need the `Manage Guild` permission to use this command.',
+                        components: [
+                            new ContainerBuilder().addSectionComponents(
+                                new SectionBuilder()
+                                    .addTextDisplayComponents(
+                                        new TextDisplayBuilder().setContent(
+                                            `The birthday channel is ${dbGuild.channelId ? `currently set to <#${dbGuild.channelId}>` : 'not set'}. You can set it by providing a channel.`
+                                        )
+                                    )
+                                    .setButtonAccessory(
+                                        new GargoyleButtonBuilder(this, 'remove', 'channel')
+                                            .setLabel('Remove Channel')
+                                            .setDisabled(!dbGuild.channelId)
+                                            .setStyle(ButtonStyle.Danger)
+                                    )
+                            )
+                        ],
+                        flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
+                    });
+                    return;
+                } else {
+                    dbGuild.channelId = channel.id;
+                    await dbGuild.save().catch((err: Error) => {
+                        client.logger.error(`Failed to update guild birthday channel for guild ${interaction.guildId}: ${err.stack}`);
+                    });
+                    await interaction.reply({
+                        content: `The birthday channel has been set to <#${channel.id}>.`,
                         flags: MessageFlags.Ephemeral
                     });
                     return;
                 }
-                let dbGuild = await databaseGuildBirthdays.findOne({ guildId: interaction.guildId! }).catch((err: Error) => {
-                    client.logger.error(`Failed to fetch guild birthday settings for guild ${interaction.guildId}: ${err.stack}`);
-                });
-
-                if (!dbGuild) {
-                    dbGuild = new databaseGuildBirthdays({
-                        guildId: interaction.guildId!,
-                        channelId: null,
-                        birthdayRoleId: null,
-                        mentionRoleId: null
+            } else if (interaction.options.getSubcommand() === 'role') {
+                const role = interaction.options.getRole('role', false);
+                if (!role) {
+                    await interaction.reply({
+                        components: [
+                            new ContainerBuilder().addSectionComponents(
+                                new SectionBuilder()
+                                    .addTextDisplayComponents(
+                                        new TextDisplayBuilder().setContent(
+                                            `The birthday role is ${dbGuild.birthdayRoleId ? `currently set to <@&${dbGuild.birthdayRoleId}>` : 'not set'}. You can set it by providing a role.`
+                                        )
+                                    )
+                                    .setButtonAccessory(
+                                        new GargoyleButtonBuilder(this, 'remove', 'role')
+                                            .setLabel('Remove Role')
+                                            .setStyle(ButtonStyle.Danger)
+                                            .setDisabled(!dbGuild.birthdayRoleId)
+                                    )
+                            )
+                        ],
+                        flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
                     });
+                    return;
+                } else {
+                    dbGuild.birthdayRoleId = role.id;
                     await dbGuild.save().catch((err: Error) => {
-                        client.logger.error(`Failed to create guild birthday settings for guild ${interaction.guildId}: ${err.stack}`);
+                        client.logger.error(`Failed to update guild birthday role for guild ${interaction.guildId}: ${err.stack}`);
                     });
+                    await interaction.reply({
+                        content: `The birthday role has been set to <@&${role.id}>.`,
+                        flags: MessageFlags.Ephemeral
+                    });
+                    return;
                 }
+            } else if (interaction.options.getSubcommand() === 'mention-role') {
+                const role = interaction.options.getRole('role', false);
+                if (!role) {
+                    await interaction.reply({
+                        components: [
+                            new ContainerBuilder().addSectionComponents(
+                                new SectionBuilder()
+                                    .addTextDisplayComponents(
+                                        new TextDisplayBuilder().setContent(
+                                            `The birthday mention role is ${
+                                                dbGuild.mentionRoleId ? `currently set to <@&${dbGuild.mentionRoleId}>` : 'not set'
+                                            }. You can set it by providing a role.`
+                                        )
+                                    )
+                                    .setButtonAccessory(
+                                        new GargoyleButtonBuilder(this, 'remove', 'mentionrole')
+                                            .setLabel('Remove Mention Role')
+                                            .setStyle(ButtonStyle.Danger)
+                                            .setDisabled(!dbGuild.mentionRoleId)
+                                    )
+                            )
+                        ],
+                        flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
+                    });
+                    return;
+                } else {
+                    dbGuild.mentionRoleId = role.id;
+                    await dbGuild.save().catch((err: Error) => {
+                        client.logger.error(`Failed to update guild birthday mention role for guild ${interaction.guildId}: ${err.stack}`);
+                    });
+                    await interaction.reply({
+                        content: `The birthday mention role has been set to <@&${role.id}>.`,
+                        flags: MessageFlags.Ephemeral
+                    });
+                    return;
+                }
+            } else if (interaction.options.getSubcommand() === 'trigger') {
+                const force = interaction.options.getBoolean('force', false) || false;
+                if (dbGuild.channelId) {
+                    const channel = interaction.guild?.channels.cache.get(dbGuild.channelId);
+                    if (channel && (channel.type === ChannelType.GuildText || channel.type === ChannelType.GuildAnnouncement)) {
+                        let birthdayMembers: GuildMember[] = [];
+                        if (!force) {
+                            birthdayMembers = await this.getGuildBirthdays(client, interaction.guild!);
+                        } else {
+                            birthdayMembers = [interaction.member as GuildMember];
+                        }
 
-                if (interaction.options.getSubcommand() === 'channel') {
-                    const channel = interaction.options.getChannel('channel', false);
-                    if (!channel) {
+                        if (birthdayMembers.length === 0) {
+                            await interaction.reply({ content: 'No members have their birthday today.', flags: MessageFlags.Ephemeral });
+                            return;
+                        }
+
+                        for (const member of birthdayMembers) {
+                            await this.sendBirthdayMessage(channel as TextChannel | NewsChannel, member);
+                        }
+
                         await interaction.reply({
-                            components: [
-                                new ContainerBuilder().addSectionComponents(
-                                    new SectionBuilder()
-                                        .addTextDisplayComponents(
-                                            new TextDisplayBuilder().setContent(
-                                                `The birthday channel is ${dbGuild.channelId ? `currently set to <#${dbGuild.channelId}>` : 'not set'}. You can set it by providing a channel.`
-                                            )
-                                        )
-                                        .setButtonAccessory(
-                                            new GargoyleButtonBuilder(this, 'remove', 'channel')
-                                                .setLabel('Remove Channel')
-                                                .setDisabled(!dbGuild.channelId)
-                                                .setStyle(ButtonStyle.Danger)
-                                        )
-                                )
-                            ],
-                            flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
+                            content: `Triggered birthday messages for ${birthdayMembers.length} member(s) in ${channel}.`,
+                            flags: MessageFlags.Ephemeral
                         });
+
                         return;
                     } else {
-                        dbGuild.channelId = channel.id;
+                        dbGuild.channelId = null;
                         await dbGuild.save().catch((err: Error) => {
                             client.logger.error(`Failed to update guild birthday channel for guild ${interaction.guildId}: ${err.stack}`);
                         });
                         await interaction.reply({
-                            content: `The birthday channel has been set to <#${channel.id}>.`,
+                            content: 'The birthday channel was invalid and has been removed. Please set a new one.',
                             flags: MessageFlags.Ephemeral
                         });
                         return;
                     }
-                } else if (interaction.options.getSubcommand() === 'role') {
-                    const role = interaction.options.getRole('role', false);
-                    if (!role) {
-                        await interaction.reply({
-                            components: [
-                                new ContainerBuilder().addSectionComponents(
-                                    new SectionBuilder()
-                                        .addTextDisplayComponents(
-                                            new TextDisplayBuilder().setContent(
-                                                `The birthday role is ${dbGuild.birthdayRoleId ? `currently set to <@&${dbGuild.birthdayRoleId}>` : 'not set'}. You can set it by providing a role.`
-                                            )
-                                        )
-                                        .setButtonAccessory(
-                                            new GargoyleButtonBuilder(this, 'remove', 'role')
-                                                .setLabel('Remove Role')
-                                                .setStyle(ButtonStyle.Danger)
-                                                .setDisabled(!dbGuild.birthdayRoleId)
-                                        )
-                                )
-                            ],
-                            flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
-                        });
-                        return;
-                    } else {
-                        dbGuild.birthdayRoleId = role.id;
-                        await dbGuild.save().catch((err: Error) => {
-                            client.logger.error(`Failed to update guild birthday role for guild ${interaction.guildId}: ${err.stack}`);
-                        });
-                        await interaction.reply({
-                            content: `The birthday role has been set to <@&${role.id}>.`,
-                            flags: MessageFlags.Ephemeral
-                        });
-                        return;
-                    }
-                } else if (interaction.options.getSubcommand() === 'mention-role') {
-                    const role = interaction.options.getRole('role', false);
-                    if (!role) {
-                        await interaction.reply({
-                            components: [
-                                new ContainerBuilder().addSectionComponents(
-                                    new SectionBuilder()
-                                        .addTextDisplayComponents(
-                                            new TextDisplayBuilder().setContent(
-                                                `The birthday mention role is ${
-                                                    dbGuild.mentionRoleId ? `currently set to <@&${dbGuild.mentionRoleId}>` : 'not set'
-                                                }. You can set it by providing a role.`
-                                            )
-                                        )
-                                        .setButtonAccessory(
-                                            new GargoyleButtonBuilder(this, 'remove', 'mentionrole')
-                                                .setLabel('Remove Mention Role')
-                                                .setStyle(ButtonStyle.Danger)
-                                                .setDisabled(!dbGuild.mentionRoleId)
-                                        )
-                                )
-                            ],
-                            flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
-                        });
-                        return;
-                    } else {
-                        dbGuild.mentionRoleId = role.id;
-                        await dbGuild.save().catch((err: Error) => {
-                            client.logger.error(`Failed to update guild birthday mention role for guild ${interaction.guildId}: ${err.stack}`);
-                        });
-                        await interaction.reply({
-                            content: `The birthday mention role has been set to <@&${role.id}>.`,
-                            flags: MessageFlags.Ephemeral
-                        });
-                        return;
-                    }
-                } else if (interaction.options.getSubcommand() === 'trigger') {
-                    const force = interaction.options.getBoolean('force', false) || false;
-                    if (dbGuild.channelId) {
-                        const channel = interaction.guild?.channels.cache.get(dbGuild.channelId);
-                        if (channel && (channel.type === ChannelType.GuildText || channel.type === ChannelType.GuildAnnouncement)) {
-                            let birthdayMembers: GuildMember[] = [];
-                            if (!force) {
-                                birthdayMembers = await this.getGuildBirthdays(client, interaction.guild!);
-                            } else {
-                                birthdayMembers = [interaction.member as GuildMember];
-                            }
-
-                            if (birthdayMembers.length === 0) {
-                                await interaction.reply({ content: 'No members have their birthday today.', flags: MessageFlags.Ephemeral });
-                                return;
-                            }
-
-                            for (const member of birthdayMembers) {
-                                await this.sendBirthdayMessage(channel as TextChannel | NewsChannel, member);
-                            }
-
-                            await interaction.reply({
-                                content: `Triggered birthday messages for ${birthdayMembers.length} member(s) in ${channel}.`,
-                                flags: MessageFlags.Ephemeral
-                            });
-
-                            return;
-                        } else {
-                            dbGuild.channelId = null;
-                            await dbGuild.save().catch((err: Error) => {
-                                client.logger.error(`Failed to update guild birthday channel for guild ${interaction.guildId}: ${err.stack}`);
-                            });
-                            await interaction.reply({
-                                content: 'The birthday channel was invalid and has been removed. Please set a new one.',
-                                flags: MessageFlags.Ephemeral
-                            });
-                            return;
-                        }
-                    } else {
-                        await interaction.reply({ content: 'No birthday channel is set.', flags: MessageFlags.Ephemeral });
-                        return;
-                    }
-                }
-            } else if (interaction.options.getSubcommand() === 'set') {
-                const day = interaction.options.getInteger('day', true);
-                const month = interaction.options.getString('month', true);
-                const year = interaction.options.getInteger('year', false) || null;
-
-                if (month === '2' && day > 29) {
-                    await interaction.reply({ content: 'February only has 29 days at most.', flags: MessageFlags.Ephemeral });
-                    return;
-                }
-                if ([4, 6, 9, 11].includes(parseInt(month)) && day > 30) {
-                    await interaction.reply({ content: 'The selected month only has 30 days.', flags: MessageFlags.Ephemeral });
-                    return;
-                }
-
-                const birthdayDate = new Date();
-                birthdayDate.setUTCDate(day);
-                birthdayDate.setUTCMonth(parseInt(month));
-                if (year) birthdayDate.setUTCFullYear(year);
-                else birthdayDate.setUTCFullYear(1000); // Default year if not provided
-
-                this.birthdaySetups.set(interaction.user.id, birthdayDate);
-
-                await interaction.reply({
-                    components: [
-                        new ContainerBuilder()
-                            .addTextDisplayComponents(
-                                new TextDisplayBuilder().setContent(
-                                    `${Emojis.WhiteConfetti} Your Birthday is set for **${birthdayDate.toLocaleDateString('en-US', {
-                                        year: year ? 'numeric' : undefined,
-                                        month: 'long',
-                                        day: 'numeric'
-                                    })}**.` +
-                                        `\n-# **Keep in mind that this information is public, and will be shown to everyone in guilds you share on your birthday.**` +
-                                        `\n-# You can remove it at any time with \`/birthday opt-out\`.`
-                                )
-                            )
-                            .addActionRowComponents(
-                                new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
-                                    new GargoyleButtonBuilder(this, 'confirm').setLabel('Confirm').setStyle(ButtonStyle.Success),
-                                    new GargoyleButtonBuilder(this, 'cancel').setLabel('Cancel').setStyle(ButtonStyle.Danger)
-                                )
-                            )
-                    ],
-                    flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
-                });
-            } else if (interaction.options.getSubcommand() === 'opt-out') {
-                const dbBirthday = await databaseUserBirthdays.findOneAndDelete({ userId: interaction.user.id }).catch((err: Error) => {
-                    client.logger.error(`Failed to remove birthday for user ${interaction.user.id}: ${err.stack}`);
-                });
-                if (!dbBirthday) {
-                    await interaction.reply({ content: 'You do not have a birthday set.', flags: MessageFlags.Ephemeral });
-                    return;
-                }
-                await interaction.reply({ content: 'Your birthday has been removed from the database.', flags: MessageFlags.Ephemeral });
-            } else if (interaction.options.getSubcommand() === 'view') {
-                const user = interaction.options.getUser('user', false) || interaction.user;
-                const dbBirthday = await databaseUserBirthdays.findOne({ userId: user.id }).catch((err: Error) => {
-                    client.logger.error(`Failed to fetch birthday for user ${user.id}: ${err.stack}`);
-                });
-                if (!dbBirthday) {
-                    if (user.id === interaction.user.id) {
-                        await interaction.reply({ content: 'You do not have a birthday set.', flags: MessageFlags.Ephemeral });
-                    } else {
-                        await interaction.reply({ content: `${user.username} does not have a birthday set.`, flags: MessageFlags.Ephemeral });
-                    }
-                    return;
-                }
-                const birthday = new Date();
-                birthday.setUTCDate(dbBirthday.day);
-                birthday.setUTCMonth(dbBirthday.month);
-                if (dbBirthday.year) birthday.setUTCFullYear(dbBirthday.year);
-                else birthday.setUTCFullYear(1000);
-
-                if (user.id === interaction.user.id) {
-                    await interaction.reply({
-                        content: `Your birthday is set to **${birthday.toLocaleDateString('en-US', {
-                            year: dbBirthday.year ? 'numeric' : undefined,
-                            month: 'long',
-                            day: 'numeric'
-                        })}**.`,
-                        flags: MessageFlags.Ephemeral
-                    });
                 } else {
-                    await interaction.reply({
-                        content: `${user.username}'s birthday is set to **${birthday.toLocaleDateString('en-US', {
-                            year: dbBirthday.year ? 'numeric' : undefined,
-                            month: 'long',
-                            day: 'numeric'
-                        })}**.`,
-                        flags: MessageFlags.Ephemeral
-                    });
+                    await interaction.reply({ content: 'No birthday channel is set.', flags: MessageFlags.Ephemeral });
+                    return;
                 }
-            } else {
-                await interaction.reply({ content: 'Unknown subcommand.', flags: MessageFlags.Ephemeral });
             }
+        } else if (interaction.options.getSubcommand() === 'set') {
+            const day = interaction.options.getInteger('day', true);
+            const month = interaction.options.getString('month', true);
+            const year = interaction.options.getInteger('year', false) || null;
+
+            if (month === '2' && day > 29) {
+                await interaction.reply({ content: 'February only has 29 days at most.', flags: MessageFlags.Ephemeral });
+                return;
+            }
+            if ([4, 6, 9, 11].includes(parseInt(month)) && day > 30) {
+                await interaction.reply({ content: 'The selected month only has 30 days.', flags: MessageFlags.Ephemeral });
+                return;
+            }
+
+            const birthdayDate = new Date();
+            birthdayDate.setUTCDate(day);
+            birthdayDate.setUTCMonth(parseInt(month));
+            if (year) birthdayDate.setUTCFullYear(year);
+            else birthdayDate.setUTCFullYear(1000); // Default year if not provided
+
+            this.birthdaySetups.set(interaction.user.id, birthdayDate);
+
+            await interaction.reply({
+                components: [
+                    new ContainerBuilder()
+                        .addTextDisplayComponents(
+                            new TextDisplayBuilder().setContent(
+                                `${Emojis.WhiteConfetti} Your Birthday is set for **${birthdayDate.toLocaleDateString('en-US', {
+                                    year: year ? 'numeric' : undefined,
+                                    month: 'long',
+                                    day: 'numeric'
+                                })}**.` +
+                                    `\n-# **Keep in mind that this information is public, and will be shown to everyone in guilds you share on your birthday.**` +
+                                    `\n-# You can remove it at any time with \`/birthday opt-out\`.`
+                            )
+                        )
+                        .addActionRowComponents(
+                            new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+                                new GargoyleButtonBuilder(this, 'confirm').setLabel('Confirm').setStyle(ButtonStyle.Success),
+                                new GargoyleButtonBuilder(this, 'cancel').setLabel('Cancel').setStyle(ButtonStyle.Danger)
+                            )
+                        )
+                ],
+                flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
+            });
+        } else if (interaction.options.getSubcommand() === 'opt-out') {
+            const dbBirthday = await databaseUserBirthdays.findOneAndDelete({ userId: interaction.user.id }).catch((err: Error) => {
+                client.logger.error(`Failed to remove birthday for user ${interaction.user.id}: ${err.stack}`);
+            });
+            if (!dbBirthday) {
+                await interaction.reply({ content: 'You do not have a birthday set.', flags: MessageFlags.Ephemeral });
+                return;
+            }
+            await interaction.reply({ content: 'Your birthday has been removed from the database.', flags: MessageFlags.Ephemeral });
+        } else if (interaction.options.getSubcommand() === 'view') {
+            const user = interaction.options.getUser('user', false) || interaction.user;
+            const dbBirthday = await databaseUserBirthdays.findOne({ userId: user.id }).catch((err: Error) => {
+                client.logger.error(`Failed to fetch birthday for user ${user.id}: ${err.stack}`);
+            });
+            if (!dbBirthday) {
+                if (user.id === interaction.user.id) {
+                    await interaction.reply({ content: 'You do not have a birthday set.', flags: MessageFlags.Ephemeral });
+                } else {
+                    await interaction.reply({ content: `${user.username} does not have a birthday set.`, flags: MessageFlags.Ephemeral });
+                }
+                return;
+            }
+            const birthday = new Date();
+            birthday.setUTCDate(dbBirthday.day);
+            birthday.setUTCMonth(dbBirthday.month);
+            if (dbBirthday.year) birthday.setUTCFullYear(dbBirthday.year);
+            else birthday.setUTCFullYear(1000);
+
+            if (user.id === interaction.user.id) {
+                await interaction.reply({
+                    content: `Your birthday is set to **${birthday.toLocaleDateString('en-US', {
+                        year: dbBirthday.year ? 'numeric' : undefined,
+                        month: 'long',
+                        day: 'numeric'
+                    })}**.`,
+                    flags: MessageFlags.Ephemeral
+                });
+            } else {
+                await interaction.reply({
+                    content: `${user.username}'s birthday is set to **${birthday.toLocaleDateString('en-US', {
+                        year: dbBirthday.year ? 'numeric' : undefined,
+                        month: 'long',
+                        day: 'numeric'
+                    })}**.`,
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+        } else if (interaction.options.getSubcommand() === 'today') {
+            const birthdayMembers = await this.getGuildBirthdays(client, interaction.guild!);
+            if (birthdayMembers.length === 0) {
+                await interaction.reply({ content: 'No members have their birthday today.', flags: MessageFlags.Ephemeral });
+                return;
+            }
+            await interaction.reply({
+                content:
+                    `The following members have their birthday today (${new Date().toLocaleDateString('en-US', {
+                        month: 'long',
+                        day: 'numeric'
+                    })}):\n` + birthdayMembers.map((member) => `- ${member.user.tag}`).join('\n'),
+                flags: MessageFlags.Ephemeral
+            });
+            return;
+        } else {
+            await interaction.reply({ content: 'Unknown subcommand.', flags: MessageFlags.Ephemeral });
         }
     }
 
@@ -635,8 +649,8 @@ export default class Birthday extends GargoyleModule {
 export async function getBirthdayUsers(client: GargoyleClient) {
     return await databaseUserBirthdays
         .find({
-            month: new Date().getUTCMonth(),
-            day: new Date().getUTCDate()
+            month: new Date().getMonth(),
+            day: new Date().getDate()
         })
         .catch((err: Error) => {
             client.logger.error(`Failed to fetch birthday users: ${err.stack}`);
