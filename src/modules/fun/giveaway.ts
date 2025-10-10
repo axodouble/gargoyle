@@ -32,25 +32,43 @@ export default class Giveaway extends GargoyleModule {
         new GargoyleSlashCommandBuilder()
             .setName('giveaway')
             .setDescription('Start a giveaway')
-            .addStringOption((option) =>
-                option.setName('duration').setDescription('The duration of the giveaway (e.g. 1h, 30m, 2d)').setRequired(true)
+            .addSubcommand((subcommand) =>
+                subcommand
+                    .setName('start')
+                    .setDescription('Start a giveaway')
+                    .addStringOption((option) =>
+                        option.setName('duration').setDescription('The duration of the giveaway (e.g. 1h, 30m, 2d)').setRequired(true)
+                    )
+                    .addIntegerOption((option) =>
+                        option
+                            .setName('winners')
+                            .setDescription('The number of winners (default: 1)')
+                            .setRequired(false)
+                            .setMinValue(1)
+                            .setMaxValue(20)
+                    )
+                    .addChannelOption((option) =>
+                        option
+                            .setName('channel')
+                            .setDescription('The channel to host the giveaway in (default: current channel)')
+                            .setRequired(false)
+                            .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
+                    )
             )
-            .addIntegerOption((option) =>
-                option.setName('winners').setDescription('The number of winners (default: 1)').setRequired(false).setMinValue(1).setMaxValue(20)
-            )
-            .addChannelOption((option) =>
-                option
-                    .setName('channel')
-                    .setDescription('The channel to host the giveaway in (default: current channel)')
-                    .setRequired(false)
-                    .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
-            )
-            .setDefaultMemberPermissions(0) as GargoyleSlashCommandBuilder
+            .addSubcommand((subcommand) =>
+                subcommand
+                    .setName('reroll')
+                    .setDescription('Reroll a giveaway winner')
+                    .addStringOption((option) =>
+                        option.setName('message_id').setDescription('The message ID of the giveaway to reroll').setRequired(true)
+                    )
+            ) as GargoyleSlashCommandBuilder
     ];
 
     private giveawaySetups: Map<
         string,
         {
+            authorId: string;
             winners: number;
             channelId: string;
             endTime: number;
@@ -69,7 +87,7 @@ export default class Giveaway extends GargoyleModule {
     }
 
     public override async executeSlashCommand(client: GargoyleClient, interaction: ChatInputCommandInteraction): Promise<void> {
-        if (interaction.commandName === 'giveaway') {
+        if (interaction.options.getSubcommand() === 'start') {
             if (!client.db) {
                 await interaction.reply({ content: 'Database connection not established, please try again later.', flags: MessageFlags.Ephemeral });
                 return;
@@ -118,6 +136,7 @@ export default class Giveaway extends GargoyleModule {
             const endTime = Date.now() + durationMs;
 
             this.giveawaySetups.set(interaction.user.id, {
+                authorId: interaction.user.id,
                 winners: winners,
                 channelId: channel.id,
                 endTime: endTime,
@@ -257,6 +276,7 @@ export default class Giveaway extends GargoyleModule {
 
             if (giveawayEntry) {
                 giveaway = {
+                    authorId: giveawayEntry.authorId,
                     winners: giveawayEntry.winners,
                     channelId: giveawayEntry.channelId,
                     endTime: giveawayEntry.endTime.getTime(),
@@ -278,7 +298,7 @@ export default class Giveaway extends GargoyleModule {
                         .addTextDisplayComponents(
                             new TextDisplayBuilder().setContent(
                                 `# ${Emojis.WhiteConfetti} **${giveaway.winners > 1 ? `${giveaway.winners}x GIVEAWAY` : `GIVEAWAY`}** ${Emojis.WhiteConfetti}` +
-                                    `\n**Hosted by:** <@${userId}>` +
+                                    `\n**Hosted by:** <@${giveaway.authorId}>` +
                                     (giveaway.prizeMessage ? `\n\n${giveaway.prizeMessage}` : '') +
                                     `\n-# **${giveaway.entries.length} Entries | Ends ** <t:${Math.floor(giveaway.endTime / 1000)}:R>`
                             )
@@ -358,6 +378,10 @@ const giveawaySchema = new Schema({
         required: true
     },
     messageId: {
+        type: String,
+        required: true
+    },
+    authorId: {
         type: String,
         required: true
     },
