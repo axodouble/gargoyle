@@ -114,6 +114,9 @@ export default class Birthday extends GargoyleModule {
                             .setDescription('Trigger birthday messages in the birthday channel')
                             .addBooleanOption((option) => option.setName('force').setDescription('Whether to force the trigger'))
                     )
+                    .addSubcommand((subcommand) =>
+                        subcommand.setName('reset').setDescription('Reset the last checked date, causing birthdays to be checked again')
+                    )
             ) as GargoyleSlashCommandBuilder
     ];
 
@@ -295,6 +298,16 @@ export default class Birthday extends GargoyleModule {
                     await interaction.reply({ content: 'No birthday channel is set.', flags: MessageFlags.Ephemeral });
                     return;
                 }
+            } else if (interaction.options.getSubcommand() === 'reset') {
+                dbGuild.lastCheck = undefined;
+                await dbGuild.save().catch((err: Error) => {
+                    client.logger.error(`Failed to reset last check for guild ${interaction.guildId}: ${err.stack}`);
+                });
+                await interaction.reply({
+                    content: 'The last checked date has been reset. Birthdays will be checked again.',
+                    flags: MessageFlags.Ephemeral
+                });
+                return;
             }
         } else if (interaction.options.getSubcommand() === 'set') {
             const day = interaction.options.getInteger('day', true);
@@ -565,7 +578,7 @@ export default class Birthday extends GargoyleModule {
             if (dbGuild.lastCheck) {
                 const lastCheck = dbGuild.lastCheck;
                 const now = new Date();
-                if (now.getDay() === lastCheck.getDay()) return;
+                if (now.getDay() === lastCheck.getDay()) continue; // Already checked today
             }
 
             if (!dbGuild.channelId) {
@@ -573,7 +586,7 @@ export default class Birthday extends GargoyleModule {
                 await dbGuild.save().catch((err: Error) => {
                     client.logger.error(`Failed to update last check for guild ${guild.id}: ${err.stack}`);
                 });
-                return;
+                continue;
             }
 
             const birthdayMembers = await this.getGuildBirthdays(client, guild);
@@ -582,7 +595,7 @@ export default class Birthday extends GargoyleModule {
                 await dbGuild.save().catch((err: Error) => {
                     client.logger.error(`Failed to update last check for guild ${guild.id}: ${err.stack}`);
                 });
-                return;
+                continue;
             }
 
             const channel = guild.channels.cache.get(dbGuild.channelId);
@@ -592,7 +605,7 @@ export default class Birthday extends GargoyleModule {
                 await dbGuild.save().catch((err: Error) => {
                     client.logger.error(`Failed to update guild birthday channel for guild ${guild.id}: ${err.stack}`);
                 });
-                return;
+                continue;
             }
 
             const role = dbGuild.mentionRoleId ? guild.roles.cache.get(dbGuild.mentionRoleId) : undefined;
