@@ -3,10 +3,11 @@ import GargoyleContainerBuilder from '@src/system/backend/builders/gargoyleConta
 import GargoyleSlashCommandBuilder from '@src/system/backend/builders/gargoyleSlashCommandBuilder.js';
 import GargoyleClient from '@src/system/backend/classes/gargoyleClient.js';
 import GargoyleModule from '@src/system/backend/classes/gargoyleModule.js';
-import { createBanner } from '@src/system/backend/tools/banners.js';
 import Emojis from '@src/system/backend/tools/emojis.js';
+import { createCanvas, loadImage } from 'canvas';
 import {
     ActionRowBuilder,
+    AttachmentBuilder,
     ButtonInteraction,
     ButtonStyle,
     ChannelType,
@@ -634,19 +635,43 @@ export default class Birthday extends GargoyleModule {
                         )
                     )
             ],
-            files: [
-                await createBanner(`It's ${member.user.username}'s birthday!`, {
-                    fillStyle: '#ffffff',
-                    width: 1080,
-                    height: 80,
-                    bannerStyle: 'underline',
-                    fileName: 'birthday'
-                })
-            ],
+            files: [await this.createBirthdayBanner(member)],
             flags: [MessageFlags.IsComponentsV2]
         });
         if (message) message.react(Emojis.WhiteConfetti).catch(() => null);
         return message;
+    }
+
+    private async createBirthdayBanner(member: GuildMember) {
+        const canvas = createCanvas(1080, 300);
+        const context = canvas.getContext('2d');
+
+        // Underline
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, canvas.height - 3, canvas.width, canvas.height);
+
+        // Text
+        context.fillStyle = '#ffffff';
+        context.font = '60px Sans-serif';
+        context.textAlign = 'center';
+        context.fillText(`Happy Birthday, ${member.user.username}!`, canvas.width / 2, canvas.height / 2 + 20);
+
+        // Add avatar
+        const avatarSize = 128;
+        const avatarX = canvas.width / 2 - avatarSize / 2;
+        const avatarY = canvas.height / 2 - avatarSize / 2 - 40;
+
+        context.save();
+        context.beginPath();
+        context.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2, true);
+        context.closePath();
+        context.clip();
+
+        const avatar = await loadImage(member.user.displayAvatarURL({ extension: 'png', size: 256 }));
+        context.drawImage(avatar, avatarX, avatarY, avatarSize, avatarSize);
+        context.restore();
+
+        return new AttachmentBuilder(canvas.toBuffer(), { name: 'birthday.png' });
     }
 
     public override init(client: GargoyleClient): void {
