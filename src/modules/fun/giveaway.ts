@@ -302,9 +302,6 @@ async function endCurrentGiveaways(client: GargoyleClient) {
         const channel = await client.channels.fetch(event.channelId).catch(() => null);
         const message = await (channel as TextChannel).messages.fetch(event.messageId).catch(() => null);
         if (!channel || (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement) || !message) {
-            await databaseGiveaway.deleteOne({ _id: event._id }).catch((err: Error) => {
-                client.logger.error(`Failed to delete giveaway from database: ${err.stack}`);
-            });
             continue;
         }
 
@@ -316,13 +313,8 @@ async function endCurrentGiveaways(client: GargoyleClient) {
                 },
                 channel as TextChannel,
                 message.id
-            ).catch(() => {
-                message.delete().catch(() => {});
-            });
+            ).catch(() => {});
 
-            await databaseGiveaway.deleteOne({ _id: event._id }).catch((err: Error) => {
-                client.logger.error(`Failed to delete giveaway from database: ${err.stack}`);
-            });
             continue;
         }
 
@@ -352,10 +344,6 @@ async function endCurrentGiveaways(client: GargoyleClient) {
             message.id
         ).catch(() => {
             message.delete().catch(() => {});
-        });
-
-        await databaseGiveaway.deleteOne({ _id: event._id }).catch((err: Error) => {
-            client.logger.error(`Failed to delete giveaway from database: ${err.stack}`);
         });
     }
 }
