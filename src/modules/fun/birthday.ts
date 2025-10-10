@@ -272,7 +272,6 @@ export default class Birthday extends GargoyleModule {
 
                             for (const member of birthdayMembers) {
                                 const years = member.birthday.year ? new Date().getFullYear() - member.birthday.year : undefined;
-                                console.log(years);
                                 await this.sendBirthdayMessage(channel as TextChannel | NewsChannel, member.member, years);
                             }
 
@@ -702,8 +701,6 @@ export async function getBirthdayUsers(client: GargoyleClient) {
             client.logger.error(`Failed to fetch birthday users: ${err.stack}`);
             return [];
         });
-
-    client.logger.debug(`${new Date().getMonth()}, ${new Date().getDate()}`);
 
     client.logger.debug(`Fetched ${result.length} birthday users from the database.`);
     return result;
