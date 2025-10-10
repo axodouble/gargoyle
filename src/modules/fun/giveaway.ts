@@ -14,6 +14,7 @@ import {
     ChatInputCommandInteraction,
     ContainerBuilder,
     MessageCreateOptions,
+    MessageEditOptions,
     MessageFlags,
     ModalActionRowComponentBuilder,
     ModalSubmitInteraction,
@@ -234,6 +235,14 @@ export default class Giveaway extends GargoyleModule {
             });
 
             await interaction.reply({ content: 'You have entered the giveaway!', flags: MessageFlags.Ephemeral });
+
+            await editAsServer(
+                (await this.giveawayMessage(giveawayEntry.guildId, interaction.message.id)) as MessageEditOptions,
+                interaction.message.channel as TextChannel,
+                interaction.message.id
+            ).catch(() => {
+                interaction.message.delete().catch(() => {});
+            });
             return;
         }
     }
