@@ -3,6 +3,7 @@ import GargoyleContainerBuilder from '@src/system/backend/builders/gargoyleConta
 import GargoyleSlashCommandBuilder from '@src/system/backend/builders/gargoyleSlashCommandBuilder.js';
 import GargoyleClient from '@src/system/backend/classes/gargoyleClient.js';
 import GargoyleModule from '@src/system/backend/classes/gargoyleModule.js';
+import { FontWeight } from '@src/system/backend/tools/banners.js';
 import Emojis from '@src/system/backend/tools/emojis.js';
 import { createCanvas, loadImage } from 'canvas';
 import {
@@ -22,7 +23,6 @@ import {
     MessageFlags,
     NewsChannel,
     PermissionFlagsBits,
-    Role,
     SectionBuilder,
     TextChannel,
     TextDisplayBuilder
@@ -262,26 +262,33 @@ export default class Birthday extends GargoyleModule {
                 if (dbGuild.channelId) {
                     const channel = interaction.guild?.channels.cache.get(dbGuild.channelId);
                     if (channel && (channel.type === ChannelType.GuildText || channel.type === ChannelType.GuildAnnouncement)) {
-                        let birthdayMembers: GuildMember[] = [];
                         if (!force) {
-                            birthdayMembers = await this.getGuildBirthdays(client, interaction.guild!);
+                            const birthdayMembers = await this.getGuildBirthdays(client, interaction.guild!);
+
+                            if (birthdayMembers.length === 0) {
+                                await interaction.reply({ content: 'No members have their birthday today.', flags: MessageFlags.Ephemeral });
+                                return;
+                            }
+
+                            for (const member of birthdayMembers) {
+                                const years = member.birthday.year ? new Date().getFullYear() - member.birthday.year : undefined;
+                                console.log(years);
+                                await this.sendBirthdayMessage(channel as TextChannel | NewsChannel, member.member, years);
+                            }
+
+                            await interaction.reply({
+                                content: `Triggered birthday messages for ${birthdayMembers.length} member(s) in ${channel}.`,
+                                flags: MessageFlags.Ephemeral
+                            });
                         } else {
-                            birthdayMembers = [interaction.member as GuildMember];
+                            const age = (await databaseUserBirthdays.findOne({ userId: interaction.user.id }))?.year;
+                            this.sendBirthdayMessage(
+                                channel as TextChannel | NewsChannel,
+                                interaction.member as GuildMember,
+                                age ? new Date().getFullYear() - age : undefined
+                            );
+                            await interaction.reply({ content: `Sent you a birthday message in ${channel}.`, flags: MessageFlags.Ephemeral });
                         }
-
-                        if (birthdayMembers.length === 0) {
-                            await interaction.reply({ content: 'No members have their birthday today.', flags: MessageFlags.Ephemeral });
-                            return;
-                        }
-
-                        for (const member of birthdayMembers) {
-                            await this.sendBirthdayMessage(channel as TextChannel | NewsChannel, member);
-                        }
-
-                        await interaction.reply({
-                            content: `Triggered birthday messages for ${birthdayMembers.length} member(s) in ${channel}.`,
-                            flags: MessageFlags.Ephemeral
-                        });
 
                         return;
                     } else {
@@ -413,7 +420,7 @@ export default class Birthday extends GargoyleModule {
                     `The following members have their birthday today (${new Date().toLocaleDateString('en-US', {
                         month: 'long',
                         day: 'numeric'
-                    })}):\n` + birthdayMembers.map((member) => `- ${member.user.tag}`).join('\n'),
+                    })}):\n` + birthdayMembers.map((member) => `- ${member.member.user.tag}`).join('\n'),
                 flags: MessageFlags.Ephemeral
             });
             return;
@@ -544,16 +551,17 @@ export default class Birthday extends GargoyleModule {
         await interaction.reply({ content: 'Unknown button action.', flags: MessageFlags.Ephemeral });
     }
 
-    private async getGuildBirthdays(client: GargoyleClient, guild: Guild): Promise<GuildMember[]> {
+    private async getGuildBirthdays(client: GargoyleClient, guild: Guild) {
         const birthdayUsers = await getBirthdayUsers(client);
         if (!birthdayUsers || birthdayUsers.length === 0) return [];
+        client.logger.debug(`Found ${birthdayUsers.length} birthday users in the database.`);
 
-        const members: GuildMember[] = [];
+        const birthdayMembers = [];
         for (const birthdayUser of birthdayUsers) {
             const member = await guild.members.fetch(birthdayUser.userId).catch(() => null);
-            if (member) members.push(member);
+            if (member) birthdayMembers.push({ member: member, birthday: birthdayUser });
         }
-        return members;
+        return birthdayMembers;
     }
 
     private async checkBirthdays(client: GargoyleClient) {
@@ -609,10 +617,10 @@ export default class Birthday extends GargoyleModule {
                 continue;
             }
 
-            const role = dbGuild.mentionRoleId ? guild.roles.cache.get(dbGuild.mentionRoleId) : undefined;
-
             for (const member of birthdayMembers) {
-                await this.sendBirthdayMessage(channel as TextChannel | NewsChannel, member, role);
+                const years = member.birthday.year ? new Date().getFullYear() - member.birthday.year : undefined;
+
+                await this.sendBirthdayMessage(channel as TextChannel | NewsChannel, member.member, years);
                 // #TODO: Figure out a way to manage roles, as I do not want to fetch every single member to check if they have the role.
             }
 
@@ -623,7 +631,7 @@ export default class Birthday extends GargoyleModule {
         }
     }
 
-    private async sendBirthdayMessage(channel: TextChannel | NewsChannel, member: GuildMember, role?: Role) {
+    private async sendBirthdayMessage(channel: TextChannel | NewsChannel, member: GuildMember, years: number | undefined) {
         const message = await channel.send({
             components: [
                 new ContainerBuilder()
@@ -631,30 +639,30 @@ export default class Birthday extends GargoyleModule {
                     .addMediaGalleryComponents(new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL('attachment://birthday.png')))
                     .addTextDisplayComponents(
                         new TextDisplayBuilder().setContent(
-                            `Happy Birthday, <@${member.id}>! ${Emojis.WhiteConfetti}` + `${role ? `\n-# <@&${role.id}>` : ''}`
+                            `Happy Birthday, <@${member.id}>! ${years ? ' Now ' + years + ' years old!' : ''} ${Emojis.WhiteConfetti}`
                         )
                     )
             ],
-            files: [await this.createBirthdayBanner(member)],
+            files: [await this.createBirthdayBanner(member, years)],
             flags: [MessageFlags.IsComponentsV2]
         });
         if (message) message.react(Emojis.WhiteConfetti).catch(() => null);
         return message;
     }
 
-    private async createBirthdayBanner(member: GuildMember) {
+    private async createBirthdayBanner(member: GuildMember, years: number | undefined): Promise<AttachmentBuilder> {
         const canvas = createCanvas(1080, 300);
         const context = canvas.getContext('2d');
 
         // Underline
         context.fillStyle = '#ffffff';
-        context.fillRect(0, canvas.height - 3, canvas.width, canvas.height);
+        context.fillRect(0, canvas.height - 6, canvas.width, canvas.height);
 
         // Text
         context.fillStyle = '#ffffff';
-        context.font = '60px Sans-serif';
+        context.font = `${FontWeight.Bold} 60px Montserrat`;
         context.textAlign = 'center';
-        context.fillText(`Happy Birthday, ${member.user.username}!`, canvas.width / 2, canvas.height / 2 + 20);
+        context.fillText(`Happy Birthday ${member.user.username}!`, canvas.width / 2, canvas.height - 25);
 
         // Add avatar
         const avatarSize = 128;
@@ -685,7 +693,7 @@ export default class Birthday extends GargoyleModule {
 }
 
 export async function getBirthdayUsers(client: GargoyleClient) {
-    return await databaseUserBirthdays
+    const result = await databaseUserBirthdays
         .find({
             month: new Date().getMonth(),
             day: new Date().getDate()
@@ -694,6 +702,11 @@ export async function getBirthdayUsers(client: GargoyleClient) {
             client.logger.error(`Failed to fetch birthday users: ${err.stack}`);
             return [];
         });
+
+    client.logger.debug(`${new Date().getMonth()}, ${new Date().getDate()}`);
+
+    client.logger.debug(`Fetched ${result.length} birthday users from the database.`);
+    return result;
 }
 
 const birthdayUserSchema = new Schema({
