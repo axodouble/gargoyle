@@ -175,6 +175,7 @@ export default class Giveaway extends GargoyleModule {
             setup.prizeMessage = prizeMessage;
 
             const giveaway = new databaseGiveaway({
+                authorId: interaction.user.id,
                 guildId: interaction.guildId,
                 channelId: setup.channelId,
                 messageId: 'temp', // Will be updated later
