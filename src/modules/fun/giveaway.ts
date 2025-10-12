@@ -80,6 +80,7 @@ export default class Giveaway extends GargoyleModule {
     public override init(client: GargoyleClient): void {
         setInterval(async () => {
             if (client.db === null) return;
+            client.logger.trace('Checking giveaways to end...');
             await endCurrentGiveaways(client).catch((err: Error) => {
                 client.logger.error(`Failed to end current giveaways: ${err.stack}`);
             });
