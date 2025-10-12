@@ -161,6 +161,39 @@ export default class Giveaway extends GargoyleModule {
                     )
             );
             return;
+        } else if (interaction.options.getSubcommand() === 'reroll') {
+            if (!client.db) {
+                await interaction.reply({ content: 'Database connection not established, please try again later.', flags: MessageFlags.Ephemeral });
+                return;
+            }
+
+            const messageId = interaction.options.getString('message_id', true);
+            const giveawayEntry = await databaseGiveaway.findOne({ messageId: messageId, guildId: interaction.guildId });
+
+            if (!giveawayEntry) {
+                await interaction.reply({ content: 'No giveaway found with that message ID in this server.', flags: MessageFlags.Ephemeral });
+                return;
+            }
+
+            if (giveawayEntry.entries.length === 0) {
+                await interaction.reply({ content: 'No entries found for this giveaway.', flags: MessageFlags.Ephemeral });
+                return;
+            }
+
+            const winners: string[] = [];
+            while (winners.length < giveawayEntry.winners && giveawayEntry.entries.length > 0) {
+                const randomIndex = Math.floor(Math.random() * giveawayEntry.entries.length);
+                const winner = giveawayEntry.entries.splice(randomIndex, 1)[0];
+                if (!winners.includes(winner)) {
+                    winners.push(winner);
+                }
+            }
+
+            await interaction.reply({
+                content: `The new winner${winners.length > 1 ? 's are' : ' is'}: ${winners.map((w) => `<@${w}>`).join(', ')}!`,
+                flags: MessageFlags.Ephemeral
+            });
+            return;
         }
     }
 
