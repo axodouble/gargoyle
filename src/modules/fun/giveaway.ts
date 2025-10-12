@@ -190,8 +190,7 @@ export default class Giveaway extends GargoyleModule {
             }
 
             await interaction.reply({
-                content: `The new winner${winners.length > 1 ? 's are' : ' is'}: ${winners.map((w) => `<@${w}>`).join(', ')}!`,
-                flags: MessageFlags.Ephemeral
+                content: `The new winner${winners.length > 1 ? 's are' : ' is'}: ${winners.map((w) => `<@${w}>`).join(', ')}!`
             });
             return;
         }
