@@ -261,7 +261,7 @@ export default class Giveaway extends GargoyleModule {
                 await interaction.reply({ content: 'This giveaway has already ended.', flags: MessageFlags.Ephemeral });
 
                 await editAsServer(
-                    { components: [new GargoyleContainerBuilder('Giveaway ended')], flags: MessageFlags.IsComponentsV2 },
+                    { ...((await this.giveawayMessage(giveawayEntry?.authorId!, interaction.message.id!)) as MessageEditOptions) },
                     interaction.message.channel as TextChannel,
                     interaction.message.id
                 ).catch(() => {
