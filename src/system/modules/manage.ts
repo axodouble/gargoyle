@@ -204,7 +204,6 @@ class SupportMessage extends GargoyleEvent {
     public async execute(client: GargoyleClient, message: Message): Promise<void> {
         if (message.author.bot) return;
         if (message.channel.type !== ChannelType.DM) return;
-        if (message.channel.recipient?.id !== client.user?.id) return;
 
         const channel = (await client.channels.fetch('1386544585391607858')) as TextChannel;
         channel?.send(`Message from ${message.author.tag} (ID: ${message.author.id}):\n${message.content}`);
