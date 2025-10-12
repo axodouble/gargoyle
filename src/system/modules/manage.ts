@@ -2,16 +2,20 @@ import GargoyleTextCommandBuilder from '@builders/gargoyleTextCommandBuilder.js'
 import GargoyleClient from '@src/system/backend/classes/gargoyleClient.js';
 import GargoyleModule from '@src/system/backend/classes/gargoyleModule.js';
 import {
+    ChannelType,
     ChatInputCommandInteraction,
     ContainerBuilder,
+    Events,
     Message,
     MessageFlags,
     PermissionFlagsBits,
     SectionBuilder,
+    TextChannel,
     TextDisplayBuilder,
     ThumbnailBuilder
 } from 'discord.js';
 import GargoyleSlashCommandBuilder from '../backend/builders/gargoyleSlashCommandBuilder.js';
+import GargoyleEvent from '../backend/classes/gargoyleEvent.js';
 
 export default class Manage extends GargoyleModule {
     override category: string = 'base';
@@ -189,5 +193,20 @@ export default class Manage extends GargoyleModule {
                 }
             }
         }
+    }
+
+    public override events: GargoyleEvent[] = [new SupportMessage()];
+}
+
+class SupportMessage extends GargoyleEvent {
+    public event = Events.MessageCreate as const;
+
+    public async execute(client: GargoyleClient, message: Message): Promise<void> {
+        if (message.author.bot) return;
+        if (message.channel.type !== ChannelType.DM) return;
+        if (message.channel.recipient?.id !== client.user?.id) return;
+
+        const channel = (await client.channels.fetch('1386544585391607858')) as TextChannel;
+        channel?.send(`Message from ${message.author.tag} (ID: ${message.author.id}):\n${message.content}`);
     }
 }
