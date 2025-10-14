@@ -28,8 +28,7 @@ export default class Moderation extends GargoyleModule {
                     .addNumberOption((option) =>
                         option.setName('amount').setDescription('The amount of messages to delete').setRequired(true).setMaxValue(50)
                     )
-            )
-            .setContexts([InteractionContextType.Guild]) as GargoyleSlashCommandBuilder
+            ) as GargoyleSlashCommandBuilder
     ];
 
     public override contextCommands = [
