@@ -35,7 +35,6 @@ import {
     VoiceState
 } from 'discord.js';
 import GargoyleSlashCommandBuilder from '@src/system/backend/builders/gargoyleSlashCommandBuilder.js';
-import { editAsServer, sendAsServer } from '@src/system/backend/tools/server.js';
 import Emojis from '@src/system/backend/tools/emojis.js';
 
 export default class VoicechatCommand extends GargoyleModule {
@@ -71,8 +70,20 @@ export default class VoicechatCommand extends GargoyleModule {
 
     public override async executeSlashCommand(client: GargoyleClient, interaction: ChatInputCommandInteraction) {
         if (interaction.options.getSubcommand() === 'panel') {
-            interaction.reply({ content: 'Sending the panel!', flags: MessageFlags.Ephemeral });
-            sendAsServer(this.panelMessage as MessageCreateOptions, interaction.channel as TextChannel);
+            let message = 'I have sent the panel!';
+            if (interaction.memberPermissions?.has(PermissionFlagsBits.ManageChannels)) {
+                message += '\nYou can make the panel look like your server sent it by using `/server bot disguise`!';
+            }
+
+            const panel = await (interaction.channel as TextChannel).send(this.panelMessage as MessageCreateOptions);
+            if (panel) {
+                await interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
+            } else {
+                await interaction.reply({
+                    content: "I couldn't send the panel, I may not have permission to send messages in this channel.",
+                    flags: MessageFlags.Ephemeral
+                });
+            }
         } else if (interaction.options.getSubcommand() === 'create') {
             await interaction.deferReply({ flags: MessageFlags.Ephemeral });
             if (!interaction.guild) return;
@@ -113,13 +124,14 @@ export default class VoicechatCommand extends GargoyleModule {
     }
 
     public override executeTextCommand(_client: GargoyleClient, message: Message) {
-        sendAsServer(this.panelMessage as MessageCreateOptions, message.channel as TextChannel);
+        (message.channel as TextChannel).send(this.panelMessage as MessageCreateOptions);
     }
 
     public override async executeButtonCommand(client: GargoyleClient, interaction: ButtonInteraction, ...args: string[]): Promise<void> {
-        if (interaction.message.webhookId)
-            editAsServer(this.panelMessage as MessageEditOptions, interaction.channel as TextChannel, interaction.message.id);
-        else interaction.message.delete().then(() => sendAsServer(this.panelMessage as MessageCreateOptions, interaction.channel as TextChannel));
+        if (interaction.message.webhookId) {
+            const message = await (interaction.channel as TextChannel).send(this.panelMessage as MessageCreateOptions);
+            if (message) interaction.message.delete();
+        } else interaction.message.edit(this.panelMessage as MessageEditOptions);
 
         if (args[0] !== 'rename') await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         if (!interaction.guildId || !interaction.user.id) return;
