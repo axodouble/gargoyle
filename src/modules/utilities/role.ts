@@ -1,37 +1,27 @@
 import GargoyleClient from '@classes/gargoyleClient.js';
 import GargoyleModule from '@src/system/backend/classes/gargoyleModule.js';
 import GargoyleButtonBuilder from '@builders/gargoyleButtonBuilder.js';
-import { GargoyleRoleSelectMenuBuilder } from '@builders/gargoyleSelectMenuBuilders.js';
-import { sendAsServer } from '@src/system/backend/tools/server.js';
 import {
-    ActionRowBuilder,
-    AnySelectMenuInteraction,
     ButtonInteraction,
     ButtonStyle,
     ChatInputCommandInteraction,
-    ComponentType,
     ContainerBuilder,
     HexColorString,
     InteractionContextType,
     LabelBuilder,
     MediaGalleryBuilder,
     MediaGalleryItemBuilder,
-    Message,
-    MessageCreateOptions,
-    MessageEditOptions,
     MessageFlags,
     ModalSubmitInteraction,
     Role,
     RoleSelectMenuBuilder,
     SectionBuilder,
     SendableChannels,
-    TextChannel,
     TextDisplayBuilder,
     TextInputBuilder,
     TextInputStyle
 } from 'discord.js';
 import GargoyleSlashCommandBuilder from '@src/system/backend/builders/gargoyleSlashCommandBuilder.js';
-import GargoyleTextCommandBuilder from '@src/system/backend/builders/gargoyleTextCommandBuilder.js';
 import client from '@src/system/botClient.js';
 import GargoyleModalBuilder from '@src/system/backend/builders/gargoyleModalBuilder.js';
 
@@ -41,12 +31,6 @@ export default class RoleCommand extends GargoyleModule {
         new GargoyleSlashCommandBuilder()
             .setName('role')
             .setDescription('Role related commands')
-            .addSubcommand((subcommand) =>
-                subcommand
-                    .setName('button')
-                    .setDescription('Create a button that gives a role')
-                    .addBooleanOption((option) => option.setRequired(true).setName('panel').setDescription('Whether the message contain a panel'))
-            )
             .addSubcommandGroup((group) =>
                 group
                     .setName('create')
@@ -66,16 +50,6 @@ export default class RoleCommand extends GargoyleModule {
             )
             .addSubcommand((subcommand) => subcommand.setName('panel').setDescription('Create a role panel'))
             .setContexts([InteractionContextType.Guild]) as GargoyleSlashCommandBuilder
-    ];
-
-    public override textCommands = [
-        new GargoyleTextCommandBuilder()
-            .setName('buttonrole')
-            .setDescription('Create a role button')
-            .addAlias('br')
-            .addAlias('rolebutton')
-            .addAlias('rb')
-            .setContexts([InteractionContextType.Guild])
     ];
 
     public override async executeSlashCommand(_client: GargoyleClient, interaction: ChatInputCommandInteraction) {
@@ -124,27 +98,7 @@ export default class RoleCommand extends GargoyleModule {
                 });
             }
         } else if (interaction.options.getSubcommandGroup(false) == null) {
-            if (interaction.options.getSubcommand() === 'button') {
-                if (!interaction.memberPermissions?.has('ManageRoles')) {
-                    await interaction.reply({
-                        content: 'You do not have the required permissions to use this command.',
-                        flags: MessageFlags.Ephemeral
-                    });
-                    return;
-                }
-                await interaction.reply({
-                    content: 'What role(s) would you like to give?',
-                    flags: MessageFlags.Ephemeral,
-                    components: [
-                        new ActionRowBuilder<GargoyleRoleSelectMenuBuilder>().addComponents(
-                            new GargoyleRoleSelectMenuBuilder(this, 'roles', interaction.options.getBoolean('panel', false) ? 'panel' : 'nopanel')
-                                .setMaxValues(25)
-                                .setMinValues(1)
-                                .setPlaceholder('Select role(s) to give')
-                        )
-                    ]
-                });
-            } else if (interaction.options.getSubcommand() === 'delete') {
+            if (interaction.options.getSubcommand() === 'delete') {
                 if (!interaction.memberPermissions?.has('ManageRoles')) {
                     await interaction.reply({
                         content: 'You do not have the required permissions to use this command.',
@@ -233,116 +187,6 @@ export default class RoleCommand extends GargoyleModule {
         }
     }
 
-    public override async executeTextCommand(_client: GargoyleClient, message: Message) {
-        if (!message.member?.permissions?.has('ManageRoles')) {
-            await message.reply({ content: 'You do not have the required permissions to use this command.' });
-            return;
-        }
-        (message.channel as TextChannel).send({
-            content: 'What role(s) would you like to give?',
-            components: [
-                new ActionRowBuilder<GargoyleRoleSelectMenuBuilder>().addComponents(
-                    new GargoyleRoleSelectMenuBuilder(this, 'roles').setMaxValues(25).setMinValues(1).setPlaceholder('Select role(s) to give')
-                )
-            ]
-        });
-    }
-
-    public override async executeSelectMenuCommand(client: GargoyleClient, interaction: AnySelectMenuInteraction, ...args: string[]): Promise<void> {
-        if (interaction.channel === null) return;
-        if (interaction.isRoleSelectMenu()) {
-            if (args[0] === 'roles') {
-                const roles = interaction.values;
-
-                const member = await interaction.guild?.members.fetch(interaction.user.id);
-                const channel = (await client.channels.fetch(interaction.channel.id)) as TextChannel;
-
-                if (!member || !channel) {
-                    await interaction.update({ content: 'An unexpected error occured, are you in a guild?' });
-                    return;
-                }
-
-                let message: MessageEditOptions = { content: 'Internal Component Message, if you see this then something has gone pretty wrong...' };
-
-                if (args.length > 1 && args[1] == 'panel') {
-                    const container = new ContainerBuilder();
-                    let rolesFetched: Role[] = [];
-
-                    for (const roleId of roles) {
-                        const role = interaction.guild?.roles.cache.get(roleId);
-                        role ? rolesFetched.push(role) : null;
-                        container.addSectionComponents(
-                            new SectionBuilder()
-                                .addTextDisplayComponents(new TextDisplayBuilder().setContent(`<@&${roleId}>`))
-                                .setButtonAccessory(
-                                    new GargoyleButtonBuilder(this, 'addrole', roleId).setLabel('Add Role').setStyle(ButtonStyle.Secondary)
-                                )
-                        );
-                    }
-
-                    const averageRole = averageRoleColor(rolesFetched);
-
-                    container.setAccentColor(averageRole);
-
-                    message = { components: [container], flags: [MessageFlags.IsComponentsV2] };
-                } else {
-                    const componentCollection: ActionRowBuilder<GargoyleButtonBuilder>[] = [];
-
-                    let roleCount = 0;
-                    let actionRow = new ActionRowBuilder<GargoyleButtonBuilder>();
-                    for (const roleId of roles) {
-                        roleCount++;
-                        const role = await interaction.guild?.roles.fetch(roleId);
-                        if (!role) continue;
-
-                        if (role.position >= member.roles.highest.position && member.guild.ownerId !== member.id) {
-                            interaction
-                                .reply({
-                                    content: `You cannot give yourself the role ${role.name} as it is higher than your highest role.`,
-                                    flags: MessageFlags.Ephemeral
-                                })
-                                .catch(() => {});
-
-                            return;
-                        }
-
-                        actionRow.addComponents(
-                            new GargoyleButtonBuilder(this, 'addrole', role?.id).setLabel(role?.name).setStyle(ButtonStyle.Secondary)
-                        );
-                        if (roleCount === 5) {
-                            roleCount = 0;
-                            componentCollection.push(actionRow);
-                            actionRow = new ActionRowBuilder<GargoyleButtonBuilder>();
-                        }
-                    }
-                    if (roleCount > 0) {
-                        componentCollection.push(actionRow);
-                    }
-
-                    message = { components: componentCollection };
-                }
-
-                message = {
-                    content: '',
-                    components: [
-                        ...(message.components ?? []),
-                        new ActionRowBuilder<RoleSelectMenuBuilder>().setComponents(
-                            new GargoyleRoleSelectMenuBuilder(this, 'roles', args.length > 1 && args[1] == 'panel' ? 'panel' : 'nopanel')
-                                .setMaxValues(25)
-                                .setMinValues(1)
-                                .setDefaultRoles(roles)
-                                .setPlaceholder('Select role(s) to give')
-                        ),
-                        new ActionRowBuilder<GargoyleButtonBuilder>().setComponents(new GargoyleButtonBuilder(this, 'submit').setLabel('Submit'))
-                    ],
-                    flags: message.flags
-                };
-
-                await interaction.update(message);
-            }
-        }
-    }
-
     public override async executeButtonCommand(_client: GargoyleClient, interaction: ButtonInteraction, ...args: string[]): Promise<void> {
         if (args[0] === 'addrole') {
             const role = await interaction.guild?.roles.fetch(args[1]);
@@ -374,53 +218,6 @@ export default class RoleCommand extends GargoyleModule {
                     .then(() => {
                         interaction.reply({ content: `Added role ${role.name}`, flags: MessageFlags.Ephemeral });
                     });
-            }
-        } else if (args[0] === 'submit') {
-            if (!interaction.guild) return;
-            const message: MessageCreateOptions = {
-                content: undefined,
-                components: [...(interaction.message.components ?? []).slice(0, -2)],
-                flags: interaction.message.flags.bitfield,
-                allowedMentions: { parse: [] }
-            };
-            try {
-                await interaction.update({
-                    components: [
-                        new ActionRowBuilder<RoleSelectMenuBuilder>().setComponents(
-                            new GargoyleRoleSelectMenuBuilder(
-                                this,
-                                'roles',
-                                interaction.message.components.filter((component) => component.type === ComponentType.Container).length > 0
-                                    ? 'panel'
-                                    : 'nopanel'
-                            )
-                                .setMaxValues(25)
-                                .setMinValues(1)
-                                .setDefaultRoles()
-                                .setPlaceholder('Select role(s) to give')
-                        )
-                    ]
-                });
-
-                await sendAsServer(message, interaction.channel as TextChannel);
-            } catch (err) {
-                client.logger.error('Failed to make panel', err as string);
-                await interaction.update({
-                    components: [
-                        new ContainerBuilder().addTextDisplayComponents(
-                            new TextDisplayBuilder().setContent(
-                                'Failed to make server message. Did you submit any roles? And do I have the right permissions?'
-                            )
-                        ),
-                        new ActionRowBuilder<RoleSelectMenuBuilder>().setComponents(
-                            new GargoyleRoleSelectMenuBuilder(this, 'roles', args.length > 1 && args[1] == 'panel' ? 'panel' : 'nopanel')
-                                .setMaxValues(25)
-                                .setMinValues(1)
-                                .setDefaultRoles()
-                                .setPlaceholder('Select role(s) to give')
-                        )
-                    ]
-                });
             }
         }
     }

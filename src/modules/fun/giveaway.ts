@@ -5,7 +5,6 @@ import GargoyleSlashCommandBuilder from '@src/system/backend/builders/gargoyleSl
 import GargoyleClient from '@src/system/backend/classes/gargoyleClient.js';
 import GargoyleModule from '@src/system/backend/classes/gargoyleModule.js';
 import Emojis from '@src/system/backend/tools/emojis.js';
-import { editAsServer, sendAsServer } from '@src/system/backend/tools/server.js';
 import {
     ActionRowBuilder,
     ButtonInteraction,
@@ -227,7 +226,7 @@ export default class Giveaway extends GargoyleModule {
             });
 
             const giveawayMessage = await this.giveawayMessage(interaction.user.id);
-            const message = await sendAsServer(giveawayMessage, client.channels.cache.get(setup.channelId) as TextChannel);
+            const message = await (client.channels.cache.get(setup.channelId) as TextChannel).send(giveawayMessage);
 
             if (!message) {
                 await interaction.reply({ content: 'Failed to send giveaway message.', flags: MessageFlags.Ephemeral });
@@ -259,14 +258,9 @@ export default class Giveaway extends GargoyleModule {
             if (!giveawayEntry || giveawayEntry.endTime.getTime() < Date.now()) {
                 await interaction.reply({ content: 'This giveaway has already ended.', flags: MessageFlags.Ephemeral });
 
-                await editAsServer(
-                    { ...((await this.giveawayMessage(giveawayEntry?.authorId!, interaction.message.id!)) as MessageEditOptions) },
-                    interaction.message.channel as TextChannel,
-                    interaction.message.id
-                ).catch(() => {
-                    interaction.message.delete().catch(() => {});
+                await interaction.message.edit({
+                    ...((await this.giveawayMessage(giveawayEntry?.authorId!, interaction.message.id!)) as MessageEditOptions)
                 });
-
                 return;
             }
 
@@ -289,13 +283,7 @@ export default class Giveaway extends GargoyleModule {
 
             await interaction.reply({ content: 'You have entered the giveaway!', flags: MessageFlags.Ephemeral });
 
-            await editAsServer(
-                (await this.giveawayMessage(giveawayEntry.guildId, interaction.message.id)) as MessageEditOptions,
-                interaction.message.channel as TextChannel,
-                interaction.message.id
-            ).catch(() => {
-                interaction.message.delete().catch(() => {});
-            });
+            await interaction.message.edit((await this.giveawayMessage(giveawayEntry.guildId, interaction.message.id)) as MessageEditOptions);
             return;
         }
     }
@@ -360,14 +348,12 @@ async function endCurrentGiveaways(client: GargoyleClient) {
         }
 
         if (event.entries.length === 0) {
-            await editAsServer(
-                {
+            await message
+                .edit({
                     components: [new GargoyleContainerBuilder('Giveaway ended - No entries')],
                     flags: MessageFlags.IsComponentsV2
-                },
-                channel as TextChannel,
-                message.id
-            ).catch(() => {});
+                })
+                .catch(() => {});
 
             continue;
         }
@@ -381,23 +367,17 @@ async function endCurrentGiveaways(client: GargoyleClient) {
             }
         }
 
-        await editAsServer(
-            {
-                components: [
-                    new GargoyleContainerBuilder().addTextDisplayComponents(
-                        new TextDisplayBuilder().setContent(
-                            `# ${Emojis.WhiteConfetti} **GIVEAWAY ENDED** ${Emojis.WhiteConfetti}` +
-                                `\n**Prize:** \n${event.prize}` +
-                                `\n-# **Winners:** ${winners.map((w) => `<@${w}>`).join(', ')}`
-                        )
+        await message.edit({
+            components: [
+                new GargoyleContainerBuilder().addTextDisplayComponents(
+                    new TextDisplayBuilder().setContent(
+                        `# ${Emojis.WhiteConfetti} **GIVEAWAY ENDED** ${Emojis.WhiteConfetti}` +
+                            `\n**Prize:** \n${event.prize}` +
+                            `\n-# **Winners:** ${winners.map((w) => `<@${w}>`).join(', ')}`
                     )
-                ],
-                flags: MessageFlags.IsComponentsV2
-            },
-            channel as TextChannel,
-            message.id
-        ).catch(() => {
-            message.delete().catch(() => {});
+                )
+            ],
+            flags: MessageFlags.IsComponentsV2
         });
     }
 }
