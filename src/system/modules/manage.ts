@@ -365,8 +365,8 @@ class SupportMessage extends GargoyleEvent {
         if (message.channel.type !== ChannelType.DM) return;
 
         const supportMessage = await hasSupportMessage(client, message.author.id);
-        if (!supportMessage && process.env.SUPPORT_CHANNEL_ID) {
-            const supportChannel = (await client.channels.fetch(process.env.SUPPORT_CHANNEL_ID)) as TextChannel;
+        if (!supportMessage && process.env.SUGGESTION_CHANNEL_ID) {
+            const supportChannel = (await client.channels.fetch(process.env.SUGGESTION_CHANNEL_ID)) as TextChannel;
             if (!supportChannel) return;
 
             const newSupportMessage = await this.module.createSupportMessage(client, supportChannel, message.author);
