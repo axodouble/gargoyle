@@ -32,7 +32,7 @@ import {
 import GargoyleSlashCommandBuilder from '@src/system/backend/builders/gargoyleSlashCommandBuilder.js';
 import client from '@src/system/botClient.js';
 import GargoyleButtonBuilder, { GargoyleURLButtonBuilder } from '@src/system/backend/builders/gargoyleButtonBuilder.js';
-import { editAsServer, sendAsServer } from '@src/system/backend/tools/server.js';
+import { editAsServer } from '@src/system/backend/tools/server.js';
 import { GargoyleStringSelectMenuBuilder } from '@src/system/backend/builders/gargoyleSelectMenuBuilders.js';
 import GargoyleModalBuilder from '@src/system/backend/builders/gargoyleModalBuilder.js';
 
@@ -151,7 +151,7 @@ export default class Brads extends GargoyleModule {
             }
 
             try {
-                await sendAsServer(this.panelMessage, channel);
+                await channel.send(this.panelMessage);
                 await interaction.reply({ content: 'Sent the panel to the channel.', flags: [MessageFlags.Ephemeral] });
             } catch (err) {
                 client.logger.error(err as string);
@@ -857,14 +857,9 @@ export default class Brads extends GargoyleModule {
                 ]
             } as MessageCreateOptions;
 
-            await sendAsServer({ ...message, allowedMentions: {} }, thread);
+            await thread.send({ ...message, allowedMentions: {} });
 
-            if (extraMessage) await sendAsServer({ ...extraMessage, allowedMentions: {} }, thread);
-
-            /*
-             * This might look odd, but mentioning a user in a webhook does not add them to a thread.
-             **/
-            await thread.send(message).then((msg) => msg.delete());
+            if (extraMessage) await thread.send({ ...extraMessage, allowedMentions: {} });
 
             return thread;
         } catch (err) {
