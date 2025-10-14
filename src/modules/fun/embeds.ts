@@ -1,14 +1,16 @@
 import GargoyleSlashCommandBuilder from '@src/system/backend/builders/gargoyleSlashCommandBuilder.js';
 import GargoyleClient from '@src/system/backend/classes/gargoyleClient.js';
 import GargoyleModule from '@src/system/backend/classes/gargoyleModule.js';
-import { ChatInputCommandInteraction } from 'discord.js';
+import { ApplicationIntegrationType, ChatInputCommandInteraction, InteractionContextType } from 'discord.js';
 
 export default class Embeds extends GargoyleModule {
     public override category: string = 'fun';
     public override slashCommands: GargoyleSlashCommandBuilder[] = [
         new GargoyleSlashCommandBuilder()
             .setName('embeds')
-            .setDescription('Returns a link to an embed')
+            .setContexts(InteractionContextType.BotDM, InteractionContextType.Guild, InteractionContextType.PrivateChannel)
+            .setIntegrationTypes(ApplicationIntegrationType.UserInstall, ApplicationIntegrationType.GuildInstall)
+            .setDescription('Returns a link to an embed you can post')
             .addStringOption((option) => option.setName('title').setDescription('Title of the embed').setRequired(false))
             .addStringOption((option) => option.setName('description').setDescription('Description of the embed').setRequired(false))
             .addStringOption((option) => option.setName('color').setDescription('Color of the embed in hex (e.g. #ff0000)').setRequired(false))

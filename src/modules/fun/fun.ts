@@ -19,6 +19,7 @@ export default class Fun extends GargoyleModule {
         new GargoyleSlashCommandBuilder()
             .setName('fun')
             .setDescription('Fun related commands!')
+            .setContexts(InteractionContextType.BotDM, InteractionContextType.Guild, InteractionContextType.PrivateChannel)
             .addSubcommandGroup((subcommandGroup) =>
                 subcommandGroup
                     .setName('text')
