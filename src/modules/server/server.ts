@@ -291,7 +291,7 @@ export default class Server extends GargoyleModule {
                     await interaction.guild.members
                         .editMe({
                             nick: interaction.guild.name,
-                            avatar: interaction.guild.iconURL(),
+                            avatar: interaction.guild.iconURL({ extension: 'png', size: 1024 }) ?? undefined,
                             reason: `Disguise enabled by ${interaction.user.tag} (${interaction.user.id})`
                         })
                         .catch(() => {
