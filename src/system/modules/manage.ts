@@ -394,12 +394,13 @@ class SupportMessage extends GargoyleEvent {
                 content: message.content
             });
         } else if (supportMessage) {
-            const webhooks = await (supportMessage.guild as Guild).fetchWebhooks();
+            const channel = (await client.channels.fetch(supportMessage.channel.id)) as TextChannel;
 
+            const webhooks = await channel.fetchWebhooks();
             let webhook = webhooks.find((webhook) => webhook.owner && webhook.owner.id === client.user!.id);
 
             if (!webhook) {
-                webhook = await (supportMessage.channel as TextChannel).createWebhook({
+                webhook = await channel.createWebhook({
                     name: sanitizeNameString(supportMessage.guild!.name),
                     reason: 'Server Message'
                 });
