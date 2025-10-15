@@ -275,6 +275,9 @@ export default class Giveaway extends GargoyleModule {
                 });
 
                 await interaction.reply({ content: 'You have removed your entry from the giveaway.', flags: MessageFlags.Ephemeral });
+                await interaction.message.edit({
+                    ...((await this.giveawayMessage(giveawayEntry?.authorId!, interaction.message.id!)) as MessageEditOptions)
+                });
                 return;
             }
 
