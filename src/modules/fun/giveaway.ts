@@ -7,6 +7,7 @@ import GargoyleModule from '@src/system/backend/classes/gargoyleModule.js';
 import Emojis from '@src/system/backend/tools/emojis.js';
 import {
     ActionRowBuilder,
+    ApplicationIntegrationType,
     ButtonInteraction,
     ButtonStyle,
     ChannelType,
@@ -31,6 +32,7 @@ export default class Giveaway extends GargoyleModule {
         new GargoyleSlashCommandBuilder()
             .setName('giveaway')
             .setDescription('Start a giveaway')
+            .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
             .addSubcommand((subcommand) =>
                 subcommand
                     .setName('start')

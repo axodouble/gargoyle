@@ -3,6 +3,7 @@ import GargoyleClient from '@src/system/backend/classes/gargoyleClient.js';
 import GargoyleModule from '@src/system/backend/classes/gargoyleModule.js';
 import { createCanvas, Image } from 'canvas';
 import {
+    ApplicationIntegrationType,
     ChatInputCommandInteraction,
     ContainerBuilder,
     MediaGalleryBuilder,
@@ -17,6 +18,7 @@ export default class Ceraia extends GargoyleModule {
         new GargoyleSlashCommandBuilder()
             .setName('svg')
             .setDescription('SVG Utilities')
+            .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
             .addSubcommand((subcommand) =>
                 subcommand
                     .setName('emoji')

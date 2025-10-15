@@ -3,20 +3,19 @@ import GargoyleModule from '@src/system/backend/classes/gargoyleModule.js';
 import {
     ActionRowBuilder,
     AnySelectMenuInteraction,
+    ApplicationIntegrationType,
     ButtonInteraction,
     ButtonStyle,
     ChannelType,
     ChatInputCommandInteraction,
     ContainerBuilder,
     GuildMember,
-    InteractionContextType,
     MessageActionRowComponentBuilder,
     MessageCreateOptions,
     MessageEditOptions,
     MessageFlags,
     ModalActionRowComponentBuilder,
     ModalSubmitInteraction,
-    PermissionFlagsBits,
     PrivateThreadChannel,
     Role,
     SectionBuilder,
@@ -42,20 +41,9 @@ export default class Brads extends GargoyleModule {
         new GargoyleSlashCommandBuilder()
             .setName('bgn')
             .setDescription("A command for Brad's RP")
+            .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
             .addGuild('324195889977622530')
-            .addSubcommand((subcommand) => subcommand.setName('panel').setDescription('Send the BGN panel')) as GargoyleSlashCommandBuilder,
-        new GargoyleSlashCommandBuilder()
-            .setName('transcripts')
-            .setDescription('Get transcripts of a ticket')
-            .setContexts(InteractionContextType.Guild)
-            .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-            .addSubcommand((subcommand) => subcommand.setName('recent').setDescription('Get recent tickets'))
-            .addSubcommand((subcommand) =>
-                subcommand
-                    .setName('user')
-                    .setDescription('Get recent transcripts of a user')
-                    .addUserOption((option) => option.setName('user').setDescription('The user to get transcripts for').setRequired(true))
-            ) as GargoyleSlashCommandBuilder
+            .addSubcommand((subcommand) => subcommand.setName('panel').setDescription('Send the BGN panel')) as GargoyleSlashCommandBuilder
     ];
     private panelMessage = {
         components: [

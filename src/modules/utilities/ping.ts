@@ -2,7 +2,7 @@ import GargoyleTextCommandBuilder from '@builders/gargoyleTextCommandBuilder.js'
 import GargoyleClient from '@classes/gargoyleClient.js';
 import GargoyleModule from '@src/system/backend/classes/gargoyleModule.js';
 import GargoyleSlashCommandBuilder from '@src/system/backend/builders/gargoyleSlashCommandBuilder.js';
-import { ChatInputCommandInteraction, InteractionContextType, Message, TextChannel } from 'discord.js';
+import { ApplicationIntegrationType, ChatInputCommandInteraction, InteractionContextType, Message, TextChannel } from 'discord.js';
 export default class Ping extends GargoyleModule {
     public override category: string = 'utilities';
     public override slashCommands = [
@@ -10,6 +10,7 @@ export default class Ping extends GargoyleModule {
             .setName('ping')
             .setDescription('Replies with Pong!')
             .setContexts([InteractionContextType.Guild, InteractionContextType.BotDM])
+            .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
     ];
     public override textCommands = [
         new GargoyleTextCommandBuilder()

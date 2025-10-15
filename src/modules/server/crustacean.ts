@@ -9,6 +9,7 @@ import { editAsServer, sendAsServer } from '@src/system/backend/tools/server.js'
 import client from '@src/system/botClient.js';
 import {
     ActionRowBuilder,
+    ApplicationIntegrationType,
     AttachmentBuilder,
     ButtonInteraction,
     ButtonStyle,
@@ -31,6 +32,7 @@ export default class Crustacean extends GargoyleModule {
             .setName('crustacean')
             .setDescription('Crustacean invite system')
             .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+            .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
             .addSubcommand((subcommand) => subcommand.setName('info').setDescription('Get information about the crustacean system'))
             .addSubcommand((subcommand) =>
                 subcommand

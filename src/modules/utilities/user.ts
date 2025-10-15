@@ -3,6 +3,7 @@ import GargoyleClient from '@src/system/backend/classes/gargoyleClient.js';
 import GargoyleModule from '@src/system/backend/classes/gargoyleModule.js';
 import { Canvas, CanvasGradient, CanvasPattern, loadImage } from 'canvas';
 import {
+    ApplicationIntegrationType,
     ChatInputCommandInteraction,
     ContainerBuilder,
     MediaGalleryBuilder,
@@ -19,11 +20,13 @@ export default class User extends GargoyleModule {
         new GargoyleSlashCommandBuilder()
             .setName('user')
             .setDescription('User related commands')
+            .setIntegrationTypes(ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall)
             .addSubcommand((subcommand) =>
                 subcommand
                     .setName('info')
                     .setDescription('Get information about a user')
                     .addUserOption((option) => option.setName('user').setDescription('The user to get information about').setRequired(true))
+                    .addBooleanOption((option) => option.setName('hide').setDescription('Whether to hide the response').setRequired(false))
             )
             .addSubcommand((subcommand) =>
                 subcommand
@@ -37,6 +40,7 @@ export default class User extends GargoyleModule {
                             .addChoices({ name: 'Guild', value: 'guild' }, { name: 'Global', value: 'global' })
                             .setRequired(false)
                     )
+                    .addBooleanOption((option) => option.setName('hide').setDescription('Whether to hide the response').setRequired(false))
             )
             .addSubcommand((subcommand) =>
                 subcommand
@@ -50,6 +54,7 @@ export default class User extends GargoyleModule {
                             .addChoices({ name: 'Guild', value: 'guild' }, { name: 'Global', value: 'global' })
                             .setRequired(false)
                     )
+                    .addBooleanOption((option) => option.setName('hide').setDescription('Whether to hide the response').setRequired(false))
             )
             .addSubcommandGroup((subcommandGroup) =>
                 subcommandGroup
@@ -70,6 +75,7 @@ export default class User extends GargoyleModule {
                                     .addChoices({ name: 'Guild', value: 'guild' }, { name: 'Global', value: 'global' })
                                     .setRequired(false)
                             )
+                            .addBooleanOption((option) => option.setName('hide').setDescription('Whether to hide the response').setRequired(false))
                     )
                     .addSubcommand((subcommand) =>
                         subcommand
@@ -83,11 +89,14 @@ export default class User extends GargoyleModule {
                                     .addChoices({ name: 'Guild', value: 'guild' }, { name: 'Global', value: 'global' })
                                     .setRequired(false)
                             )
+                            .addBooleanOption((option) => option.setName('hide').setDescription('Whether to hide the response').setRequired(false))
                     )
             ) as GargoyleSlashCommandBuilder
     ];
 
     public override async executeSlashCommand(client: GargoyleClient, interaction: ChatInputCommandInteraction): Promise<void> {
+        const hide = interaction.options.getBoolean('hide') ?? true;
+
         if (interaction.options.getSubcommandGroup() === null) {
             if (interaction.options.getSubcommand() === 'info') {
                 const user = await client.users.fetch(interaction.options.getUser('user', true), { force: true });
@@ -119,7 +128,7 @@ export default class User extends GargoyleModule {
                                 )
                         )
                     ],
-                    flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
+                    flags: [hide ? MessageFlags.Ephemeral : [], MessageFlags.IsComponentsV2]
                 });
             } else if (interaction.options.getSubcommand() === 'avatar') {
                 const type = interaction.options.getString('type') ?? 'global';
@@ -136,7 +145,7 @@ export default class User extends GargoyleModule {
                                     )
                                 )
                         ],
-                        flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
+                        flags: [hide ? MessageFlags.Ephemeral : [], MessageFlags.IsComponentsV2]
                     });
                 } else {
                     await interaction.reply({
@@ -149,7 +158,7 @@ export default class User extends GargoyleModule {
                                     )
                                 )
                         ],
-                        flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
+                        flags: [hide ? MessageFlags.Ephemeral : [], MessageFlags.IsComponentsV2]
                     });
                 }
             } else if (interaction.options.getSubcommand() === 'banner') {
@@ -168,7 +177,7 @@ export default class User extends GargoyleModule {
                                     )
                                 )
                         ],
-                        flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
+                        flags: [hide ? MessageFlags.Ephemeral : [], MessageFlags.IsComponentsV2]
                     });
                 } else if (user.banner) {
                     await interaction.reply({
@@ -181,18 +190,18 @@ export default class User extends GargoyleModule {
                                     )
                                 )
                         ],
-                        flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
+                        flags: [hide ? MessageFlags.Ephemeral : [], MessageFlags.IsComponentsV2]
                     });
                 } else {
                     await interaction.reply({
                         content: 'User has no banner set',
-                        flags: MessageFlags.Ephemeral
+                        flags: hide ? MessageFlags.Ephemeral : []
                     });
                 }
             }
         } else if (interaction.options.getSubcommandGroup() === 'watermark') {
             if (interaction.options.getSubcommand() === 'avatar') {
-                await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+                await interaction.deferReply({ flags: [hide ? MessageFlags.Ephemeral : []] });
 
                 const type = interaction.options.getString('type') ?? 'global';
                 const user = interaction.options.getUser('user', true);
@@ -256,7 +265,7 @@ export default class User extends GargoyleModule {
                     flags: [MessageFlags.IsComponentsV2]
                 });
             } else if (interaction.options.getSubcommand() === 'banner') {
-                await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+                await interaction.deferReply({ flags: [hide ? MessageFlags.Ephemeral : []] });
 
                 const type = interaction.options.getString('type') ?? 'global';
                 const user = await client.users.fetch(interaction.options.getUser('user', true), { force: true });

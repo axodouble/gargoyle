@@ -2,6 +2,7 @@ import GargoyleClient from '@classes/gargoyleClient.js';
 import GargoyleModule from '@src/system/backend/classes/gargoyleModule.js';
 import GargoyleButtonBuilder from '@builders/gargoyleButtonBuilder.js';
 import {
+    ApplicationIntegrationType,
     ButtonInteraction,
     ButtonStyle,
     ChatInputCommandInteraction,
@@ -31,6 +32,7 @@ export default class RoleCommand extends GargoyleModule {
         new GargoyleSlashCommandBuilder()
             .setName('role')
             .setDescription('Role related commands')
+            .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
             .addSubcommandGroup((group) =>
                 group
                     .setName('create')

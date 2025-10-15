@@ -10,6 +10,7 @@ import {
     AnySelectMenuInteraction,
     APIGuildMember,
     ApplicationCommandType,
+    ApplicationIntegrationType,
     ChatInputCommandInteraction,
     ContainerBuilder,
     ContextMenuCommandBuilder,
@@ -37,6 +38,7 @@ export default class Server extends GargoyleModule {
             .setName('server')
             .setDescription('Server / community commands')
             .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+            .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
             .addSubcommandGroup((subcommandGroup) =>
                 subcommandGroup
                     .setName('bot')

@@ -11,6 +11,7 @@ import { createCanvas } from 'canvas';
 import {
     ActionRowBuilder,
     AnySelectMenuInteraction,
+    ApplicationIntegrationType,
     AttachmentBuilder,
     ButtonInteraction,
     ButtonStyle,
@@ -46,6 +47,7 @@ export default class Ceraia extends GargoyleModule {
         new GargoyleSlashCommandBuilder()
             .setName('minecraft')
             .setDescription('BGN\s Minecraft commands')
+            .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
             .addGuild(minecraftBgnGuild)
             .addSubcommandGroup((subcommandGroup) =>
                 subcommandGroup

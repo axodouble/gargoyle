@@ -11,6 +11,7 @@ import { createCanvas, Image } from 'canvas';
 import {
     ActionRowBuilder,
     AnySelectMenuInteraction,
+    ApplicationIntegrationType,
     AttachmentBuilder,
     ButtonInteraction,
     ButtonStyle,
@@ -50,6 +51,7 @@ export default class Ceraia extends GargoyleModule {
         new GargoyleSlashCommandBuilder()
             .setName('management')
             .setDescription('Ceraia management commands')
+            .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
             .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
             .addGuild(ceraiaGuild)
             .addSubcommandGroup((subcommandGroup) =>

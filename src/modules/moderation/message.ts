@@ -3,11 +3,9 @@ import GargoyleClient from '@src/system/backend/classes/gargoyleClient.js';
 import GargoyleModule from '@src/system/backend/classes/gargoyleModule.js';
 import client from '@src/system/botClient.js';
 import {
-    ApplicationCommandType,
+    ApplicationIntegrationType,
     ChannelType,
     ChatInputCommandInteraction,
-    ContextMenuCommandBuilder,
-    InteractionContextType,
     MessageContextMenuCommandInteraction,
     MessageFlags,
     PermissionFlagsBits,
@@ -21,6 +19,7 @@ export default class Moderation extends GargoyleModule {
             .setName('messages')
             .setDescription('Message moderation commands')
             .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
+            .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
             .addSubcommand((subcommand) =>
                 subcommand
                     .setName('delete')
@@ -29,14 +28,6 @@ export default class Moderation extends GargoyleModule {
                         option.setName('amount').setDescription('The amount of messages to delete').setRequired(true).setMaxValue(50)
                     )
             ) as GargoyleSlashCommandBuilder
-    ];
-
-    public override contextCommands = [
-        new ContextMenuCommandBuilder()
-            .setContexts(InteractionContextType.Guild)
-            .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
-            .setType(ApplicationCommandType.Message)
-            .setName('Delete messages till here')
     ];
 
     public override async executeSlashCommand(_client: GargoyleClient, interaction: ChatInputCommandInteraction) {

@@ -2,6 +2,7 @@ import GargoyleClient from '@classes/gargoyleClient.js';
 import GargoyleModule from '@src/system/backend/classes/gargoyleModule.js';
 import GargoyleSlashCommandBuilder from '@builders/gargoyleSlashCommandBuilder.js';
 import {
+    ApplicationIntegrationType,
     ChatInputCommandInteraction,
     ContainerBuilder,
     InteractionContextType,
@@ -19,6 +20,7 @@ export default class Steam extends GargoyleModule {
         new GargoyleSlashCommandBuilder()
             .setName('steam')
             .setDescription('Steam related commands')
+            .setIntegrationTypes(ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall)
             .addSubcommand((subcommand) =>
                 subcommand
                     .setName('64id')

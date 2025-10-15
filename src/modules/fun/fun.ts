@@ -4,6 +4,7 @@ import GargoyleContainerBuilder from '@src/system/backend/builders/gargoyleConta
 import GargoyleSlashCommandBuilder from '@src/system/backend/builders/gargoyleSlashCommandBuilder.js';
 import { playAudio } from '@src/system/backend/tools/voice.js';
 import {
+    ApplicationIntegrationType,
     ChannelType,
     ChatInputCommandInteraction,
     GuildMember,
@@ -20,6 +21,7 @@ export default class Fun extends GargoyleModule {
             .setName('fun')
             .setDescription('Fun related commands!')
             .setContexts(InteractionContextType.BotDM, InteractionContextType.Guild, InteractionContextType.PrivateChannel)
+            .setIntegrationTypes(ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall)
             .addSubcommandGroup((subcommandGroup) =>
                 subcommandGroup
                     .setName('text')

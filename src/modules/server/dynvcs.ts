@@ -8,6 +8,7 @@ import GargoyleEvent from '@src/system/backend/classes/gargoyleEvent.js';
 import {
     ActionRowBuilder,
     AnySelectMenuInteraction,
+    ApplicationIntegrationType,
     ButtonInteraction,
     ButtonStyle,
     ChannelType,
@@ -44,6 +45,7 @@ export default class VoicechatCommand extends GargoyleModule {
             .setName('vc')
             .setDescription('Voicechat related commands.')
             .setContexts([InteractionContextType.Guild])
+            .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
             .addSubcommand((subcommand) => subcommand.setName('panel').setDescription('Get the voicechat panel'))
             .addSubcommand((subcommand) =>
                 subcommand

@@ -8,6 +8,7 @@ import Emojis from '@src/system/backend/tools/emojis.js';
 import { createCanvas, loadImage } from 'canvas';
 import {
     ActionRowBuilder,
+    ApplicationIntegrationType,
     AttachmentBuilder,
     ButtonInteraction,
     ButtonStyle,
@@ -36,6 +37,7 @@ export default class Birthday extends GargoyleModule {
             .setName('birthday')
             .setDescription('Set or view your birthday')
             .setContexts(InteractionContextType.Guild)
+            .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
             .addSubcommand((subcommand) =>
                 subcommand
                     .setName('set')
@@ -649,7 +651,7 @@ export default class Birthday extends GargoyleModule {
         return message;
     }
 
-    private async createBirthdayBanner(member: GuildMember, years: number | undefined): Promise<AttachmentBuilder> {
+    private async createBirthdayBanner(member: GuildMember, _years: number | undefined): Promise<AttachmentBuilder> {
         const canvas = createCanvas(1080, 300);
         const context = canvas.getContext('2d');
 
