@@ -244,7 +244,6 @@ export default class Economy extends GargoyleModule {
             const playerTotal = game.playerHand.reduce((acc, card) => acc + card.value, 0);
             if (playerTotal > 21) {
                 const economyUser = await getEconomyUser(interaction.user.id);
-                economyUser.balance -= game.wager;
                 await economyUser.save();
                 this.cardMap.delete(interaction.user.id);
                 await interaction.update({
@@ -302,12 +301,12 @@ export default class Economy extends GargoyleModule {
                 const economyUser = await getEconomyUser(interaction.user.id);
                 let resultMessage = '';
                 if (dealerTotal > 21 || userTotal > dealerTotal) {
-                    economyUser.balance += game.wager;
+                    economyUser.balance += (game.wager*2);
                     resultMessage = `You win! You gained $${game.wager.toLocaleString()}. Your new balance is $${economyUser.balance.toLocaleString()}.`;
                 } else if (dealerTotal === userTotal) {
+                    economyUser.balance += game.wager
                     resultMessage = `It's a tie! Your balance remains $${economyUser.balance.toLocaleString()}.`;
                 } else {
-                    economyUser.balance -= game.wager;
                     resultMessage = `You lose! You lost $${game.wager.toLocaleString()}. Your new balance is $${economyUser.balance.toLocaleString()}.`;
                 }
                 await economyUser.save();
@@ -344,7 +343,7 @@ export default class Economy extends GargoyleModule {
             }
             const economyUser = await getEconomyUser(interaction.user.id);
             const forfeitAmount = Math.floor(game.wager / 2);
-            economyUser.balance -= forfeitAmount;
+            economyUser.balance += forfeitAmount;
             await economyUser.save();
             this.cardMap.delete(interaction.user.id);
             await interaction.update({
