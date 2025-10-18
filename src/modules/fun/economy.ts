@@ -67,7 +67,7 @@ export default class Economy extends GargoyleModule {
                 const lastDaily = new Date(economyUser.lastDaily);
                 const diffTime = Math.abs(now.getTime() - lastDaily.getTime());
                 const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-                if (diffDays === 0) {
+                if (lastDaily.getDate() === now.getDate() && lastDaily.getMonth() === now.getMonth() && lastDaily.getFullYear() === now.getFullYear()) {
                     await interaction.reply({
                         components: [new GargoyleContainerBuilder('You have already claimed your daily reward today!')],
                         flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
