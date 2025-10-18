@@ -239,7 +239,7 @@ export default class Economy extends GargoyleModule {
             if (card) {
                 game.playerHand.push(card);
             }
-            const playerTotal = game.playerHand.reduce((acc, card) => acc + card.value, 0);
+            const playerTotal = calculateHandTotal(game.playerHand);
             if (playerTotal > 21) {
                 const economyUser = await getEconomyUser(interaction.user.id);
                 await economyUser.save();
@@ -281,8 +281,8 @@ export default class Economy extends GargoyleModule {
             const edit = this.drawGame(interaction.user.id, { dealerTurn: true });
             if (edit) {
                 await interaction.message.edit(edit);
-                let userTotal = game.playerHand.reduce((acc, card) => acc + card.value, 0);
-                let dealerTotal = game.dealerHand.reduce((acc, card) => acc + card.value, 0);
+                let userTotal = calculateHandTotal(game.playerHand);
+                let dealerTotal = calculateHandTotal(game.dealerHand);
                 while (dealerTotal < userTotal && dealerTotal <= 21) {
                     client.logger.trace('Dealer drawing a card...');
                     sleepSync(1500);
@@ -290,7 +290,7 @@ export default class Economy extends GargoyleModule {
                     if (card) {
                         game.dealerHand.push(card);
                     }
-                    dealerTotal = game.dealerHand.reduce((acc, card) => acc + card.value, 0);
+                    dealerTotal = calculateHandTotal(game.dealerHand);
                     const edit = this.drawGame(interaction.user.id, { dealerTurn: true });
                     if (edit) {
                         await interaction.message.edit(edit);
@@ -374,8 +374,8 @@ export default class Economy extends GargoyleModule {
         const game = this.cardMap.get(userId);
         if (!game) return null;
 
-        const playerTotal = game.playerHand.reduce((acc, card) => acc + card.value, 0);
-        const dealerTotal = game.dealerHand.reduce((acc, card) => acc + card.value, 0);
+        const playerTotal = calculateHandTotal(game.playerHand);
+        const dealerTotal = calculateHandTotal(game.dealerHand);
 
         return {
             components: [
@@ -423,6 +423,25 @@ export default class Economy extends GargoyleModule {
         string,
         { messageId: string; channelId: string; wager: number; cards: Card[]; playerHand: Card[]; dealerHand: Card[] }
     >();
+}
+
+function calculateHandTotal(hand: Card[]): number {
+    let total = 0;
+    let aces = 0;
+
+    for (const card of hand) {
+        total += card.value;
+        if (card.value === CardValue.Ace) {
+            aces += 1;
+        }
+    }
+
+    while (total > 21 && aces > 0) {
+        total -= 10;
+        aces -= 1;
+    }
+
+    return total;
 }
 
 function cardToString(card: Card): string {
