@@ -192,6 +192,24 @@ export default class Economy extends GargoyleModule {
             economyUser.balance -= bet;
             await economyUser.save();
 
+            // Hand out cards
+            const gameData = this.cardMap.get(interaction.user.id);
+            if (!gameData) {
+                await interaction.followUp({
+                    components: [new GargoyleContainerBuilder('Failed to start a game of blackjack, please try again later.')],
+                    flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
+                });
+                economyUser.balance += bet;
+                await economyUser.save();
+                this.cardMap.delete(interaction.user.id);
+                return;
+            }
+            gameData.playerHand.push(gameData.cards.pop()!);
+            gameData.dealerHand.push(gameData.cards.pop()!);
+            gameData.playerHand.push(gameData.cards.pop()!);
+            gameData.dealerHand.push(gameData.cards.pop()!);
+
+
             const edit = this.drawGame(interaction.user.id, {dealerTurn: false})
             if (!edit) {
                 await interaction.followUp({
@@ -374,8 +392,10 @@ export default class Economy extends GargoyleModule {
         const game = this.cardMap.get(userId);
         if (!game) return null;
 
+        const dealerCardsVisible = options?.dealerTurn ? game.dealerHand : [game.dealerHand[0]];
+
         const playerTotal = calculateHandTotal(game.playerHand);
-        const dealerTotal = calculateHandTotal(game.dealerHand);
+        const dealerTotal = calculateHandTotal(dealerCardsVisible);
 
         return {
             components: [
@@ -384,7 +404,7 @@ export default class Economy extends GargoyleModule {
                         new TextDisplayBuilder().setContent(`# Blackjack ${options?.dealerTurn ? "- Dealer's Turn" : '- Your Turn'}`)
                     )
                     .addTextDisplayComponents(
-                        new TextDisplayBuilder().setContent(`Dealer's cards: ${cardsToString(game.dealerHand)} (Total: ${dealerTotal})`)
+                        new TextDisplayBuilder().setContent(`Dealer's cards: ${cardsToString(dealerCardsVisible) + (options?.dealerTurn ? '' : ' `(Hidden)`')} (Total: ${dealerTotal})`)
                     )
                     .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Large))
                     .addTextDisplayComponents(
