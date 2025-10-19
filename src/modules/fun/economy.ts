@@ -176,9 +176,10 @@ export default class Economy extends GargoyleModule {
             let game = this.cardMap.get(interaction.user.id);
 
             if (game) {
+                await interaction.deferReply({ flags: MessageFlags.Ephemeral });
                 const message = await ((await client.channels.fetch(game.channelId)) as TextBasedChannel)?.messages.fetch(game.messageId);
                 if (message) {
-                    await interaction.reply({
+                    await interaction.editReply({
                         components: [
                             new GargoyleContainerBuilder(
                                 `(You already have an ongoing game!)[https://discord.com/channels/${game.channelId}/${game.messageId}] Finish it before starting a new one.`
