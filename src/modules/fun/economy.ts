@@ -298,7 +298,8 @@ export default class Economy extends GargoyleModule {
                             )
                             .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Large))
                             .addTextDisplayComponents(
-                                new TextDisplayBuilder().setContent(`You lost $${game.wager.toLocaleString()}. Your new balance is $${economyUser.balance.toLocaleString()}.`
+                                new TextDisplayBuilder().setContent(
+                                    `You lost $${game.wager.toLocaleString()}. Your new balance is $${economyUser.balance.toLocaleString()}.`
                                 )
                             )
                     ],
@@ -366,18 +367,20 @@ export default class Economy extends GargoyleModule {
                     components: [
                         new ContainerBuilder()
                             .addTextDisplayComponents(new TextDisplayBuilder().setContent('# Blackjack - Game Over'))
-                                                        .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Large))
-                            .addMediaGalleryComponents(new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(`attachment://blackjack.png`)))
+                            .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Large))
+                            .addMediaGalleryComponents(
+                                new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(`attachment://blackjack.png`))
+                            )
                             .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Large))
                             .addTextDisplayComponents(new TextDisplayBuilder().setContent(resultMessage))
                     ],
                     flags: [MessageFlags.IsComponentsV2],
-                                    files: [
-                    {
-                        attachment: await drawGame({ dealerTurn: true, userCards: game.playerHand, dealerCards: game.dealerHand }),
-                        name: 'blackjack.png'
-                    }
-                ]
+                    files: [
+                        {
+                            attachment: await drawGame({ dealerTurn: true, userCards: game.playerHand, dealerCards: game.dealerHand }),
+                            name: 'blackjack.png'
+                        }
+                    ]
                 });
             } else {
                 await interaction.reply({
@@ -402,7 +405,8 @@ export default class Economy extends GargoyleModule {
             await interaction.update({
                 components: [
                     new ContainerBuilder()
-                        .addTextDisplayComponents(new TextDisplayBuilder().setContent('# Blackjack - You Forfeited!'))                            .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Large))
+                        .addTextDisplayComponents(new TextDisplayBuilder().setContent('# Blackjack - You Forfeited!'))
+                        .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Large))
                         .addMediaGalleryComponents(
                             new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(`attachment://blackjack.png`))
                         )
@@ -536,7 +540,7 @@ type Card = {
 };
 
 async function drawGame(options: { dealerTurn?: boolean; userCards: Card[]; dealerCards: Card[] }) {
-    const canvas = new Canvas(400, 300);
+    const canvas = new Canvas(800, 600);
     const ctx = canvas.getContext('2d');
 
     // Dealer's cards
@@ -544,8 +548,8 @@ async function drawGame(options: { dealerTurn?: boolean; userCards: Card[]; deal
         const card = options.dealerCards[i];
         const cardBuffer = await drawCard(card, i > 0 && !options.dealerTurn);
         const cardImg = await loadImage(cardBuffer);
-        ctx.clearRect(10 + i * 20, 10, 75, 105);
-        ctx.drawImage(cardImg, 10 + i * 20, 10, 75, 105);
+        ctx.clearRect(20 + i * 40, 20, 150, 210);
+        ctx.drawImage(cardImg, 20 + i * 40, 20, 150, 210);
     }
 
     // Player's cards
@@ -553,29 +557,33 @@ async function drawGame(options: { dealerTurn?: boolean; userCards: Card[]; deal
         const card = options.userCards[i];
         const cardBuffer = await drawCard(card);
         const cardImg = await loadImage(cardBuffer);
-        ctx.clearRect(10 + i * 20, canvas.height - 115, 75, 105);
-        ctx.drawImage(cardImg, 10 + i * 20, canvas.height - 115, 75, 105);
+        ctx.clearRect(20 + i * 40, canvas.height - 230, 150, 210);
+        ctx.drawImage(cardImg, 20 + i * 40, canvas.height - 230, 150, 210);
     }
+
+    const cardBuffer = await drawCard(cards[0], true);
+    const cardImg = await loadImage(cardBuffer);
+    ctx.drawImage(cardImg, canvas.width - cardImg.width - 20, (canvas.height - cardImg.height) / 2, cardImg.width, cardImg.height);
 
     // Game border
     ctx.roundRect(0, 0, canvas.width, canvas.height, 16);
     ctx.strokeStyle = 'white';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 4;
     ctx.stroke();
 
     return canvas.toBuffer();
 }
 
 async function drawCard(card: Card, hidden?: boolean): Promise<Buffer> {
-    const width = 75;
-    const height = 105;
+    const width = 150;
+    const height = 210;
     const canvas = new Canvas(width, height);
     const ctx = canvas.getContext('2d');
 
     // Card background
     ctx.fillStyle = 'black';
     ctx.strokeStyle = 'white';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 4;
     ctx.roundRect(0, 0, width, height, 8);
     //ctx.fill();
     ctx.stroke();
@@ -584,7 +592,7 @@ async function drawCard(card: Card, hidden?: boolean): Promise<Buffer> {
     if (hidden) {
         const backImg = await loadImage(`./media/images/outline.png`);
         const aspectRatio = backImg.width / backImg.height;
-        const drawWidth = (width - 10) / 2;
+        const drawWidth = (width - 20) / 2;
         const drawHeight = drawWidth / aspectRatio;
         const x = (width - drawWidth) / 2;
         const y = (height - drawHeight) / 2;
@@ -592,14 +600,14 @@ async function drawCard(card: Card, hidden?: boolean): Promise<Buffer> {
         return canvas.toBuffer();
     }
     ctx.fillStyle = 'white';
-    ctx.font = `${FontWeight.ExtraLight} 16px Montserrat`;
+    ctx.font = `${FontWeight.ExtraLight} 32px Montserrat`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    const iconW = 16,
-        iconH = 16; // 80% of 20x20
-    const textX = 4 + iconW / 2;
-    const textY = 8 + 16 / 2; // 16 is font size
+    const iconW = 32;
+    const iconH = 32; // 80% of 40x40
+    const textX = 8 + iconW / 2;
+    const textY = 16 + 32 / 2; // 32 is font size
 
     ctx.fillText(card.value.shortName.toString(), textX, textY);
 
@@ -613,7 +621,7 @@ async function drawCard(card: Card, hidden?: boolean): Promise<Buffer> {
     suitCtx.fillStyle = 'white';
     suitCtx.fillRect(0, 0, iconW, iconH);
     suitCtx.globalCompositeOperation = 'source-over';
-    ctx.drawImage(suitCanvas, 4, 28, iconW, iconH);
+    ctx.drawImage(suitCanvas, 8, 56, iconW, iconH);
 
     return canvas.toBuffer();
 }
