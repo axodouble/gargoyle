@@ -11,7 +11,6 @@ export default class BigFile extends GargoyleModule {
             .setName('bigfile')
             .setDescription('Lets you share files over the 8MB Discord limit')
             .setIntegrationTypes(ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall)
-
             .addAttachmentOption((option) =>
                 option.setName('file').setDescription('The file you want to share').setRequired(true)
             ) as GargoyleSlashCommandBuilder
