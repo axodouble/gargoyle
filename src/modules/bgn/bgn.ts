@@ -845,9 +845,9 @@ export default class Brads extends GargoyleModule {
                 ]
             } as MessageCreateOptions;
 
-            await thread.send({ ...message, allowedMentions: {} });
+            await thread.send({ ...message });
 
-            if (extraMessage) await thread.send({ ...extraMessage, allowedMentions: {} });
+            if (extraMessage) await thread.send({ ...extraMessage });
 
             return thread;
         } catch (err) {
