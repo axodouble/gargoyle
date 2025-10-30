@@ -93,7 +93,6 @@ export default class Ceraia extends GargoyleModule {
                     const emojiName = svgFile.name.replace(/-/g, '').split('.')[0].padEnd(2, '_');
                     const emoji = await interaction.guild?.emojis.create({ name: emojiName, attachment: buffer });
                     await interaction.followUp({ content: emoji ? `Emoji created: ${emoji}` : 'Failed to create emoji.' });
-                    client.logger.error(`Failed to create emoji: ${emoji ? emoji.id : 'Unknown error'}`);
                     return;
                 }
 
