@@ -15,7 +15,7 @@ export default class Embeds extends GargoyleModule {
     public override category: string = 'fun';
     public override slashCommands: GargoyleSlashCommandBuilder[] = [
         new GargoyleSlashCommandBuilder()
-            .setName('embed')
+            .setName('embeds')
             .setContexts(InteractionContextType.BotDM, InteractionContextType.Guild, InteractionContextType.PrivateChannel)
             .setIntegrationTypes(ApplicationIntegrationType.UserInstall, ApplicationIntegrationType.GuildInstall)
             .setDescription('Returns a link to an embed you can post') as GargoyleSlashCommandBuilder
