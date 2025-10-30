@@ -65,7 +65,7 @@ export default class Embed extends GargoyleModule {
         if (author) params.set('author', author);
 
         await interaction.reply({
-            content: `https://gargoyle.axodouble.com/api/embeds/?${params.toString()}`
+            content: `https://gargoyle.axodouble.com/api/embed/?${params.toString()}`
         });
     }
 
@@ -100,7 +100,7 @@ export default class Embed extends GargoyleModule {
         if (image) params.set('image', image);
 
         interaction.reply({
-            content: `https://gargoyle.axodouble.com/api/embeds/?${params.toString()}`
+            content: `https://gargoyle.axodouble.com/api/embed/?${params.toString()}`
         });
     }
 
