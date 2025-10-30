@@ -11,11 +11,11 @@ import {
     TextInputStyle
 } from 'discord.js';
 
-export default class Embeds extends GargoyleModule {
+export default class Embed extends GargoyleModule {
     public override category: string = 'fun';
     public override slashCommands: GargoyleSlashCommandBuilder[] = [
         new GargoyleSlashCommandBuilder()
-            .setName('embeds')
+            .setName('embed')
             .setContexts(InteractionContextType.BotDM, InteractionContextType.Guild, InteractionContextType.PrivateChannel)
             .setIntegrationTypes(ApplicationIntegrationType.UserInstall, ApplicationIntegrationType.GuildInstall)
             .setDescription('Returns a link to an embed you can post') as GargoyleSlashCommandBuilder
@@ -105,7 +105,7 @@ export default class Embeds extends GargoyleModule {
     }
 
     public override executeApiRequest(_client: GargoyleClient, request: Request): Promise<Response> {
-        // https://gargoyle.axodouble.com/api/embeds/?title=&description=&color=&url=&footer=&image=&thumbnail=&author=
+        // https://gargoyle.axodouble.com/api/embed/?title=&description=&color=&url=&footer=&image=&thumbnail=&author=
         const url = new URL(request.url);
         const params = url.searchParams;
 
