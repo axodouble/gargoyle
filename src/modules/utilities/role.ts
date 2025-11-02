@@ -219,9 +219,9 @@ export default class RoleCommand extends GargoyleModule {
                                     ),
                                 new LabelBuilder()
                                     .setLabel('Roles')
-                                    .setDescription('The roles to include in the panel (max 25)')
+                                    .setDescription('The roles to include in the panel (max 10)')
                                     .setRoleSelectMenuComponent(
-                                        new RoleSelectMenuBuilder().setMaxValues(25).setMinValues(1).setRequired(true).setCustomId('roles')
+                                        new RoleSelectMenuBuilder().setMaxValues(10).setMinValues(1).setRequired(true).setCustomId('roles')
                                     ),
                                 new LabelBuilder()
                                     .setLabel('Panel Color')
@@ -343,7 +343,8 @@ export default class RoleCommand extends GargoyleModule {
 
             const message = (interaction.channel as SendableChannels)
                 .send({ components: [container], flags: [MessageFlags.IsComponentsV2], allowedMentions: { parse: [] } })
-                .catch(() => {
+                .catch((err: Error) => {
+                    client.logger.error('Failed to send role panel message', err.stack || err.message);
                     return undefined;
                 });
 
