@@ -35,6 +35,17 @@ export default class RoleCommand extends GargoyleModule {
             .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
             .addSubcommandGroup((group) =>
                 group
+                    .setName('give')
+                    .setDescription('give a role')
+                    .addSubcommand((subcommand) =>
+                        subcommand
+                            .setName('all')
+                            .setDescription('Give a role to all users in a guild')
+                            .addRoleOption((option) => option.setName('role').setDescription('The role to give to everyone').setRequired(true))
+                    )
+            )
+            .addSubcommandGroup((group) =>
+                group
                     .setName('create')
                     .setDescription('Create a role')
                     .addSubcommand((subcommand) =>
@@ -55,7 +66,50 @@ export default class RoleCommand extends GargoyleModule {
     ];
 
     public override async executeSlashCommand(_client: GargoyleClient, interaction: ChatInputCommandInteraction) {
-        if (interaction.options.getSubcommandGroup() === 'create') {
+        
+        if(interaction.options.getSubcommandGroup()==='give'){
+            if(interaction.options.getSubcommand()==='all'){
+                const role = interaction.options.getRole('role', true) as Role;
+                if (!interaction.memberPermissions?.has('ManageRoles')) {
+                    await interaction.reply({
+                        content: 'You do not have the required permissions to use this command.',
+                        flags: MessageFlags.Ephemeral
+                    });
+                    return;
+                }
+
+                if (!role.editable) {
+                    await interaction.reply({
+                        content: 'I do not have permission to assign that role to everyone.',
+                        flags: MessageFlags.Ephemeral
+                    });
+                    return;
+                }
+
+                await interaction.deferReply({flags: MessageFlags.Ephemeral});
+
+                const members = await interaction.guild!.members.fetch();
+                let successCount = 0;
+                let failureCount = 0;
+
+                for (const [_id, member] of members) {
+                    try {
+                        if (!member.roles.cache.has(role.id)) {
+                            await member.roles.add(role, `Role given to all members by ${interaction.user.tag}`);
+                            successCount++;
+                        }
+                    } catch {
+                        failureCount++;
+                    }
+                }
+
+                await interaction.editReply({
+                    content:`Successfully given the role <@&${role.id}> to ${successCount} members. Failed to give the role to ${failureCount} members.`,
+                    allowedMentions: { parse: [] }
+                });
+            }
+        }
+        else if (interaction.options.getSubcommandGroup() === 'create') {
             if (interaction.options.getSubcommand() === 'color') {
                 if (!interaction.memberPermissions?.has('ManageRoles')) {
                     await interaction.reply({
