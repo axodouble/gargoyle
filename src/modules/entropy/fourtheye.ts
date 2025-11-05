@@ -17,13 +17,15 @@ import {
     TextDisplayBuilder
 } from 'discord.js';
 
+const entropyGuildId = '1009048008857493624';
+
 export default class FourthEye extends GargoyleModule {
     public override category: string = 'entropy';
     public override slashCommands: GargoyleSlashCommandBuilder[] = [
         new GargoyleSlashCommandBuilder()
             .setName('fourtheye')
             .setDescription("Use Entropy's Fourth Eye moderation tools")
-            .addGuild('1009048008857493624')
+            .addGuild(entropyGuildId)
             .addSubcommand((subcommand) => subcommand.setName('rules').setDescription('Get the server rules')) as GargoyleSlashCommandBuilder
     ];
 
@@ -103,7 +105,7 @@ class FourthEyeClassification extends GargoyleEvent {
          */
         this.client = client;
         if (message.author.bot) return;
-        if (message.guildId !== '1009048008857493624') return; // Only run on Entropy's Server
+        if (message.guildId !== entropyGuildId) return; // Only run on Entropy's Server
         this.messageQueue.set(message.channel.id, [...(this.messageQueue.get(message.channel.id) || []), message]);
         // If more than 2000 characters in the queue, check immediately
         const totalLength = (this.messageQueue.get(message.channel.id) || []).reduce((acc, msg) => acc + msg.content.length, 0);
@@ -118,10 +120,47 @@ class FourthEyeClassification extends GargoyleEvent {
         setInterval(async () => {
             for (const [channelId, messages] of this.messageQueue.entries()) {
                 if (messages.length > 0 && this.client) {
-                    this.client.logger.debug((await this.checkChannel(channelId)).category);
+                    const check = await this.checkChannel(channelId);
+
+                    if (check.category === 'Flagged') {
+                        const moderatorChannel = this.getModeratorChannel();
+                        if (moderatorChannel) {
+                            moderatorChannel.send({
+                                components: [
+                                    new ContainerBuilder()
+                                        .setAccentColor([255, 0, 0])
+                                        .addTextDisplayComponents(
+                                            new TextDisplayBuilder().setContent(
+                                                'Potentially harmful messages detected in <#' +
+                                                    channelId +
+                                                    '>:\n' +
+                                                    'Between [this](' +
+                                                    messages[0].url +
+                                                    ') and [this](' +
+                                                    messages[messages.length - 1].url +
+                                                    ')\n' +
+                                                    'Involved Users: ' +
+                                                    Array.from(new Set(messages.map((msg) => `<@${msg.author.id}>`))).join(', ') +
+                                                    '\n' +
+                                                    'Please review the messages for appropriate action.'
+                                            )
+                                        )
+                                ],
+                                flags: [MessageFlags.IsComponentsV2]
+                            });
+                        }
+                    }
                 }
             }
         }, 60000);
+    }
+
+    private getModeratorChannel(): TextChannel | null {
+        if (!this.client) return null;
+        const guild = this.client.guilds.cache.get(entropyGuildId);
+        if (!guild) return null;
+        if (!guild.systemChannel) return null;
+        return guild.systemChannel;
     }
 
     /**
