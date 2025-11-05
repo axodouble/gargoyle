@@ -136,7 +136,7 @@ class FourthEyeClassification extends GargoyleEvent {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                Authorization: `Bearer ${process.env.CERSH_API_KEY}`
+                Gargoyle: `${process.env.CERSH_API_KEY}`
             },
             body: JSON.stringify({ text: messages })
         });
