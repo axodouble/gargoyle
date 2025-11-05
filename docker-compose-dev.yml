@@ -13,6 +13,7 @@ services:
       MONGO_URI: ${MONGO_URI}
       STEAM_API: ${STEAM_API}
       SUGGESTION_CHANNEL_ID: ${SUGGESTION_CHANNEL_ID}
+      CERSH_API_KEY: ${CERSH_API_KEY}
       DEBUG_LEVEL: 6
       LOG_TO_FILE: false
     ports:
