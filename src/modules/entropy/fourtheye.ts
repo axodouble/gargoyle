@@ -140,9 +140,12 @@ class FourthEyeClassification extends GargoyleEvent {
             },
             body: JSON.stringify({ text: messages })
         });
+        const responseText = await response.text();
+        this.client?.logger.trace(`FourthEye classification response: ${responseText}`);
 
-        const category = (await response.text()) === 'Safe' ? 'Safe' : 'Flagged';
+        const category = responseText === 'Safe' ? 'Safe' : 'Flagged';
 
+        this.messageQueue.set(channelId, []); // Clear the queue after checking
         return { messages: this.messageQueue.get(channelId) || [], category: category };
     }
 }
