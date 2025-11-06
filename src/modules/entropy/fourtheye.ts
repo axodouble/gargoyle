@@ -135,6 +135,8 @@ class FourthEyeClassification extends GargoyleEvent {
                         }
                     }
                 }
+
+                this.messageQueue.set(channelId, []); // Clear the queue after checking
             }
         }, 60000);
     }
