@@ -96,7 +96,7 @@ class FourthEyeClassification extends GargoyleEvent {
      * Key: Channel ID
      * Value: Message object
      */
-    private messageQueue: Map<string, Message[]> = new Map();
+    private messageQueue: Message[] = [];
     public override execute(client: GargoyleClient, message: Message): void {
         /**
          * This is a proprietary module and is not fully open source.
@@ -107,7 +107,7 @@ class FourthEyeClassification extends GargoyleEvent {
         this.client = client;
         if (message.author.bot) return;
         if (message.guildId !== entropyGuildId) return; // Only run on Entropy's Server
-        this.messageQueue.set(message.channel.id, [...(this.messageQueue.get(message.channel.id) || []), message]);
+        this.messageQueue.push(message);
         // // If more than 2000 characters in the queue, check immediately
         // const totalLength = (this.messageQueue.get(message.channel.id) || []).reduce((acc, msg) => acc + msg.content.length, 0);
         // if (totalLength >= 2000) {
@@ -121,23 +121,20 @@ class FourthEyeClassification extends GargoyleEvent {
         setInterval(async () => {
             const modChannel = this.getModeratorChannel();
             if (!modChannel) return;
-            for (const [channelId, messages] of this.messageQueue.entries()) {
-                if (messages.length > 0 && this.client) {
-                    const messagesResponse = await this.uploadCheck(messages);
-                    for (const messageResponse of messagesResponse || []) {
-                        if (messageResponse.category !== FourthEyeCategories.Safe) {
-                            const message = messages.find((msg) => msg.id === messageResponse.id);
-                            if (!message) continue;
-                            modChannel.send(
-                                `:warning: [Message](${message.url}) by <@${message.author.id}> classified as **${messageResponse.category}** by Fourth Eye:\n` +
-                                    `> ${message.content.replaceAll('\n', '\n> ')}\n`
-                            );
-                        }
-                    }
-                }
 
-                this.messageQueue.set(channelId, []); // Clear the queue after checking
+            const messagesResponse = await this.uploadCheck(this.messageQueue);
+            for (const messageResponse of messagesResponse || []) {
+                if (messageResponse.category !== FourthEyeCategories.Safe) {
+                    const message = this.messageQueue.find((msg) => msg.id === messageResponse.id);
+                    if (!message) continue;
+                    modChannel.send(
+                        `:warning: [Message](${message.url}) by <@${message.author.id}> classified as **${messageResponse.category}** by Fourth Eye:\n` +
+                            `> ${message.content.replaceAll('\n', '\n> ')}\n`
+                    );
+                }
             }
+
+            this.messageQueue = [];
         }, 60000);
     }
 
@@ -147,31 +144,6 @@ class FourthEyeClassification extends GargoyleEvent {
         if (!guild) return null;
         if (!guild.systemChannel) return null;
         return guild.systemChannel;
-    }
-
-    /**
-     * Check a channel's messages in the queue and classify them.
-     * @param channelId The channel to check in the queue.
-     * @returns The messages checked and their classification.
-     */
-    private async checkChannel(channelId: string): Promise<{ messages: Message[]; category: FourthEyeCategories }> {
-        const messages = (this.messageQueue.get(channelId) || []).join('\n');
-
-        const response = await fetch('https://api.cer.sh/api/v1/ai/classify', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Gargoyle: `${process.env.CERSH_API_KEY}`
-            },
-            body: JSON.stringify({ text: messages })
-        });
-        const responseText = await response.text();
-        this.client?.logger.trace(`FourthEye classification response: ${responseText}`);
-
-        const category = FourthEyeCategories[responseText as keyof typeof FourthEyeCategories];
-
-        this.messageQueue.set(channelId, []); // Clear the queue after checking
-        return { messages: this.messageQueue.get(channelId) || [], category: category };
     }
 
     private async uploadCheck(messages: Message[]): Promise<ClassifyResponse | null> {
