@@ -16,6 +16,8 @@ import {
     TextChannel,
     TextDisplayBuilder
 } from 'discord.js';
+import z, { ZodAny } from 'zod';
+import { id } from 'zod/locales';
 
 const entropyGuildId = '1009048008857493624';
 
@@ -182,18 +184,53 @@ class FourthEyeClassification extends GargoyleEvent {
         const responseText = await response.text();
         this.client?.logger.trace(`FourthEye classification response: ${responseText}`);
 
-        const category = FourthEyeCategories[responseText as keyof typeof FourthEyeCategories] || FourthEyeCategories.Error;
+        const category = FourthEyeCategories[responseText as keyof typeof FourthEyeCategories];
 
         this.messageQueue.set(channelId, []); // Clear the queue after checking
         return { messages: this.messageQueue.get(channelId) || [], category: category };
     }
-}
 
+    private async uploadCheck(messages: Message[]): Promise<ClassifyResponse | null> {
+        const response = await fetch('https://api.cer.sh/api/v2/ai/classify', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Gargoyle: `${process.env.CERSH_API_KEY}`
+            },
+            body: JSON.stringify({ messages: messages.map((msg) => ({ id: msg.id, content: msg.content })) })
+        });
+
+        if (!response.ok) {
+            this.client?.logger.error(`FourthEye classification upload failed: ${response.statusText}`);
+            return null;
+        }
+
+        const responseData = await response.text();
+        return classifyResponse.parse(responseData);
+    }
+}
 
 enum FourthEyeCategories {
     Safe = 'Safe',
     Racist = 'Racist',
     Homophobic = 'Homophobic',
-    Pornographic = 'Pornographic',
-    Error = 'Error'
+    Pornographic = 'Pornographic'
 }
+
+const classifyUpload = z.array(
+    z.object({
+        id: z.string(),
+        content: z.string()
+    })
+);
+
+const classifyResponse = z.array(
+    z.object({
+        id: z.string(),
+        content: z.string(),
+        category: z.enum(['Safe', 'Racist', 'Homophobic', 'Pornographic'])
+    })
+);
+
+type ClassifyUpload = z.infer<typeof classifyUpload>;
+type ClassifyResponse = z.infer<typeof classifyResponse>;
