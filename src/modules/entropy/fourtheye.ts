@@ -16,9 +16,9 @@ import {
     TextChannel,
     TextDisplayBuilder
 } from 'discord.js';
-import z, { json } from 'zod';
+import z from 'zod';
 
-const entropyGuildId = '1009048008857493624';
+const entropyGuildId = '750209335841390642';
 
 export default class FourthEye extends GargoyleModule {
     public override category: string = 'entropy';
@@ -124,11 +124,11 @@ class FourthEyeClassification extends GargoyleEvent {
 
             const messagesResponse = await this.uploadCheck(this.messageQueue);
             for (const messageResponse of messagesResponse || []) {
-                if (messageResponse.category !== FourthEyeCategories.Safe) {
+                if (messageResponse.sentimentAnalysis.category !== FourthEyeCategories.Safe) {
                     const message = this.messageQueue.find((msg) => msg.id === messageResponse.id);
                     if (!message) continue;
                     modChannel.send(
-                        `:warning: [Message](${message.url}) by <@${message.author.id}> classified as **${messageResponse.category}** by Fourth Eye:\n` +
+                        `:warning: [Message](${message.url}) by <@${message.author.id}> classified as **${messageResponse.sentimentAnalysis.category}** by Fourth Eye:\n` +
                             `> ${message.content.replaceAll('\n', '\n> ')}\n`
                     );
                 }
@@ -147,6 +147,7 @@ class FourthEyeClassification extends GargoyleEvent {
     }
 
     private async uploadCheck(messages: Message[]): Promise<ClassifyResponse | null> {
+        if(messages.length === 0) return [];
         const response = await fetch('https://api.cer.sh/api/v2/ai/classify', {
             method: 'POST',
             headers: {
@@ -178,7 +179,9 @@ const classifyResponse = z.array(
     z.object({
         id: z.string(),
         content: z.string(),
-        category: z.enum(FourthEyeCategories)
+        sentimentAnalysis: z.object({
+            category: z.enum(["Safe", "Racist", "Homophobic", "Pornographic", "Threatening"])
+        })
     })
 );
 
