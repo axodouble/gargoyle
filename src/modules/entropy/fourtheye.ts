@@ -122,7 +122,7 @@ class FourthEyeClassification extends GargoyleEvent {
                 if (messages.length > 0 && this.client) {
                     const check = await this.checkChannel(channelId);
 
-                    if (check.category === 'Flagged') {
+                    if (check.category !== FourthEyeCategories.Safe) {
                         const moderatorChannel = this.getModeratorChannel();
                         if (moderatorChannel) {
                             moderatorChannel.send({
@@ -131,7 +131,7 @@ class FourthEyeClassification extends GargoyleEvent {
                                         .setAccentColor([255, 0, 0])
                                         .addTextDisplayComponents(
                                             new TextDisplayBuilder().setContent(
-                                                'Potentially harmful messages detected in <#' +
+                                                `Potentially \`${check.category}\` messages detected in <#` +
                                                     channelId +
                                                     '>:\n' +
                                                     'Between [this](' +
@@ -168,7 +168,7 @@ class FourthEyeClassification extends GargoyleEvent {
      * @param channelId The channel to check in the queue.
      * @returns The messages checked and their classification.
      */
-    private async checkChannel(channelId: string): Promise<{ messages: Message[]; category: 'Safe' | 'Flagged' }> {
+    private async checkChannel(channelId: string): Promise<{ messages: Message[]; category: FourthEyeCategories }> {
         const messages = (this.messageQueue.get(channelId) || []).join('\n');
 
         const response = await fetch('https://api.cer.sh/api/v1/ai/classify', {
@@ -182,9 +182,18 @@ class FourthEyeClassification extends GargoyleEvent {
         const responseText = await response.text();
         this.client?.logger.trace(`FourthEye classification response: ${responseText}`);
 
-        const category = responseText === 'Safe' ? 'Safe' : 'Flagged';
+        const category = FourthEyeCategories[responseText as keyof typeof FourthEyeCategories] || FourthEyeCategories.Error;
 
         this.messageQueue.set(channelId, []); // Clear the queue after checking
         return { messages: this.messageQueue.get(channelId) || [], category: category };
     }
+}
+
+
+enum FourthEyeCategories {
+    Safe = 'Safe',
+    Racist = 'Racist',
+    Homophobic = 'Homophobic',
+    Pornographic = 'Pornographic',
+    Error = 'Error'
 }
