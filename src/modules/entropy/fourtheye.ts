@@ -16,6 +16,7 @@ import {
     TextChannel,
     TextDisplayBuilder
 } from 'discord.js';
+import z from 'zod';
 
 const entropyGuildId = '1009048008857493624';
 
@@ -107,47 +108,30 @@ class FourthEyeClassification extends GargoyleEvent {
         if (message.author.bot) return;
         if (message.guildId !== entropyGuildId) return; // Only run on Entropy's Server
         this.messageQueue.set(message.channel.id, [...(this.messageQueue.get(message.channel.id) || []), message]);
-        // If more than 2000 characters in the queue, check immediately
-        const totalLength = (this.messageQueue.get(message.channel.id) || []).reduce((acc, msg) => acc + msg.content.length, 0);
-        if (totalLength >= 2000) {
-            this.checkChannel(message.channel.id);
-            return;
-        }
+        // // If more than 2000 characters in the queue, check immediately
+        // const totalLength = (this.messageQueue.get(message.channel.id) || []).reduce((acc, msg) => acc + msg.content.length, 0);
+        // if (totalLength >= 2000) {
+        //     this.checkChannel(message.channel.id);
+        //     return;
+        // }
     }
 
     private checkQueue(): void {
         // Check every 1 minute
         setInterval(async () => {
+            const modChannel = this.getModeratorChannel();
+            if (!modChannel) return;
             for (const [channelId, messages] of this.messageQueue.entries()) {
                 if (messages.length > 0 && this.client) {
-                    const check = await this.checkChannel(channelId);
-
-                    if (check.category !== FourthEyeCategories.Safe) {
-                        const moderatorChannel = this.getModeratorChannel();
-                        if (moderatorChannel) {
-                            moderatorChannel.send({
-                                components: [
-                                    new ContainerBuilder()
-                                        .setAccentColor([255, 0, 0])
-                                        .addTextDisplayComponents(
-                                            new TextDisplayBuilder().setContent(
-                                                `Potentially \`${check.category}\` messages detected in <#` +
-                                                    channelId +
-                                                    '>:\n' +
-                                                    'Between [this](' +
-                                                    messages[0].url +
-                                                    ') and [this](' +
-                                                    messages[messages.length - 1].url +
-                                                    ')\n' +
-                                                    'Involved Users: ' +
-                                                    Array.from(new Set(messages.map((msg) => `<@${msg.author.id}>`))).join(', ') +
-                                                    '\n' +
-                                                    'Please review the messages for appropriate action.'
-                                            )
-                                        )
-                                ],
-                                flags: [MessageFlags.IsComponentsV2]
-                            });
+                    const messagesResponse = await this.uploadCheck(messages);
+                    for (const messageResponse of messagesResponse || []) {
+                        if (messageResponse.category !== FourthEyeCategories.Safe) {
+                            const message = messages.find((msg) => msg.id === messageResponse.id);
+                            if (!message) continue;
+                            modChannel.send(
+                                `:warning: [Message](${message.url}) by <@${message.author.id}> classified as **${messageResponse.category}** by Fourth Eye:\n` +
+                                    `> ${message.content.replaceAll('\n', '\n> ')}\n`
+                            );
                         }
                     }
                 }
@@ -182,18 +166,46 @@ class FourthEyeClassification extends GargoyleEvent {
         const responseText = await response.text();
         this.client?.logger.trace(`FourthEye classification response: ${responseText}`);
 
-        const category = FourthEyeCategories[responseText as keyof typeof FourthEyeCategories] || FourthEyeCategories.Error;
+        const category = FourthEyeCategories[responseText as keyof typeof FourthEyeCategories];
 
         this.messageQueue.set(channelId, []); // Clear the queue after checking
         return { messages: this.messageQueue.get(channelId) || [], category: category };
     }
-}
 
+    private async uploadCheck(messages: Message[]): Promise<ClassifyResponse | null> {
+        const response = await fetch('https://api.cer.sh/api/v2/ai/classify', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Gargoyle: `${process.env.CERSH_API_KEY}`
+            },
+            body: JSON.stringify({ messages: messages.map((msg) => ({ id: msg.id, content: msg.content })) })
+        });
+
+        if (!response.ok) {
+            this.client?.logger.error(`FourthEye classification upload failed: ${response.statusText}`);
+            return null;
+        }
+
+        const responseData = await response.text();
+        return classifyResponse.parse(responseData);
+    }
+}
 
 enum FourthEyeCategories {
     Safe = 'Safe',
     Racist = 'Racist',
     Homophobic = 'Homophobic',
     Pornographic = 'Pornographic',
-    Error = 'Error'
+    Threatening = 'Threatening'
 }
+
+const classifyResponse = z.array(
+    z.object({
+        id: z.string(),
+        content: z.string(),
+        category: z.enum(FourthEyeCategories)
+    })
+);
+
+type ClassifyResponse = z.infer<typeof classifyResponse>;
