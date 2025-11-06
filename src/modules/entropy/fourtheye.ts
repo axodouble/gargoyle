@@ -16,7 +16,7 @@ import {
     TextChannel,
     TextDisplayBuilder
 } from 'discord.js';
-import z from 'zod';
+import z, { json } from 'zod';
 
 const entropyGuildId = '1009048008857493624';
 
@@ -162,7 +162,7 @@ class FourthEyeClassification extends GargoyleEvent {
         }
 
         const responseData = await response.text();
-        return classifyResponse.parse(responseData);
+        return classifyResponse.parse(JSON.parse(responseData));
     }
 }
 
