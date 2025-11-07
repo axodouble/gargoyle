@@ -1,3 +1,4 @@
+import { GargoyleURLButtonBuilder } from '@src/system/backend/builders/gargoyleButtonBuilder.js';
 import GargoyleSlashCommandBuilder from '@src/system/backend/builders/gargoyleSlashCommandBuilder.js';
 import GargoyleClient from '@src/system/backend/classes/gargoyleClient.js';
 import GargoyleEvent from '@src/system/backend/classes/gargoyleEvent.js';
@@ -13,6 +14,7 @@ import {
     MessageEditOptions,
     MessageFlags,
     RGBTuple,
+    SectionBuilder,
     TextChannel,
     TextDisplayBuilder
 } from 'discord.js';
@@ -127,10 +129,23 @@ class FourthEyeClassification extends GargoyleEvent {
                 if (messageResponse.sentimentAnalysis.category !== FourthEyeCategories.Safe) {
                     const message = this.messageQueue.find((msg) => msg.id === messageResponse.id);
                     if (!message) continue;
-                    modChannel.send(
-                        `:warning: [Message](${message.url}) by <@${message.author.id}> classified as **${messageResponse.sentimentAnalysis.category}** by Fourth Eye:\n` +
-                            `> ${message.content.replaceAll('\n', '\n> ')}\n`
-                    );
+                    modChannel.send({
+                        components: [
+                            new ContainerBuilder()
+                                .setAccentColor([255, 0, 0])
+                                .addSectionComponents(
+                                    new SectionBuilder()
+                                        .setButtonAccessory(new GargoyleURLButtonBuilder(message.url).setLabel('Message'))
+                                        .addTextDisplayComponents(
+                                            new TextDisplayBuilder().setContent(
+                                                `:warning: Message by <@${message.author.id}> classified as **${messageResponse.sentimentAnalysis.category}** by Fourth Eye:\n` +
+                                                    `> ${message.content.replaceAll('\n', '\n> ')}\n`
+                                            )
+                                        )
+                                )
+                        ],
+                        flags: [MessageFlags.IsComponentsV2]
+                    });
                 }
             }
 
