@@ -18,7 +18,7 @@ import {
 } from 'discord.js';
 import z from 'zod';
 
-const entropyGuildId = '750209335841390642';
+const entropyGuildId = '1009048008857493624';
 
 export default class FourthEye extends GargoyleModule {
     public override category: string = 'entropy';
@@ -147,7 +147,7 @@ class FourthEyeClassification extends GargoyleEvent {
     }
 
     private async uploadCheck(messages: Message[]): Promise<ClassifyResponse | null> {
-        if(messages.length === 0) return [];
+        if (messages.length === 0) return [];
         const response = await fetch('https://api.cer.sh/api/v2/ai/classify', {
             method: 'POST',
             headers: {
@@ -180,7 +180,7 @@ const classifyResponse = z.array(
         id: z.string(),
         content: z.string(),
         sentimentAnalysis: z.object({
-            category: z.enum(["Safe", "Racist", "Homophobic", "Pornographic", "Threatening"])
+            category: z.enum(['Safe', 'Racist', 'Homophobic', 'Pornographic', 'Threatening'])
         })
     })
 );
