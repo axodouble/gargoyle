@@ -183,11 +183,11 @@ class FourthEyeClassification extends GargoyleEvent {
 }
 
 enum FourthEyeCategories {
+    Error = 'Error',
     Safe = 'Safe',
     Racist = 'Racist',
     Homophobic = 'Homophobic',
-    Pornographic = 'Pornographic',
-    Threatening = 'Threatening'
+    Pornographic = 'Pornographic'
 }
 
 const classifyResponse = z.array(
@@ -195,7 +195,7 @@ const classifyResponse = z.array(
         id: z.string(),
         content: z.string(),
         sentimentAnalysis: z.object({
-            category: z.enum(['Safe', 'Racist', 'Homophobic', 'Pornographic', 'Threatening'])
+            category: z.enum(['Error', 'Safe', 'Racist', 'Homophobic', 'Pornographic'])
         })
     })
 );
