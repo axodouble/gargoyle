@@ -21,7 +21,6 @@ import {
     MessageFlags,
     SeparatorBuilder,
     SeparatorSpacingSize,
-    TextBasedChannel,
     TextDisplayBuilder
 } from 'discord.js';
 import { model, Schema } from 'mongoose';
@@ -685,58 +684,6 @@ async function drawCards(cards: Card[], hiddenCards: number = 0): Promise<Buffer
             ctx.drawImage(suitCanvas, i * 40 + 8, 56, iconW, iconH);
         }
     }
-
-    return canvas.toBuffer();
-}
-
-async function drawCard(card: Card, hidden?: boolean): Promise<Buffer> {
-    const width = 150;
-    const height = 210;
-    const canvas = new Canvas(width, height);
-    const ctx = canvas.getContext('2d');
-
-    // Card background
-    ctx.fillStyle = 'black';
-    ctx.strokeStyle = 'white';
-    ctx.lineWidth = 4;
-    ctx.roundRect(0, 0, width, height, 8);
-    //ctx.fill();
-    ctx.stroke();
-
-    // Card value
-    if (hidden) {
-        const backImg = await loadImage(`./media/images/outline.png`);
-        const aspectRatio = backImg.width / backImg.height;
-        const drawWidth = (width - 20) / 2;
-        const drawHeight = drawWidth / aspectRatio;
-        const x = (width - drawWidth) / 2;
-        const y = (height - drawHeight) / 2;
-        ctx.drawImage(backImg, x, y, drawWidth, drawHeight);
-        return canvas.toBuffer();
-    }
-    ctx.fillStyle = 'white';
-    ctx.font = `${FontWeight.ExtraLight} 32px Montserrat`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-
-    const iconW = 32;
-    const iconH = 32; // 80% of 40x40
-    const textX = 8 + iconW / 2;
-    const textY = 16 + 32 / 2; // 32 is font size
-
-    ctx.fillText(card.value.shortName.toString(), textX, textY);
-
-    // Suit icon (draw to offscreen canvas, recolor, then draw to main canvas)
-    const suitName = card.suit.toLowerCase();
-    const suitImg = await loadImage(`./media/icons/phosphor/${suitName}.svg`);
-    const suitCanvas = new Canvas(iconW, iconH);
-    const suitCtx = suitCanvas.getContext('2d');
-    suitCtx.drawImage(suitImg, 0, 0, iconW, iconH);
-    suitCtx.globalCompositeOperation = 'source-in';
-    suitCtx.fillStyle = 'white';
-    suitCtx.fillRect(0, 0, iconW, iconH);
-    suitCtx.globalCompositeOperation = 'source-over';
-    ctx.drawImage(suitCanvas, 8, 56, iconW, iconH);
 
     return canvas.toBuffer();
 }
