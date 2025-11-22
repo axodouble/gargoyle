@@ -2,9 +2,8 @@ FROM oven/bun:debian
 
 WORKDIR /workspace/gargoyle
 
-RUN apt-get update && apt-get install -y git curl ffmpeg
-
-RUN apt-get install -y build-essential libcairo2-dev libpango1.0-dev libgif-dev libjpeg-dev
+RUN apt-get update && apt-get install -y git curl ffmpeg espeak-ng \
+	&& apt-get install -y build-essential libcairo2-dev libpango1.0-dev libgif-dev libjpeg-dev
 
 COPY package.json ./package.json
 

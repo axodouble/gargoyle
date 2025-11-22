@@ -7,6 +7,10 @@ async function registerCommands(client: GargoyleClient): Promise<void> {
     const slashCommands: GargoyleSlashCommandBuilder[] = [];
     const contextCommands: ContextMenuCommandBuilder[] = [];
     client.modules.forEach((module) => {
+        try {module.init(client);} catch (err) {
+            client.logger.error(`Error initializing module ${module.constructor.name}: ${err}`);
+        }
+
         module.events.forEach((event) => {
             if (!(event instanceof GargoyleEvent)) {
                 client.logger.error(`Event is not an instance of GargoyleEvent.`);
