@@ -119,14 +119,14 @@ class OnVoiceMessageEvent extends GargoyleEvent {
     }
     public override event = Events.MessageCreate as const;
     public override execute(client: GargoyleClient, message: Message): void {
-        if (message.author.bot) return;
-        if (!message.guild) return;
+        if (message.author.bot || !message.member || !message.guild) return;
         const member = message.guild.members.cache.get(message.author.id);
         if (!member) return;
         const voiceChannel = member.voice.channel;
         if (!voiceChannel) return;
         if (!((message.channel as GuildBasedChannel).name.toLowerCase().replaceAll('-', '') === 'nomic')) return;
-        if (message.channel.type !== ChannelType.GuildText) return;
+
+        if (message.content) if (message.channel.type !== ChannelType.GuildText) return;
 
         if (this.guildLock.has(voiceChannel.guild.id)) {
             const guildState = this.guildLock.get(voiceChannel.guild.id)!;
@@ -158,12 +158,22 @@ class OnVoiceMessageEvent extends GargoyleEvent {
             }
         });
 
-        const espeak = spawn('espeak-ng', [
-            '-s',
-            '140',
-            '--stdout',
-            `${message.member?.displayName || message.author.username} says ${message.content}`
-        ]);
+        const content = message.content.substring(0, 200)
+            .replaceAll(
+                // Replace all links with the text "link"
+                /(https?:\/\/[^\s]+)/g,
+                'link'
+            )
+            .replaceAll(
+                // Replace mentions with the username
+                /<@!?(\d+)>/g,
+                (_, userId) => {
+                    const user = message.guild?.members.cache.get(userId);
+                    return user ? user.displayName : 'someone';
+                }
+            );
+
+        const espeak = spawn('espeak-ng', ['-s', '140', '--stdout', `${message.member!.displayName} says ${content}`]);
 
         const resource = createAudioResource(espeak.stdout);
         player.play(resource);
