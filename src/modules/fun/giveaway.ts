@@ -347,7 +347,7 @@ async function endCurrentGiveaways(client: GargoyleClient) {
         if (event.endTime.getTime() > now) break;
 
         const channel = await client.channels.fetch(event.channelId).catch(() => null);
-        const message = await (channel as TextChannel).messages.fetch(event.messageId).catch(() => null);
+        const message = await (channel as TextChannel).messages?.fetch(event.messageId).catch(() => null);
         if (!channel || (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement) || !message) {
             continue;
         }
