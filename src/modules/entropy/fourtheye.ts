@@ -68,7 +68,7 @@ export default class FourthEye extends GargoyleModule {
         };
     }
 
-    public override events: GargoyleEvent[] = [new FourthEyeClassification()];
+    public override events: GargoyleEvent[] = [];
 }
 
 async function getAverageColor(imageUrl: string): Promise<RGBTuple> {
