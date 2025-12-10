@@ -69,7 +69,7 @@ export default class ProxmoxUtil extends GargoyleModule {
 
             const summaryMessage = formattedLines.join('\n');
 
-            (notifChannel as TextChannel).send({ content: `${summaryMessage}` });
+            (notifChannel as TextChannel).send({ content: `\`\`\`${summary}\`\`\`` });
 
             return Promise.resolve(new Response('OK', { status: 200, headers: { 'Content-Type': 'text/plain' } }));
         } else {
