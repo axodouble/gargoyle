@@ -14,7 +14,7 @@ export default class ProxmoxUtil extends GargoyleModule {
         const url = new URL(request.url);
 
         if (!process.env.PROXMOX_NOTIFY_AUTH || !process.env.PROXMOX_NOTIFY_CHANNEL_ID) {
-            return Promise.resolve(new Response('Proxmox notification not configured', { status: 500, headers: { 'Content-Type': 'text/plain' } }));
+            return Promise.resolve(new Response('Proxmox notification not configured', { status: 501, headers: { 'Content-Type': 'text/plain' } }));
         }
 
         const notifChannel = await client.channels.fetch(process.env.PROXMOX_NOTIFY_CHANNEL_ID).catch(() => null);
