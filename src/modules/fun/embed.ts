@@ -65,7 +65,7 @@ export default class Embed extends GargoyleModule {
         if (author) params.set('author', author);
 
         await interaction.reply({
-            content: `https://gargoyle.axodouble.com/api/embed/?${params.toString()}`
+            content: `https://gargoyle.ceraia.com/api/embed/?${params.toString()}`
         });
     }
 
@@ -100,12 +100,12 @@ export default class Embed extends GargoyleModule {
         if (image) params.set('image', image);
 
         interaction.reply({
-            content: `https://gargoyle.axodouble.com/api/embed/?${params.toString()}`
+            content: `https://gargoyle.ceraia.com/api/embed/?${params.toString()}`
         });
     }
 
     public override executeApiRequest(_client: GargoyleClient, request: Request): Promise<Response> {
-        // https://gargoyle.axodouble.com/api/embed/?title=&description=&color=&url=&footer=&image=&thumbnail=&author=
+        // https://gargoyle.ceraia.com/api/embed/?title=&description=&color=&url=&footer=&image=&thumbnail=&author=
         const url = new URL(request.url);
         const params = url.searchParams;
 
