@@ -17,10 +17,10 @@ import {
     Events,
     GuildMember,
     InteractionContextType,
+    LabelBuilder,
     MessageActionRowComponentBuilder,
     MessageContextMenuCommandInteraction,
     MessageFlags,
-    ModalActionRowComponentBuilder,
     ModalSubmitInteraction,
     PermissionFlagsBits,
     SectionBuilder,
@@ -138,13 +138,14 @@ export default class Server extends GargoyleModule {
             await interaction.showModal(
                 new GargoyleModalBuilder(this, 'message')
                     .setTitle('Send a message as the server')
-                    .setComponents(
-                        new ActionRowBuilder<ModalActionRowComponentBuilder>().addComponents(
-                            new TextInputBuilder()
+                    .addLabelComponents(
+                        new LabelBuilder().setLabel("Message")
+                        .setTextInputComponent(
+                                new TextInputBuilder()
                                 .setCustomId('message')
-                                .setLabel('Message')
                                 .setPlaceholder('Enter your message here')
                                 .setStyle(TextInputStyle.Paragraph)
+                                .setMaxLength(2000)
                                 .setRequired(true)
                         )
                     )
@@ -388,13 +389,14 @@ export default class Server extends GargoyleModule {
             interaction.showModal(
                 new GargoyleModalBuilder(this, 'edit', interaction.targetMessage.id)
                     .setTitle('Edit Server Message')
-                    .setComponents(
-                        new ActionRowBuilder<ModalActionRowComponentBuilder>().addComponents(
-                            new TextInputBuilder()
+                    .setLabelComponents(
+                        new LabelBuilder().setLabel("Message")
+                        .setTextInputComponent(
+                                new TextInputBuilder()
                                 .setCustomId('message')
-                                .setLabel('Message')
                                 .setPlaceholder('Enter your message here')
                                 .setStyle(TextInputStyle.Paragraph)
+                                .setMaxLength(2000)
                                 .setRequired(true)
                                 .setValue(interaction.targetMessage.content)
                         )
