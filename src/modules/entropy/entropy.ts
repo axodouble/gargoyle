@@ -2,11 +2,60 @@ import GargoyleClient from '@classes/gargoyleClient.js';
 import GargoyleModule from '@src/system/backend/classes/gargoyleModule.js';
 import GargoyleEmbedBuilder from '@builders/gargoyleEmbedBuilder.js';
 import GargoyleEvent from '@src/system/backend/classes/gargoyleEvent.js';
-import { Events, GuildMember, TextChannel } from 'discord.js';
+import { ChannelType, ChatInputCommandInteraction, Events, GuildMember, MessageFlags, TextChannel, VoiceChannel } from 'discord.js';
+import { playAudio } from '@src/system/backend/tools/voice.js';
+import GargoyleSlashCommandBuilder from '@src/system/backend/builders/gargoyleSlashCommandBuilder.js';
 
 export default class Entropy extends GargoyleModule {
     public override category: string = 'entropy';
     public override events = [new RolePrefix(), new LeaveLog()];
+public override slashCommands: GargoyleSlashCommandBuilder[] = [
+        new GargoyleSlashCommandBuilder()
+            .setName('bell')
+            .addGuild('1009048008857493624')
+            .setDescription('For whom the bell tolls')
+            .addChannelOption((option)=>option.setName('channel').setDescription('The voice channel to ring the bell in').setRequired(true).addChannelTypes(ChannelType.GuildVoice)) as GargoyleSlashCommandBuilder
+]
+
+    public override executeSlashCommand(client: GargoyleClient, interaction: ChatInputCommandInteraction): void {
+        if (interaction.guild?.id !== '1009048008857493624') {
+            interaction.reply({ content: 'This command can only be used in the Entropy server.', flags: MessageFlags.Ephemeral });
+            return;
+        }
+
+        const channel = interaction.options.getChannel('channel') as VoiceChannel;
+        if (!channel) {
+            interaction.reply({ content: 'Please specify a valid voice channel.', flags: MessageFlags.Ephemeral });
+            return;
+        }
+
+        playAudio(client, channel, 'bell.mp3');
+        interaction.reply({ content: `Ringing the bell in ${channel.name}!`, flags: MessageFlags.Ephemeral });
+    }
+
+    public override init(client: GargoyleClient): void {
+        // Wait until the hour to chime, chime every hour on the hour
+        setInterval(() => {
+            const now = new Date();
+            if (now.getMinutes() === 0 && now.getSeconds() === 0) {
+                // It's the top of the hour
+                const entropyGuild = client.guilds.cache.get('1009048008857493624');
+                if (!entropyGuild) return;
+
+                // Get all voice channels where there are people connected
+                const voiceChannels = entropyGuild.channels.cache.filter(
+                    (channel) =>
+                        channel.type === ChannelType.GuildVoice &&
+                        (channel as VoiceChannel).members.size > 0 &&
+                        channel.permissionsFor(entropyGuild.members.me!)?.has(['Connect', 'Speak'])
+                ) as Map<string, VoiceChannel>;
+
+                for (const [, voiceChannel] of voiceChannels) {
+                    playAudio(client, voiceChannel, 'bell.mp3');
+                }
+            }
+        }, 1000); // Check every second
+    }
 }
 
 class RolePrefix extends GargoyleEvent {
