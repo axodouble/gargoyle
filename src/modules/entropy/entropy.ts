@@ -37,7 +37,7 @@ public override slashCommands: GargoyleSlashCommandBuilder[] = [
         // Wait until the hour to chime, chime every hour on the hour
         setInterval(() => {
             const now = new Date();
-            if (now.getMinutes() === 0 && now.getSeconds() === 0) {
+            if (now.getMinutes() === 0) {
                 // It's the top of the hour
                 const entropyGuild = client.guilds.cache.get('1009048008857493624');
                 if (!entropyGuild) return;
@@ -54,7 +54,7 @@ public override slashCommands: GargoyleSlashCommandBuilder[] = [
                     playAudio(client, voiceChannel, 'bell.mp3');
                 }
             }
-        }, 1000); // Check every second
+        }, 60000); // Check every minute
     }
 }
 
