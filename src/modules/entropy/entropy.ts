@@ -41,8 +41,6 @@ public override slashCommands: GargoyleSlashCommandBuilder[] = [
                 // It's the top of the hour
                 const entropyGuild = client.guilds.cache.get('1009048008857493624');
                 if (!entropyGuild) return;
-
-                // Get all voice channels where there are people connected
                 const voiceChannels = entropyGuild.channels.cache.filter(
                     (channel) =>
                         channel.type === ChannelType.GuildVoice &&
@@ -50,8 +48,13 @@ public override slashCommands: GargoyleSlashCommandBuilder[] = [
                         channel.permissionsFor(entropyGuild.members.me!)?.has(['Connect', 'Speak'])
                 ) as Map<string, VoiceChannel>;
 
-                for (const [, voiceChannel] of voiceChannels) {
-                    playAudio(client, voiceChannel, 'bell.mp3');
+                const maxMembersChannel = [...voiceChannels.values()].reduce(
+                    (max, channel) => (channel.members.size > max.members.size ? channel : max),
+                    [...voiceChannels.values()][0]
+                );
+
+                if (maxMembersChannel) {
+                    playAudio(client, maxMembersChannel, 'bell.mp3');
                 }
             }
         }, 60000); // Check every minute
