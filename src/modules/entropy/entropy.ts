@@ -9,13 +9,19 @@ import GargoyleSlashCommandBuilder from '@src/system/backend/builders/gargoyleSl
 export default class Entropy extends GargoyleModule {
     public override category: string = 'entropy';
     public override events = [new RolePrefix(), new LeaveLog()];
-public override slashCommands: GargoyleSlashCommandBuilder[] = [
+    public override slashCommands: GargoyleSlashCommandBuilder[] = [
         new GargoyleSlashCommandBuilder()
             .setName('bell')
             .addGuild('1009048008857493624')
             .setDescription('For whom the bell tolls')
-            .addChannelOption((option)=>option.setName('channel').setDescription('The voice channel to ring the bell in').setRequired(true).addChannelTypes(ChannelType.GuildVoice)) as GargoyleSlashCommandBuilder
-]
+            .addChannelOption((option) =>
+                option
+                    .setName('channel')
+                    .setDescription('The voice channel to ring the bell in')
+                    .setRequired(true)
+                    .addChannelTypes(ChannelType.GuildVoice)
+            ) as GargoyleSlashCommandBuilder
+    ];
 
     public override executeSlashCommand(client: GargoyleClient, interaction: ChatInputCommandInteraction): void {
         if (interaction.guild?.id !== '1009048008857493624') {
@@ -32,7 +38,6 @@ public override slashCommands: GargoyleSlashCommandBuilder[] = [
         playAudio(client, channel, 'bell.mp3');
         interaction.reply({ content: `Ringing the bell in ${channel.name}!`, flags: MessageFlags.Ephemeral });
     }
-
 }
 
 class RolePrefix extends GargoyleEvent {

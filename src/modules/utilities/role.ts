@@ -66,9 +66,8 @@ export default class RoleCommand extends GargoyleModule {
     ];
 
     public override async executeSlashCommand(_client: GargoyleClient, interaction: ChatInputCommandInteraction) {
-        
-        if(interaction.options.getSubcommandGroup()==='give'){
-            if(interaction.options.getSubcommand()==='all'){
+        if (interaction.options.getSubcommandGroup() === 'give') {
+            if (interaction.options.getSubcommand() === 'all') {
                 const role = interaction.options.getRole('role', true) as Role;
                 if (!interaction.memberPermissions?.has('ManageRoles')) {
                     await interaction.reply({
@@ -86,7 +85,7 @@ export default class RoleCommand extends GargoyleModule {
                     return;
                 }
 
-                await interaction.deferReply({flags: MessageFlags.Ephemeral});
+                await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
                 const members = await interaction.guild!.members.fetch();
                 let successCount = 0;
@@ -104,12 +103,11 @@ export default class RoleCommand extends GargoyleModule {
                 }
 
                 await interaction.editReply({
-                    content:`Successfully given the role <@&${role.id}> to ${successCount} members. Failed to give the role to ${failureCount} members.`,
+                    content: `Successfully given the role <@&${role.id}> to ${successCount} members. Failed to give the role to ${failureCount} members.`,
                     allowedMentions: { parse: [] }
                 });
             }
-        }
-        else if (interaction.options.getSubcommandGroup() === 'create') {
+        } else if (interaction.options.getSubcommandGroup() === 'create') {
             if (interaction.options.getSubcommand() === 'color') {
                 if (!interaction.memberPermissions?.has('ManageRoles')) {
                     await interaction.reply({

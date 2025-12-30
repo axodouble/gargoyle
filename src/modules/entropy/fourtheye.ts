@@ -86,6 +86,7 @@ async function getAverageColor(imageUrl: string): Promise<RGBTuple> {
     return [r, g, b];
 }
 
+// @ts-ignore
 class FourthEyeClassification extends GargoyleEvent {
     constructor() {
         super();

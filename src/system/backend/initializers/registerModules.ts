@@ -7,7 +7,9 @@ async function registerCommands(client: GargoyleClient): Promise<void> {
     const slashCommands: GargoyleSlashCommandBuilder[] = [];
     const contextCommands: ContextMenuCommandBuilder[] = [];
     client.modules.forEach((module) => {
-        try {module.init(client);} catch (err) {
+        try {
+            module.init(client);
+        } catch (err) {
             client.logger.error(`Error initializing module ${module.constructor.name}: ${err}`);
         }
 

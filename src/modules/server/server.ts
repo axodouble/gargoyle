@@ -139,15 +139,16 @@ export default class Server extends GargoyleModule {
                 new GargoyleModalBuilder(this, 'message')
                     .setTitle('Send a message as the server')
                     .addLabelComponents(
-                        new LabelBuilder().setLabel("Message")
-                        .setTextInputComponent(
+                        new LabelBuilder()
+                            .setLabel('Message')
+                            .setTextInputComponent(
                                 new TextInputBuilder()
-                                .setCustomId('message')
-                                .setPlaceholder('Enter your message here')
-                                .setStyle(TextInputStyle.Paragraph)
-                                .setMaxLength(2000)
-                                .setRequired(true)
-                        )
+                                    .setCustomId('message')
+                                    .setPlaceholder('Enter your message here')
+                                    .setStyle(TextInputStyle.Paragraph)
+                                    .setMaxLength(2000)
+                                    .setRequired(true)
+                            )
                     )
             );
         } else if (interaction.options.getSubcommand().startsWith('attachment')) {
@@ -390,16 +391,17 @@ export default class Server extends GargoyleModule {
                 new GargoyleModalBuilder(this, 'edit', interaction.targetMessage.id)
                     .setTitle('Edit Server Message')
                     .setLabelComponents(
-                        new LabelBuilder().setLabel("Message")
-                        .setTextInputComponent(
+                        new LabelBuilder()
+                            .setLabel('Message')
+                            .setTextInputComponent(
                                 new TextInputBuilder()
-                                .setCustomId('message')
-                                .setPlaceholder('Enter your message here')
-                                .setStyle(TextInputStyle.Paragraph)
-                                .setMaxLength(2000)
-                                .setRequired(true)
-                                .setValue(interaction.targetMessage.content)
-                        )
+                                    .setCustomId('message')
+                                    .setPlaceholder('Enter your message here')
+                                    .setStyle(TextInputStyle.Paragraph)
+                                    .setMaxLength(2000)
+                                    .setRequired(true)
+                                    .setValue(interaction.targetMessage.content)
+                            )
                     )
             );
         }

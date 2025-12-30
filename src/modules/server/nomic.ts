@@ -158,7 +158,8 @@ class OnVoiceMessageEvent extends GargoyleEvent {
             }
         });
 
-        const content = message.content.substring(0, 200)
+        const content = message.content
+            .substring(0, 200)
             .replaceAll(
                 // Replace all links with the text "link"
                 /(https?:\/\/[^\s]+)/g,
