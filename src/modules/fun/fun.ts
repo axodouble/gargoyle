@@ -85,8 +85,7 @@ export default class Fun extends GargoyleModule {
                             .addChannelTypes(ChannelType.GuildVoice)
                             .setRequired(false)
                     )
-            )
-            .setContexts([InteractionContextType.Guild, InteractionContextType.BotDM]) as GargoyleSlashCommandBuilder
+            ) as GargoyleSlashCommandBuilder
     ];
 
     public override async executeSlashCommand(client: GargoyleClient, interaction: ChatInputCommandInteraction) {
