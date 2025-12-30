@@ -1,7 +1,7 @@
 import GargoyleSlashCommandBuilder from '@src/system/backend/builders/gargoyleSlashCommandBuilder.js';
 import GargoyleClient from '@src/system/backend/classes/gargoyleClient.js';
 import GargoyleModule from '@src/system/backend/classes/gargoyleModule.js';
-import { ApplicationIntegrationType, ChatInputCommandInteraction } from 'discord.js';
+import { ApplicationIntegrationType, ChatInputCommandInteraction, InteractionContextType } from 'discord.js';
 
 export default class BigFile extends GargoyleModule {
     public override category: string = 'utilities';
@@ -11,6 +11,7 @@ export default class BigFile extends GargoyleModule {
             .setName('bigfile')
             .setDescription('Lets you share files over the 8MB Discord limit')
             .setIntegrationTypes(ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall)
+            .setContexts(InteractionContextType.BotDM, InteractionContextType.Guild, InteractionContextType.PrivateChannel)
             .addAttachmentOption((option) =>
                 option.setName('file').setDescription('The file you want to share').setRequired(true)
             ) as GargoyleSlashCommandBuilder

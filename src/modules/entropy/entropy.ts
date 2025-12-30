@@ -33,32 +33,6 @@ public override slashCommands: GargoyleSlashCommandBuilder[] = [
         interaction.reply({ content: `Ringing the bell in ${channel.name}!`, flags: MessageFlags.Ephemeral });
     }
 
-    public override init(client: GargoyleClient): void {
-        // Wait until the hour to chime, chime every hour on the hour
-        setInterval(() => {
-            const now = new Date();
-            if (now.getMinutes() === 0) {
-                // It's the top of the hour
-                const entropyGuild = client.guilds.cache.get('1009048008857493624');
-                if (!entropyGuild) return;
-                const voiceChannels = entropyGuild.channels.cache.filter(
-                    (channel) =>
-                        channel.type === ChannelType.GuildVoice &&
-                        (channel as VoiceChannel).members.size > 0 &&
-                        channel.permissionsFor(entropyGuild.members.me!)?.has(['Connect', 'Speak'])
-                ) as Map<string, VoiceChannel>;
-
-                const maxMembersChannel = [...voiceChannels.values()].reduce(
-                    (max, channel) => (channel.members.size > max.members.size ? channel : max),
-                    [...voiceChannels.values()][0]
-                );
-
-                if (maxMembersChannel) {
-                    playAudio(client, maxMembersChannel, 'bell.mp3');
-                }
-            }
-        }, 60000); // Check every minute
-    }
 }
 
 class RolePrefix extends GargoyleEvent {

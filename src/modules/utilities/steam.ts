@@ -33,7 +33,7 @@ export default class Steam extends GargoyleModule {
                     .setDescription('View someones steam profile')
                     .addStringOption((option) => option.setName('user').setDescription('The user whose profile to view').setRequired(true))
             )
-            .setContexts([InteractionContextType.Guild, InteractionContextType.BotDM]) as GargoyleSlashCommandBuilder
+            .setContexts(InteractionContextType.Guild, InteractionContextType.BotDM, InteractionContextType.PrivateChannel) as GargoyleSlashCommandBuilder
     ];
     public override textCommands = [];
 

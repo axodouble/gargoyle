@@ -6,6 +6,7 @@ import {
     ApplicationIntegrationType,
     ChatInputCommandInteraction,
     ContainerBuilder,
+    InteractionContextType,
     MediaGalleryBuilder,
     MediaGalleryItemBuilder,
     MessageFlags,
@@ -21,6 +22,7 @@ export default class User extends GargoyleModule {
             .setName('user')
             .setDescription('User related commands')
             .setIntegrationTypes(ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall)
+            .setContexts(InteractionContextType.Guild, InteractionContextType.BotDM, InteractionContextType.PrivateChannel)
             .addSubcommand((subcommand) =>
                 subcommand
                     .setName('info')
