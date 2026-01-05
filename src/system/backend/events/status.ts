@@ -29,7 +29,7 @@ export default class Ready extends GargoyleEvent {
         );
 
         setInterval(async () => {
-            let state = `🌺 Ceraia ${process.env.ENVIRONMENT === 'prod' ? '' : '(dev)'}`;
+            let state = getStatusMessage();
 
             if (!this.hasShownBirthdayMessage && this.birthdayUsers.length > 0) {
                 const birthdayName = this.birthdayUsers
@@ -58,5 +58,36 @@ export default class Ready extends GargoyleEvent {
                 state: state
             });
         }, 30000);
+    }
+}
+
+let bodiesFound = 0;
+function getStatusMessage(): string {
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const now = new Date();
+
+    const startOfTodayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    const isPastOct5Utc = now.getUTCMonth() > 9 || (now.getUTCMonth() === 9 && now.getUTCDate() > 5);
+    const targetYearUtc = isPastOct5Utc ? now.getUTCFullYear() + 1 : now.getUTCFullYear();
+    const oct5Utc = Date.UTC(targetYearUtc, 9, 5);
+
+    const daysUntilOct5 = Math.max(0, Math.floor((oct5Utc - startOfTodayUtc) / msPerDay));
+
+    const messages = [
+        `{bodies} bodies, 0 found`,
+        `just ${daysUntilOct5} more days...`,
+        '🍺 God gives his tastiest beers to his drunkest drivers.',
+        'The voices are getting louder',
+        'Nevermind change of plans, tomorrow.',
+        'I see dead pixels.'
+    ];
+
+    const status = messages[Math.floor(Math.random() * messages.length)];
+
+    if (status.includes('{bodies}')) {
+        bodiesFound += 1;
+        return status.replace('{bodies}', bodiesFound.toString()) + (process.env.ENVIRONMENT === 'prod' ? '' : ' (dev)');
+    } else {
+        return status + (process.env.ENVIRONMENT === 'prod' ? '' : ' (dev)');
     }
 }
