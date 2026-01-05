@@ -29,7 +29,7 @@ export default class Ready extends GargoyleEvent {
         );
 
         setInterval(async () => {
-            let state = getStatusMessage();
+            let state = getStatusMessage(client);
 
             if (!this.hasShownBirthdayMessage && this.birthdayUsers.length > 0) {
                 const birthdayName = this.birthdayUsers
@@ -62,7 +62,7 @@ export default class Ready extends GargoyleEvent {
 }
 
 let bodiesFound = 0;
-function getStatusMessage(): string {
+function getStatusMessage(client: GargoyleClient): string {
     const msPerDay = 24 * 60 * 60 * 1000;
     const now = new Date();
 
@@ -74,6 +74,11 @@ function getStatusMessage(): string {
     const daysUntilOct5 = Math.max(0, Math.floor((oct5Utc - startOfTodayUtc) / msPerDay));
 
     const messages = [
+        `${client.guilds.cache.size} servers strong!`,
+        'Developed with duct tape and dreams.',
+        'Running....',
+        `${process.uptime()} seconds of uptime.`,
+        `Watching ${client.users.cache.random()?.username}...`,
         `{bodies} bodies, 0 found`,
         `just ${daysUntilOct5} more days...`,
         '🍺 God gives his tastiest beers to his drunkest drivers.',
@@ -82,12 +87,16 @@ function getStatusMessage(): string {
         'I see dead pixels.'
     ];
 
-    const status = messages[Math.floor(Math.random() * messages.length)];
+    let status = messages[Math.floor(Math.random() * messages.length)];
+
+    if (process.env.ENVIRONMENT !== 'prod') {
+        status += ` (dev)`;
+    }
 
     if (status.includes('{bodies}')) {
         bodiesFound += 1;
-        return status.replace('{bodies}', bodiesFound.toString()) + (process.env.ENVIRONMENT === 'prod' ? '' : ' (dev)');
-    } else {
-        return status + (process.env.ENVIRONMENT === 'prod' ? '' : ' (dev)');
+        status = status.replace('{bodies}', bodiesFound.toString());
     }
+
+    return status;
 }
