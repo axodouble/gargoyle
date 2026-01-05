@@ -36,7 +36,28 @@ export default class ProxmoxUtil extends GargoyleModule {
             const payload = (await request.json()) as ProxmoxNotifyPayload;
             const summary = payload.description.split('=======')[1].split('Logs')[0].trim();
 
-            (notifChannel as TextChannel).send({ content: `\`\`\`${summary}\`\`\`` });
+            const vm: { vmid: string; name: string; status: string; time: string; size: string; filename: string }[] = [];
+            const lines = summary.split('\n');
+
+            for (const line of lines.slice(1, lines.length - 3)) {
+                const parts = line.trim().split(/\s+/);
+                if (parts.length >= 6) {
+                    vm.push({
+                        vmid: parts[0],
+                        name: parts[1],
+                        status: parts[2],
+                        time: parts[3] + (parts[4].match(/^[a-zA-Z]+$/) ? ' ' + parts[4] : ''),
+                        size: parts[parts.length - 3],
+                        filename: parts[parts.length - 1]
+                    });
+                }
+            }
+            let formattedSummary = 'Proxmox Backup Summary:\n';
+            for (const v of vm) {
+                formattedSummary += `- [${v.vmid}] ${v.name} - Status: ${v.status}, Time: ${v.time}, Size: ${v.size}\n`;
+            }
+
+            (notifChannel as TextChannel).send({ content: `\`\`\`${formattedSummary}\`\`\`` });
 
             return Promise.resolve(new Response('OK', { status: 200, headers: { 'Content-Type': 'text/plain' } }));
         } else {
