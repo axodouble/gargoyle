@@ -14,7 +14,7 @@ export default class Markov extends GargoyleModule {
             .setDescription('Generate a Markov chain message based on previous messages in this server.')
     ];
 
-    public override executeSlashCommand(client: GargoyleClient, interaction: ChatInputCommandInteraction): void {
+    public override async executeSlashCommand(client: GargoyleClient, interaction: ChatInputCommandInteraction): Promise<void> {
         if (interaction.commandName === 'markov') {
             if (!client.db) {
                 interaction.reply('Database not connected. Markov chains are unavailable.');
@@ -27,36 +27,33 @@ export default class Markov extends GargoyleModule {
                 return;
             }
 
-            databaseMarkovChains
-                .findOne({ guildId })
-                .then((doc) => {
-                    if (!doc || doc.markovChain.size === 0) {
-                        interaction.reply('No Markov chain data available for this server.');
-                        return;
-                    }
+            const doc = await databaseMarkovChains.findOne({ guildId }).catch((err) => {
+                client.logger.error(err);
+                return null;
+            });
 
-                    const markovChain = doc.markovChain;
-                    const keys = Array.from(markovChain.keys());
-                    let currentKey = keys[Math.floor(Math.random() * keys.length)];
-                    let result = currentKey;
+            if (!doc || doc.markovChain.size === 0) {
+                interaction.reply('No Markov chain data available for this server.');
+                return;
+            }
 
-                    for (let i = 0; i < 50; i++) {
-                        const nextWords = markovChain.get(currentKey);
-                        if (!nextWords || nextWords.length === 0) break;
+            const markovChain = doc.markovChain;
+            const keys = Array.from(markovChain.keys());
+            let currentKey = keys[Math.floor(Math.random() * keys.length)];
+            let result = currentKey;
 
-                        const nextWord = nextWords[Math.floor(Math.random() * nextWords.length)];
-                        result += ' ' + nextWord;
+            for (let i = 0; i < 50; i++) {
+                const nextWords = markovChain.get(currentKey);
+                if (!nextWords || nextWords.length === 0) break;
 
-                        const keyParts = currentKey.split(' ');
-                        currentKey = `${keyParts[1]} ${nextWord}`;
-                    }
+                const nextWord = nextWords[Math.floor(Math.random() * nextWords.length)];
+                result += ' ' + nextWord;
 
-                    interaction.reply(result);
-                })
-                .catch((err) => {
-                    console.error(err);
-                    interaction.reply('An error occurred while generating the Markov chain message.');
-                });
+                const keyParts = currentKey.split(' ');
+                currentKey = `${keyParts[1]} ${nextWord}`;
+            }
+
+            interaction.reply({ content: result, allowedMentions: { parse: [] } });
         }
     }
 

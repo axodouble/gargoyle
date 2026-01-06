@@ -17,7 +17,6 @@ export default async function executeWebRequest(client: GargoyleClient, request:
     if (!command) {
         return new Response('Not Found', { status: 404, headers: { 'Content-Type': 'text/plain' } });
     } else {
-        client.logger.trace(`Executing command ${commandName} from web request.`);
         return command.executeApiRequest(client, request);
     }
 }
