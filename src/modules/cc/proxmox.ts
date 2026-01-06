@@ -46,18 +46,18 @@ export default class ProxmoxUtil extends GargoyleModule {
                         vmid: parts[0],
                         name: parts[1],
                         status: parts[2],
-                        time: parts[3] + (parts[4].match(/^[a-zA-Z]+$/) ? ' ' + parts[4] : ''),
+                        time: parts[3],
                         size: parts[parts.length - 3],
                         filename: parts[parts.length - 1]
                     });
                 }
             }
-            let formattedSummary = 'Proxmox Backup Summary:\n';
+            let formattedSummary = '## Proxmox Backup Summary:\n';
             for (const v of vm) {
-                formattedSummary += `- [${v.vmid}] ${v.name} - Status: ${v.status}, Time: ${v.time}, Size: ${v.size}\n`;
+                formattedSummary += `- ${v.status === 'ok' ? '✅' : `❌ [${v.status}]`} ${v.name} [${v.vmid}] - Size: ${v.size} GiB\n`;
             }
 
-            (notifChannel as TextChannel).send({ content: `\`\`\`${formattedSummary}\`\`\`` });
+            (notifChannel as TextChannel).send({ content: `${formattedSummary}` });
 
             return Promise.resolve(new Response('OK', { status: 200, headers: { 'Content-Type': 'text/plain' } }));
         } else {
