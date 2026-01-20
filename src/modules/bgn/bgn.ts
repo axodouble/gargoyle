@@ -252,35 +252,7 @@ export default class Brads extends GargoyleModule {
             await interaction.deferReply({});
             const staffMembers = await this.getStaffMemberData(client, interaction.options.getInteger('days', false) || 0);
 
-            let messageContent = '### Staff Activity Sheets\n\n';
-
-            for (const staffMember of staffMembers) {
-                let userString = '';
-                if (staffMember.author) userString += `<@!${staffMember.author}> `;
-                else userString += 'Unknown User ';
-
-                if (staffMember.steamId) userString += `[${staffMember.characterName}](https://steamcommunity.com/profiles/${staffMember.steamId}) `;
-                else userString += `${staffMember.characterName || 'Unknown Character '}`;
-
-                userString += ` ${staffMember.hours.toFixed(2)} hours.\n`;
-
-                messageContent += userString;
-            }
-
-            await interaction.editReply({
-                components: [
-                    new ContainerBuilder().addSectionComponents(
-                        new SectionBuilder()
-                            .addTextDisplayComponents(new TextDisplayBuilder().setContent(messageContent))
-                            .setButtonAccessory(
-                                new GargoyleButtonBuilder(this, 'refreshstaffsheets', `${interaction.options.getInteger('days', false) || 0}`)
-                                    .setLabel('Refresh')
-                                    .setStyle(ButtonStyle.Success)
-                            )
-                    )
-                ],
-                flags: [MessageFlags.IsComponentsV2]
-            });
+            await interaction.editReply(this.staffActivityMessage(staffMembers, interaction.options.getInteger('days', false) || 0) as MessageEditOptions);
         } else if (interaction.options.getSubcommand() === 'panel') {
             if (interaction.guildId !== '324195889977622530') {
                 await interaction.reply("This command can only be used in Brad's RP.");
@@ -435,7 +407,7 @@ export default class Brads extends GargoyleModule {
             steamId: string | null;
             rankId: string | null;
             hours: number;
-        }>
+        }>, days: number
     ) {
         let messageContent = '### Staff Activity Sheets\n\n';
         for (const staffMember of staffMembers) {
@@ -455,8 +427,8 @@ export default class Brads extends GargoyleModule {
             components: [
                 new ContainerBuilder().addSectionComponents(
                     new SectionBuilder()
-                        .addTextDisplayComponents(new TextDisplayBuilder().setContent(messageContent))
-                        .setButtonAccessory(new GargoyleButtonBuilder(this, 'refreshstaffsheets').setLabel('Refresh').setStyle(ButtonStyle.Success))
+                        .addTextDisplayComponents(new TextDisplayBuilder().setContent(messageContent.substring(0, 2000)))
+                        .setButtonAccessory(new GargoyleButtonBuilder(this, 'refreshstaffsheets', `${days}`).setLabel('Refresh').setStyle(ButtonStyle.Success))
                 )
             ],
             flags: [MessageFlags.IsComponentsV2]
@@ -467,7 +439,7 @@ export default class Brads extends GargoyleModule {
         if (args[0] === 'refreshstaffsheets') {
             await interaction.deferUpdate();
             await interaction.message.edit(
-                (await this.staffActivityMessage(await this.getStaffMemberData(client, args[1] ? parseInt(args[1]) : 0))) as MessageEditOptions
+                (await this.staffActivityMessage(await this.getStaffMemberData(client, args[1] ? parseInt(args[1]) : 0), args[1] ? parseInt(args[1]) : 0)) as MessageEditOptions
             );
         } else if (args[0] === 'apply') {
             const member = await interaction.guild!.members.fetch(interaction.user.id).catch(() => null);
