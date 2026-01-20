@@ -162,8 +162,9 @@ export default class Brads extends GargoyleModule {
                 let steamId: string | null = null;
 
                 for (const line of lines) {
-                    if (line.toLowerCase().startsWith('steam 64id:')) {
-                        steamId = line.replace(/steam 64id:/i, '').trim();
+                    if (line.toLowerCase().includes('64id:')) {
+                        steamId = line.split(' ').pop() || null;
+                        break;
                     }
                 }
 
