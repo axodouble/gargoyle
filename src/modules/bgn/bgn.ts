@@ -27,7 +27,8 @@ import {
     TextDisplayBuilder,
     TextInputBuilder,
     TextInputStyle,
-    ThreadChannel
+    ThreadChannel,
+    User
 } from 'discord.js';
 import GargoyleSlashCommandBuilder from '@src/system/backend/builders/gargoyleSlashCommandBuilder.js';
 import client from '@src/system/botClient.js';
@@ -133,6 +134,15 @@ export default class Brads extends GargoyleModule {
     public override async executeSlashCommand(client: GargoyleClient, interaction: ChatInputCommandInteraction): Promise<void> {
         if (interaction.options.getSubcommand() === 'staffsheets') {
             await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+            client.logger.trace(`Attempting to get staff sheets at ${process.env.BGN_STAFF_DB_HOST}`);
+            const sql = new SQL({
+                adapter: 'mariadb',
+                hostname: process.env.BGN_STAFF_DB_HOST,
+                username: process.env.BGN_STAFF_DB_USER,
+                password: process.env.BGN_STAFF_DB_PASS,
+                database: process.env.BGN_STAFF_DB_NAME,
+                port: 3306
+            });
 
             const filingChannel = client.channels.cache.get('1442969575003127919') as TextChannel;
             if (!filingChannel) {
@@ -154,38 +164,6 @@ export default class Brads extends GargoyleModule {
             // Extract the steam ids and the author ids
             const steamIdMessages = await steamIdsThread.messages.fetch({ limit: 100 });
 
-            const discordSteamMap = new Map<string, string | null>();
-
-            steamIdMessages.forEach((msg) => {
-                const lines = msg.content.split('\n');
-                let discordId = msg.author.id;
-                let steamId: string | null = null;
-
-                for (const line of lines) {
-                    if (line.toLowerCase().includes('64id') || line.toLowerCase().includes('64 id')) {
-                        steamId = line.split(' ').pop() || null;
-                        break;
-                    }
-                }
-
-                if (discordSteamMap.has(discordId)) {
-                    if (typeof steamId === 'string') {
-                        discordSteamMap.set(discordId, steamId);
-                    }
-                    return;
-                } else discordSteamMap.set(discordId, steamId);
-            });
-
-            client.logger.trace(`Attempting to get staff sheets at ${process.env.BGN_STAFF_DB_HOST}`);
-            const sql = new SQL({
-                adapter: 'mariadb',
-                hostname: process.env.BGN_STAFF_DB_HOST,
-                username: process.env.BGN_STAFF_DB_USER,
-                password: process.env.BGN_STAFF_DB_PASS,
-                database: process.env.BGN_STAFF_DB_NAME,
-                port: 3306
-            });
-
             // Structure:
             // Id      | SteamId     | CharacterName | RankId       | ConnectDate | DisconnectDate
             // INT(10) | VARCHAR(50) | VARCHAR(255)  | VARCHAR(255) | DATETIME    | DATETIME
@@ -200,15 +178,23 @@ export default class Brads extends GargoyleModule {
             }
 
             // Compile a list of how many hours each staff member has worked
-            const staffHours = new Map<string, { characterName: string; steamId: string; rankId: string; hours: number }>();
+            const staffMembers = new Map<string, { author: string | null; characterName: string; steamId: string; rankId: string; hours: number }>();
+            const filingMembers = new Set<User>(
+                steamIdMessages.map((msg) => {
+                    return msg.author;
+                })
+            );
 
             for (const row of results) {
                 const connectDate = new Date(row.ConnectDate as string);
                 const disconnectDate = new Date(row.DisconnectDate as string);
                 const hoursWorked = (disconnectDate.getTime() - connectDate.getTime()) / (1000 * 60 * 60);
 
-                if (!staffHours.has(row.SteamId as string)) {
-                    staffHours.set(row.SteamId as string, {
+                const discordUser = steamIdMessages.find((msg) => msg.content.includes(row.SteamId as string))?.author.id;
+
+                if (!staffMembers.has(row.SteamId as string)) {
+                    staffMembers.set(row.SteamId as string, {
+                        author: discordUser || null,
                         characterName: row.CharacterName as string,
                         steamId: row.SteamId as string,
                         rankId: row.RankId as string,
@@ -216,21 +202,28 @@ export default class Brads extends GargoyleModule {
                     });
                 }
 
-                staffHours.get(row.SteamId as string)!.hours += hoursWorked;
+                staffMembers.get(row.SteamId as string)!.hours += hoursWorked;
             }
 
             // Sort by most hours
-            const sortedStaff = Array.from(staffHours.values()).sort((a, b) => b.hours - a.hours);
+            const sortedStaff = Array.from(staffMembers.values()).sort((a, b) => b.hours - a.hours);
 
             let messageContent = '### Staff Activity Sheets\n\n';
 
             for (const staff of sortedStaff) {
-                // Find the discord id from the steam id
-                const discordId = Array.from(discordSteamMap.entries()).find(([, steamId]) => steamId === staff.steamId)?.[0];
-                messageContent += `${discordId ? `<@!${discordId}>` : 'Unknown Discord User'} ([${staff.characterName}](https://steamcommunity.com/profiles/${staff.steamId})) ${staff.hours.toFixed(2)} hours\n`;
+                messageContent += `[${staff.characterName}](https://steamcommunity.com/profiles/${staff.steamId}) ${staff.author ? `<@!${staff.author}>` : 'Unknown User'} with ${staff.hours.toFixed(2)} hours\n`;
             }
 
-            await interaction.editReply({ content: messageContent, flags: [MessageFlags.SuppressEmbeds] });
+            for (const member of filingMembers) {
+                if (!staffMembers.has(member.id)) {
+                    messageContent += `${member} (No recorded staff activity)\n`;
+                }
+            }
+
+            await interaction.editReply({
+                components: [new ContainerBuilder().addTextDisplayComponents(new TextDisplayBuilder().setContent(messageContent))],
+                flags: [MessageFlags.SuppressEmbeds]
+            });
             await sql.end();
         } else if (interaction.options.getSubcommand() === 'panel') {
             if (interaction.guildId !== '324195889977622530') {
