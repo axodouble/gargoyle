@@ -10,6 +10,7 @@ import {
     ChatInputCommandInteraction,
     ContainerBuilder,
     GuildMember,
+    InteractionContextType,
     MessageActionRowComponentBuilder,
     MessageCreateOptions,
     MessageEditOptions,
@@ -34,6 +35,7 @@ import GargoyleButtonBuilder, { GargoyleURLButtonBuilder } from '@src/system/bac
 import { editAsServer } from '@src/system/backend/tools/server.js';
 import { GargoyleStringSelectMenuBuilder } from '@src/system/backend/builders/gargoyleSelectMenuBuilders.js';
 import GargoyleModalBuilder from '@src/system/backend/builders/gargoyleModalBuilder.js';
+import { SQL } from 'bun';
 
 export default class Brads extends GargoyleModule {
     public override name: string = 'bgn';
@@ -42,8 +44,10 @@ export default class Brads extends GargoyleModule {
         new GargoyleSlashCommandBuilder()
             .setName('bgn')
             .setDescription("A command for Brad's RP")
+            .setContexts(InteractionContextType.Guild)
             .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
             .addGuild('324195889977622530')
+            .addSubcommand((subcommand) => subcommand.setName('staffsheets').setDescription('Get the staff sheets'))
             .addSubcommand((subcommand) => subcommand.setName('panel').setDescription('Send the BGN panel')) as GargoyleSlashCommandBuilder
     ];
     private panelMessage = {
@@ -127,7 +131,57 @@ export default class Brads extends GargoyleModule {
     } as MessageCreateOptions;
 
     public override async executeSlashCommand(_client: GargoyleClient, interaction: ChatInputCommandInteraction): Promise<void> {
-        if (interaction.options.getSubcommand() === 'panel') {
+        if (interaction.options.getSubcommand() === 'staffsheets') {
+            const sql = new SQL({
+                adapter: 'mariadb',
+                hostname: process.env.BGN_STAFF_DB_HOST,
+                username: process.env.BGN_STAFF_DB_USER,
+                password: process.env.BGN_STAFF_DB_PASS,
+                database: process.env.BGN_STAFF_DB_NAME
+            });
+
+            // Structure:
+            // Id      | SteamId     | CharacterName | RankId       | ConnectDate | DisconnectDate
+            // INT(10) | VARCHAR(50) | VARCHAR(255)  | VARCHAR(255) | DATETIME    | DATETIME
+
+            // Select all entries where the disconnect date is within the last week
+            const results =
+                await sql`SELECT SteamId, CharacterName, RankId, ConnectDate, DisconnectDate FROM StaffActivity WHERE DisconnectDate >= NOW() - INTERVAL 7 DAY ORDER BY ConnectDate DESC`;
+
+            if (results.length === 0) {
+                await interaction.reply({ content: 'No staff activity found in the last week.', flags: [MessageFlags.Ephemeral] });
+                return;
+            }
+
+            // Compile a list of how many hours each staff member has worked
+            const staffHours: { [key: string]: { characterName: string; rankId: string; hours: number } } = {};
+
+            for (const row of results) {
+                const connectDate = new Date(row.ConnectDate as string);
+                const disconnectDate = new Date(row.DisconnectDate as string);
+                const hoursWorked = (disconnectDate.getTime() - connectDate.getTime()) / (1000 * 60 * 60);
+
+                if (!staffHours[row.SteamId as string]) {
+                    staffHours[row.SteamId as string] = {
+                        characterName: row.CharacterName as string,
+                        rankId: row.RankId as string,
+                        hours: 0
+                    };
+                }
+
+                staffHours[row.SteamId as string].hours += hoursWorked;
+            }
+
+            let messageContent = '### Staff Activity in the Last Week:\n';
+
+            for (const steamId in staffHours) {
+                const staff = staffHours[steamId];
+                messageContent += `- **${staff.characterName}** (Rank: ${staff.rankId}) - ${staff.hours.toFixed(2)} hours\n`;
+            }
+
+            await interaction.reply({ content: messageContent, flags: [MessageFlags.Ephemeral] });
+            await sql.end();
+        } else if (interaction.options.getSubcommand() === 'panel') {
             if (!interaction.channel) {
                 interaction.reply('You can only use this interaction in channels.');
                 return;
