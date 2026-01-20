@@ -48,7 +48,13 @@ export default class Brads extends GargoyleModule {
             .setContexts(InteractionContextType.Guild)
             .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
             .addGuilds('324195889977622530', '1442961061207736672')
-            .addSubcommand((subcommand) => subcommand.setName('staffsheets').setDescription('Get the staff sheets'))
+            .addSubcommand((subcommand) => subcommand.setName('staffsheets').setDescription('Get the staff sheets').addIntegerOption((option) =>
+                option
+                    .setName('days')
+                    .setDescription('Number of days to get staff activity for (default: current week)')
+                    .setMinValue(0)
+                    .setRequired(false)
+            ))
             .addSubcommand((subcommand) => subcommand.setName('panel').setDescription('Send the BGN panel')) as GargoyleSlashCommandBuilder
     ];
     private panelMessage = {
@@ -131,100 +137,149 @@ export default class Brads extends GargoyleModule {
         flags: [MessageFlags.IsComponentsV2]
     } as MessageCreateOptions;
 
+    private async getStaffMemberData(client: GargoyleClient, lastDays: number) {
+        client.logger.trace(`Attempting to get staff sheets at ${process.env.BGN_STAFF_DB_HOST}`);
+        const sql = new SQL({
+            adapter: 'mariadb',
+            hostname: process.env.BGN_STAFF_DB_HOST,
+            username: process.env.BGN_STAFF_DB_USER,
+            password: process.env.BGN_STAFF_DB_PASS,
+            database: process.env.BGN_STAFF_DB_NAME,
+            port: 3306
+        });
+
+        const filingChannel = client.channels.cache.get('1442969575003127919') as TextChannel;
+        if (!filingChannel) {
+            return [];
+        }
+
+        const steamIdsThread = (await filingChannel.threads.fetch('1442971015041912842')) as ThreadChannel;
+        if (!steamIdsThread) {
+            return [];
+        }
+
+        // Example message from the steam IDs thread:
+        // Discord Username: <@495315654866501632>  | Cactus
+        // Steam Profile Link: https://steamcommunity.com/profiles/76561199123498942/
+        // Steam 64ID: 76561199123498942
+
+        // Extract the steam ids and the author ids
+        const steamIdMessages = await steamIdsThread.messages.fetch({ limit: 100 });
+
+        // Structure:
+        // Id      | SteamId     | CharacterName | RankId       | ConnectDate | DisconnectDate
+        // INT(10) | VARCHAR(50) | VARCHAR(255)  | VARCHAR(255) | DATETIME    | DATETIME
+
+        // Staff hours are counted from last Sunday 15:00 to the following Sunday 15:00
+        // If specified, only get the last X days
+        const results =
+            lastDays === 0
+                ? await sql`
+                SELECT SteamId, CharacterName, RankId, ConnectDate, DisconnectDate
+                FROM StaffActivities
+                WHERE ConnectDate >= DATE_ADD(
+                    DATE_SUB(CURRENT_DATE(), INTERVAL (WEEKDAY(CURRENT_DATE()) + 1) DAY),
+                    INTERVAL 15 HOUR
+                )
+                AND ConnectDate < DATE_ADD(
+                    DATE_ADD(
+                        DATE_SUB(CURRENT_DATE(), INTERVAL (WEEKDAY(CURRENT_DATE()) + 1) DAY),
+                        INTERVAL 7 DAY
+                    ),
+                    INTERVAL 15 HOUR
+                )
+            `
+                : await sql`
+                SELECT SteamId, CharacterName, RankId, ConnectDate, DisconnectDate
+                FROM StaffActivities
+                WHERE DisconnectDate >= NOW() - INTERVAL ${lastDays || 7} DAY
+                ORDER BY ConnectDate DESC
+            `;
+
+        if (results.length === 0) {
+            return [];
+        }
+
+        // Compile a list of how many hours each staff member has worked
+        const staffMembers = new Map<
+            string,
+            { author: string | null; characterName: string | null; steamId: string | null; rankId: string | null; hours: number }
+        >();
+        const filingMembers = new Set<User>(
+            steamIdMessages.map((msg) => {
+                return msg.author;
+            })
+        );
+
+        for (const row of results) {
+            const connectDate = new Date(row.ConnectDate as string);
+            const disconnectDate = new Date(row.DisconnectDate as string);
+            const hoursWorked = (disconnectDate.getTime() - connectDate.getTime()) / (1000 * 60 * 60);
+
+            const discordUser = steamIdMessages.find((msg) => msg.content.includes(row.SteamId as string))?.author.id;
+
+            if (!staffMembers.has(row.SteamId as string)) {
+                staffMembers.set(row.SteamId as string, {
+                    author: discordUser || null,
+                    characterName: row.CharacterName as string,
+                    steamId: row.SteamId as string,
+                    rankId: row.RankId as string,
+                    hours: 0
+                });
+            }
+
+            staffMembers.get(row.SteamId as string)!.hours += hoursWorked;
+        }
+
+        for (const member of filingMembers) {
+            if (!Array.from(staffMembers.values()).some((staff) => staff.author === member.id)) {
+                staffMembers.set(`unknown-${member.id}`, {
+                    author: member.id,
+                    characterName: null,
+                    steamId: null,
+                    rankId: null,
+                    hours: 0
+                });
+            }
+        }
+
+        await sql.end();
+        return Array.from(staffMembers.values()).sort((a, b) => b.hours - a.hours);
+    }
+
     public override async executeSlashCommand(client: GargoyleClient, interaction: ChatInputCommandInteraction): Promise<void> {
         if (interaction.options.getSubcommand() === 'staffsheets') {
-            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-            client.logger.trace(`Attempting to get staff sheets at ${process.env.BGN_STAFF_DB_HOST}`);
-            const sql = new SQL({
-                adapter: 'mariadb',
-                hostname: process.env.BGN_STAFF_DB_HOST,
-                username: process.env.BGN_STAFF_DB_USER,
-                password: process.env.BGN_STAFF_DB_PASS,
-                database: process.env.BGN_STAFF_DB_NAME,
-                port: 3306
-            });
-
-            const filingChannel = client.channels.cache.get('1442969575003127919') as TextChannel;
-            if (!filingChannel) {
-                await interaction.editReply({ content: 'Could not find the filing channel.' });
-                return;
-            }
-
-            const steamIdsThread = (await filingChannel.threads.fetch('1442971015041912842')) as ThreadChannel;
-            if (!steamIdsThread) {
-                await interaction.editReply({ content: 'Could not find the steam IDs thread.' });
-                return;
-            }
-
-            // Example message from the steam IDs thread:
-            // Discord Username: <@495315654866501632>  | Cactus
-            // Steam Profile Link: https://steamcommunity.com/profiles/76561199123498942/
-            // Steam 64ID: 76561199123498942
-
-            // Extract the steam ids and the author ids
-            const steamIdMessages = await steamIdsThread.messages.fetch({ limit: 100 });
-
-            // Structure:
-            // Id      | SteamId     | CharacterName | RankId       | ConnectDate | DisconnectDate
-            // INT(10) | VARCHAR(50) | VARCHAR(255)  | VARCHAR(255) | DATETIME    | DATETIME
-
-            // Select all entries where the disconnect date is within the last week
-            const results =
-                await sql`SELECT SteamId, CharacterName, RankId, ConnectDate, DisconnectDate FROM StaffActivities WHERE DisconnectDate >= NOW() - INTERVAL 7 DAY ORDER BY ConnectDate DESC`;
-
-            if (results.length === 0) {
-                await interaction.editReply({ content: 'No staff activity found in the last week.' });
-                return;
-            }
-
-            // Compile a list of how many hours each staff member has worked
-            const staffMembers = new Map<string, { author: string | null; characterName: string; steamId: string; rankId: string; hours: number }>();
-            const filingMembers = new Set<User>(
-                steamIdMessages.map((msg) => {
-                    return msg.author;
-                })
-            );
-
-            for (const row of results) {
-                const connectDate = new Date(row.ConnectDate as string);
-                const disconnectDate = new Date(row.DisconnectDate as string);
-                const hoursWorked = (disconnectDate.getTime() - connectDate.getTime()) / (1000 * 60 * 60);
-
-                const discordUser = steamIdMessages.find((msg) => msg.content.includes(row.SteamId as string))?.author.id;
-
-                if (!staffMembers.has(row.SteamId as string)) {
-                    staffMembers.set(row.SteamId as string, {
-                        author: discordUser || null,
-                        characterName: row.CharacterName as string,
-                        steamId: row.SteamId as string,
-                        rankId: row.RankId as string,
-                        hours: 0
-                    });
-                }
-
-                staffMembers.get(row.SteamId as string)!.hours += hoursWorked;
-            }
-
-            // Sort by most hours
-            const sortedStaff = Array.from(staffMembers.values()).sort((a, b) => b.hours - a.hours);
+            const staffMembers = await this.getStaffMemberData(client, interaction.options.getInteger('days', false) || 0);
 
             let messageContent = '### Staff Activity Sheets\n\n';
 
-            for (const staff of sortedStaff) {
-                messageContent += `[${staff.characterName}](https://steamcommunity.com/profiles/${staff.steamId}) ${staff.author ? `<@!${staff.author}>` : 'Unknown User'} with ${staff.hours.toFixed(2)} hours\n`;
-            }
+            for (const staffMember of staffMembers) {
+                let userString = '';
+                if (staffMember.author) userString += `<@!${staffMember.author}> `;
+                else userString += 'Unknown User ';
 
-            for (const member of filingMembers) {
-                if (!Array.from(staffMembers.values()).some((staff) => staff.author === member.id)) {
-                    messageContent += `${member} (No recorded staff activity)\n`;
-                }
+                if (staffMember.steamId) userString += `[${staffMember.characterName}](https://steamcommunity.com/profiles/${staffMember.steamId}) `;
+                else userString += `${staffMember.characterName || 'Unknown Character '}`;
+
+                userString += ` ${staffMember.hours.toFixed(2)} hours.\n`;
+
+                messageContent += userString;
             }
 
             await interaction.editReply({
-                components: [new ContainerBuilder().addTextDisplayComponents(new TextDisplayBuilder().setContent(messageContent))],
-                flags: [MessageFlags.SuppressEmbeds, MessageFlags.IsComponentsV2]
+                components: [
+                    new ContainerBuilder().addSectionComponents(
+                        new SectionBuilder()
+                            .addTextDisplayComponents(new TextDisplayBuilder().setContent(messageContent))
+                            .setButtonAccessory(
+                                new GargoyleButtonBuilder(this, 'refreshstaffsheets', `${interaction.options.getInteger('days', false) || 0}`)
+                                    .setLabel('Refresh')
+                                    .setStyle(ButtonStyle.Success)
+                            )
+                    )
+                ],
+                flags: [MessageFlags.IsComponentsV2]
             });
-            await sql.end();
         } else if (interaction.options.getSubcommand() === 'panel') {
             if (interaction.guildId !== '324195889977622530') {
                 await interaction.reply("This command can only be used in Brad's RP.");
@@ -372,8 +427,48 @@ export default class Brads extends GargoyleModule {
         }
     }
 
+    private async staffActivityMessage(
+        staffMembers: Array<{
+            author: string | null;
+            characterName: string | null;
+            steamId: string | null;
+            rankId: string | null;
+            hours: number;
+        }>
+    ) {
+        let messageContent = '### Staff Activity Sheets\n\n';
+        for (const staffMember of staffMembers) {
+            let userString = '';
+            if (staffMember.author) userString += `<@!${staffMember.author}> `;
+            else userString += 'Unknown User ';
+
+            if (staffMember.steamId) userString += `[${staffMember.characterName}](https://steamcommunity.com/profiles/${staffMember.steamId}) `;
+            else userString += `${staffMember.characterName || 'Unknown Character '}`;
+
+            userString += ` ${staffMember.hours.toFixed(2)} hours.\n`;
+
+            messageContent += userString;
+        }
+
+        return {
+            components: [
+                new ContainerBuilder().addSectionComponents(
+                    new SectionBuilder()
+                        .addTextDisplayComponents(new TextDisplayBuilder().setContent(messageContent))
+                        .setButtonAccessory(new GargoyleButtonBuilder(this, 'refreshstaffsheets').setLabel('Refresh').setStyle(ButtonStyle.Success))
+                )
+            ],
+            flags: [MessageFlags.IsComponentsV2]
+        };
+    }
+
     public override async executeButtonCommand(client: GargoyleClient, interaction: ButtonInteraction, ...args: string[]): Promise<void> {
-        if (args[0] === 'apply') {
+        if (args[0] === 'refreshstaffsheets') {
+            await interaction.deferUpdate();
+            await interaction.message.edit(
+                (await this.staffActivityMessage(await this.getStaffMemberData(client, args[1] ? parseInt(args[1]) : 0))) as MessageEditOptions
+            );
+        } else if (args[0] === 'apply') {
             const member = await interaction.guild!.members.fetch(interaction.user.id).catch(() => null);
             if (!member) {
                 await interaction.reply({ content: 'You must be a member of the server to apply for staff.', flags: MessageFlags.Ephemeral });
