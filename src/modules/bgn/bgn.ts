@@ -140,7 +140,7 @@ export default class Brads extends GargoyleModule {
                 return;
             }
 
-            const steamIdsThread = filingChannel.threads.cache.get('1442971015041912842') as ThreadChannel;
+            const steamIdsThread = (await filingChannel.threads.fetch('1442971015041912842')) as ThreadChannel;
             if (!steamIdsThread) {
                 await interaction.editReply({ content: 'Could not find the steam IDs thread.' });
                 return;
