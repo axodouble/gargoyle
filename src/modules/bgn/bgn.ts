@@ -168,7 +168,12 @@ export default class Brads extends GargoyleModule {
                     }
                 }
 
-                discordSteamMap.set(discordId, steamId);
+                if (discordSteamMap.has(discordId)) {
+                    if (typeof steamId === 'string') {
+                        discordSteamMap.set(discordId, steamId);
+                    }
+                    return;
+                } else discordSteamMap.set(discordId, steamId);
             });
 
             client.logger.trace(`Attempting to get staff sheets at ${process.env.BGN_STAFF_DB_HOST}`);
