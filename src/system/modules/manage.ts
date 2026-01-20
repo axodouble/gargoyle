@@ -1,5 +1,5 @@
 import GargoyleTextCommandBuilder from '@builders/gargoyleTextCommandBuilder.js';
-import GargoyleClient from '@src/system/backend/classes/gargoyleClient.js';
+import GargoyleClient, { databaseClientMetrics } from '@src/system/backend/classes/gargoyleClient.js';
 import GargoyleModule from '@src/system/backend/classes/gargoyleModule.js';
 import {
     ActionRowBuilder,
@@ -36,6 +36,7 @@ import GargoyleModalBuilder from '../backend/builders/gargoyleModalBuilder.js';
 import { sanitizeNameString } from '../backend/tools/server.js';
 
 export default class Manage extends GargoyleModule {
+    public override name: string = 'manage';
     override category: string = 'base';
     public override slashCommands: GargoyleSlashCommandBuilder[] = [
         new GargoyleSlashCommandBuilder()
@@ -44,6 +45,7 @@ export default class Manage extends GargoyleModule {
             .addGuild('750209335841390642')
             .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
             .setPrivate(true)
+            .addSubcommand((subcommand) => subcommand.setName('metrics').setDescription('Get bot metrics'))
             .addSubcommandGroup((group) =>
                 group
                     .setName('support')
@@ -191,6 +193,28 @@ export default class Manage extends GargoyleModule {
                     await interaction.editReply({
                         content: `[Support thread](https://discord.com/channels/${message.channelId}/${message.id}) created successfully.`
                     });
+                }
+            } else if (interaction.options.getSubcommand() === 'metrics') {
+                const metrics = await databaseClientMetrics.findOne({ clientId: client.user?.id! });
+                if (!metrics) {
+                    await interaction.reply({ content: 'No metrics found.', flags: [MessageFlags.Ephemeral] });
+                    return;
+                }
+
+                let metricsMessage = 'Module Usage Metrics:\n';
+                for (const moduleMetric of metrics.modules) {
+                    metricsMessage += `Module: ${moduleMetric.moduleName} - Used: ${moduleMetric.used} times\n`;
+                }
+
+                if (metricsMessage.length > 2000) {
+                    const buffer = Buffer.from(metricsMessage, 'utf-8');
+                    await interaction.reply({
+                        content: 'Metrics are too long, sending as a file.',
+                        files: [{ attachment: buffer, name: 'metrics.txt' }],
+                        flags: [MessageFlags.Ephemeral]
+                    });
+                } else {
+                    await interaction.reply({ content: metricsMessage, flags: [MessageFlags.Ephemeral] });
                 }
             }
         } else {

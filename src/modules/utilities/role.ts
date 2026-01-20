@@ -27,6 +27,7 @@ import client from '@src/system/botClient.js';
 import GargoyleModalBuilder from '@src/system/backend/builders/gargoyleModalBuilder.js';
 
 export default class RoleCommand extends GargoyleModule {
+    public override name: string = 'role';
     public override category: string = 'utilities';
     public override slashCommands = [
         new GargoyleSlashCommandBuilder()

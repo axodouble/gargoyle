@@ -16,6 +16,7 @@ import GargoyleEvent from './gargoyleEvent.js';
 import GargoyleSlashCommandBuilder from '../builders/gargoyleSlashCommandBuilder.js';
 
 abstract class GargoyleModule {
+    public abstract name: string;
     public abstract category: string;
     /**
      * Mark a module as deprecated.

@@ -32,6 +32,7 @@ import {
 } from 'discord.js';
 
 export default class Server extends GargoyleModule {
+    public override name: string = 'server';
     public override category: string = 'server';
     public override slashCommands = [
         new GargoyleSlashCommandBuilder()

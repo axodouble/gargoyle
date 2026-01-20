@@ -12,6 +12,7 @@ import {
 } from 'discord.js';
 
 export default class Embed extends GargoyleModule {
+    public override name: string = 'embed';
     public override category: string = 'fun';
     public override slashCommands: GargoyleSlashCommandBuilder[] = [
         new GargoyleSlashCommandBuilder()

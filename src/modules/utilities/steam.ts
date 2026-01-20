@@ -15,6 +15,7 @@ import SteamAPI from 'steamapi';
 import { GargoyleURLButtonBuilder } from '@src/system/backend/builders/gargoyleButtonBuilder.js';
 
 export default class Steam extends GargoyleModule {
+    public override name: string = 'steam';
     public override category: string = 'utilities';
     public override slashCommands = [
         new GargoyleSlashCommandBuilder()

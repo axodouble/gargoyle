@@ -16,6 +16,7 @@ import {
 import GargoyleEvent from '@src/system/backend/classes/gargoyleEvent.js';
 
 export default class NoMic extends GargoyleModule {
+    public override name: string = 'nomic';
     public override category: string = 'server';
     private guildlock = new Map<string, { speaking: boolean; idlingSince: Date; connection: VoiceConnection }>();
     public override slashCommands: GargoyleSlashCommandBuilder[] = [

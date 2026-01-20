@@ -23,6 +23,7 @@ import z from 'zod';
 const entropyGuildId = '1009048008857493624';
 
 export default class FourthEye extends GargoyleModule {
+    public override name: string = 'fourtheye';
     public override category: string = 'entropy';
     public override slashCommands: GargoyleSlashCommandBuilder[] = [
         new GargoyleSlashCommandBuilder()

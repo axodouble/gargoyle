@@ -15,6 +15,7 @@ import {
 } from 'discord.js';
 
 export default class Fun extends GargoyleModule {
+    public override name: string = 'fun';
     public override category: string = 'fun';
     public override slashCommands = [
         new GargoyleSlashCommandBuilder()

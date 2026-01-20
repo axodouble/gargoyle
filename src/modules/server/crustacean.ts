@@ -25,6 +25,7 @@ import {
 } from 'discord.js';
 
 export default class Crustacean extends GargoyleModule {
+    public override name: string = 'crustacean';
     public override category: string = 'server';
     public override deprecated: boolean = true;
     public override slashCommands = [

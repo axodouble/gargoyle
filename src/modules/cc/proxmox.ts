@@ -4,6 +4,7 @@ import GargoyleModule from '@src/system/backend/classes/gargoyleModule.js';
 import { TextChannel } from 'discord.js';
 
 export default class ProxmoxUtil extends GargoyleModule {
+    public override name: string = 'proxmox';
     public override category: string = 'ceraia';
 
     public override slashCommands: GargoyleSlashCommandBuilder[] = [

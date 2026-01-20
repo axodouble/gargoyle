@@ -4,6 +4,7 @@ import GargoyleModule from '@src/system/backend/classes/gargoyleModule.js';
 import { ApplicationIntegrationType, ChatInputCommandInteraction, InteractionContextType } from 'discord.js';
 
 export default class BigFile extends GargoyleModule {
+    public override name: string = 'bigfile';
     public override category: string = 'utilities';
 
     public override slashCommands: GargoyleSlashCommandBuilder[] = [

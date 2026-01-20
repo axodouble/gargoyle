@@ -27,6 +27,7 @@ import {
 import { model, Schema } from 'mongoose';
 
 export default class Giveaway extends GargoyleModule {
+    public override name: string = 'giveaway';
     public override category: string = 'fun';
     public override deprecated: boolean | null = true;
     public override slashCommands = [

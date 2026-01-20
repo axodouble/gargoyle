@@ -1,4 +1,4 @@
-import GargoyleClient from '@src/system/backend/classes/gargoyleClient.js';
+import GargoyleClient, { recordModuleUsage } from '@src/system/backend/classes/gargoyleClient.js';
 import GargoyleEvent from '@src/system/backend/classes/gargoyleEvent.js';
 import { ChatInputCommandInteraction } from 'discord.js';
 
@@ -45,6 +45,7 @@ export default class SlashCommandHandler extends GargoyleEvent {
             }
             return;
         } else {
+            await recordModuleUsage(client, command.name);
             command.executeSlashCommand(client, interaction);
             return client.logger.trace(`${interaction.user} used the ${interaction.commandName} command.`);
         }

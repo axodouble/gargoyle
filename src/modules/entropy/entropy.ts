@@ -7,6 +7,7 @@ import { playAudio } from '@src/system/backend/tools/voice.js';
 import GargoyleSlashCommandBuilder from '@src/system/backend/builders/gargoyleSlashCommandBuilder.js';
 
 export default class Entropy extends GargoyleModule {
+    public override name: string = 'entropy';
     public override category: string = 'entropy';
     public override events = [new RolePrefix(), new LeaveLog()];
     public override slashCommands: GargoyleSlashCommandBuilder[] = [

@@ -1,11 +1,11 @@
-import GargoyleClient from '@src/system/backend/classes/gargoyleClient.js';
+import GargoyleClient, { recordModuleUsage } from '@src/system/backend/classes/gargoyleClient.js';
 import GargoyleEvent from '@src/system/backend/classes/gargoyleEvent.js';
 import { AnySelectMenuInteraction } from 'discord.js';
 
 export default class SelectCommandHandler extends GargoyleEvent {
     public event = 'interactionCreate' as const;
 
-    public execute(client: GargoyleClient, interaction: AnySelectMenuInteraction): void {
+    public async execute(client: GargoyleClient, interaction: AnySelectMenuInteraction): Promise<void> {
         if (!interaction.isAnySelectMenu()) return;
 
         const origin = interaction.customId.toLowerCase().split('-')[1];
@@ -28,6 +28,7 @@ export default class SelectCommandHandler extends GargoyleEvent {
                 }, 5000);
             });
         } else {
+            await recordModuleUsage(client, command.name);
             const args = interaction.customId.toLowerCase().split('-').slice(2);
             command.executeSelectMenuCommand(client, interaction, ...args);
             return client.logger.trace(`${interaction.user} used the ${interaction.customId} select menu command.`);

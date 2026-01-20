@@ -1,11 +1,11 @@
-import GargoyleClient from '@src/system/backend/classes/gargoyleClient.js';
+import GargoyleClient, { recordModuleUsage } from '@src/system/backend/classes/gargoyleClient.js';
 import GargoyleEvent from '@src/system/backend/classes/gargoyleEvent.js';
 import { ModalSubmitInteraction } from 'discord.js';
 
 export default class ModalCommandHandler extends GargoyleEvent {
     public event = 'interactionCreate' as const;
 
-    public execute(client: GargoyleClient, interaction: ModalSubmitInteraction): void {
+    public async execute(client: GargoyleClient, interaction: ModalSubmitInteraction): Promise<void> {
         if (!interaction.isModalSubmit()) return;
         if (interaction.user.bot) return;
 
@@ -30,6 +30,7 @@ export default class ModalCommandHandler extends GargoyleEvent {
                 }, 5000);
             });
         } else {
+            await recordModuleUsage(client, command.name);
             const args = interaction.customId.toLowerCase().split('-').slice(2);
             command.executeModalCommand(client, interaction, ...args);
             return client.logger.trace(`${interaction.user} used the ${interaction.customId} modal command.`);

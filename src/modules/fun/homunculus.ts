@@ -6,6 +6,7 @@ import { Events, Message, TextChannel } from 'discord.js';
 import { Ollama } from 'ollama';
 
 export default class Homunculus extends GargoyleModule {
+    public override name: string = 'homunculus';
     public override category: string = 'fun';
     public override slashCommands: GargoyleSlashCommandBuilder[] = [];
     private client: GargoyleClient | undefined = undefined;

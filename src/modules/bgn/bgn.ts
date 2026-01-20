@@ -36,6 +36,7 @@ import { GargoyleStringSelectMenuBuilder } from '@src/system/backend/builders/ga
 import GargoyleModalBuilder from '@src/system/backend/builders/gargoyleModalBuilder.js';
 
 export default class Brads extends GargoyleModule {
+    public override name: string = 'bgn';
     public override category: string = 'bgn';
     public override slashCommands = [
         new GargoyleSlashCommandBuilder()

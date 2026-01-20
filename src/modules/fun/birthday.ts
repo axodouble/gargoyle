@@ -31,6 +31,7 @@ import {
 import { model, Schema } from 'mongoose';
 
 export default class Birthday extends GargoyleModule {
+    public override name: string = 'birthday';
     public override category: string = 'fun';
     public override deprecated: boolean | null = true;
     public override slashCommands: GargoyleSlashCommandBuilder[] = [

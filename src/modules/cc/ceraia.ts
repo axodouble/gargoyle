@@ -46,6 +46,7 @@ import Emojis from '@src/system/backend/tools/emojis.js';
 const ceraiaGuild = '1394893354763817040'; // Ceraia guild ID
 
 export default class Ceraia extends GargoyleModule {
+    public override name: string = 'ceraia';
     public override category: string = 'ceraia';
     public override slashCommands = [
         new GargoyleSlashCommandBuilder()

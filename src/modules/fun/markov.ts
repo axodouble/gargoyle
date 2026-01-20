@@ -6,6 +6,7 @@ import { ChatInputCommandInteraction, ClientEvents, Message } from 'discord.js';
 import { model, Schema } from 'mongoose';
 
 export default class Markov extends GargoyleModule {
+    public override name: string = 'markov';
     public override category: string = 'fun';
 
     public override slashCommands: GargoyleSlashCommandBuilder[] = [

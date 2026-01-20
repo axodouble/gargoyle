@@ -26,6 +26,7 @@ import {
 import { model, Schema } from 'mongoose';
 
 export default class Economy extends GargoyleModule {
+    public override name: string = 'economy';
     public override category: string = 'fun';
     public override slashCommands: GargoyleSlashCommandBuilder[] = [
         new GargoyleSlashCommandBuilder()

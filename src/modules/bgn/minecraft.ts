@@ -42,6 +42,7 @@ import { model, Schema } from 'mongoose';
 const minecraftBgnGuild = '1039152052644880435';
 
 export default class Ceraia extends GargoyleModule {
+    public override name: string = 'minecraft';
     public override category: string = 'bgn';
     public override slashCommands = [
         new GargoyleSlashCommandBuilder()

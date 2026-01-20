@@ -4,6 +4,7 @@ import GargoyleModule from '@src/system/backend/classes/gargoyleModule.js';
 import GargoyleSlashCommandBuilder from '@src/system/backend/builders/gargoyleSlashCommandBuilder.js';
 import { ApplicationIntegrationType, ChatInputCommandInteraction, InteractionContextType, Message, TextChannel } from 'discord.js';
 export default class Ping extends GargoyleModule {
+    public override name: string = 'ping';
     public override category: string = 'utilities';
     public override slashCommands = [
         new GargoyleSlashCommandBuilder()

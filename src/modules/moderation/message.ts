@@ -13,6 +13,7 @@ import {
 } from 'discord.js';
 
 export default class Moderation extends GargoyleModule {
+    public override name: string = 'moderation';
     public override category: string = 'moderation';
     public override slashCommands = [
         new GargoyleSlashCommandBuilder()

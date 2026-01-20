@@ -37,6 +37,7 @@ import GargoyleSlashCommandBuilder from '@src/system/backend/builders/gargoyleSl
 import Emojis from '@src/system/backend/tools/emojis.js';
 
 export default class VoicechatCommand extends GargoyleModule {
+    public override name: string = 'dynvcs';
     public override category: string = 'server';
     public override slashCommands = [
         new GargoyleSlashCommandBuilder()

@@ -35,6 +35,7 @@ import GargoyleButtonBuilder from '../backend/builders/gargoyleButtonBuilder.js'
 import Emojis from '../backend/tools/emojis.js';
 
 export default class Help extends GargoyleModule {
+    override name: string = 'help';
     override category: string = 'base';
     override slashCommands = [
         new GargoyleSlashCommandBuilder().setName('help').setDescription('Replies with bot information'),
