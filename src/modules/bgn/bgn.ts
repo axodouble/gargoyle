@@ -215,7 +215,7 @@ export default class Brads extends GargoyleModule {
             }
 
             for (const member of filingMembers) {
-                if (!staffMembers.has(member.id)) {
+                if (!Array.from(staffMembers.values()).some((staff) => staff.author === member.id)) {
                     messageContent += `${member} (No recorded staff activity)\n`;
                 }
             }
