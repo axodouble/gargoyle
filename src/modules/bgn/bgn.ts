@@ -48,13 +48,26 @@ export default class Brads extends GargoyleModule {
             .setContexts(InteractionContextType.Guild)
             .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
             .addGuilds('324195889977622530', '1442961061207736672')
-            .addSubcommand((subcommand) => subcommand.setName('staffsheets').setDescription('Get the staff sheets').addIntegerOption((option) =>
-                option
-                    .setName('days')
-                    .setDescription('Number of days to get staff activity for (default: current week)')
-                    .setMinValue(0)
-                    .setRequired(false)
-            ))
+            .addSubcommandGroup((group) =>
+                group
+                    .setName('sheets')
+                    .setDescription('BGN Staff Sheets')
+                    .addSubcommand((subcommand) => subcommand.setName('week').setDescription('Get this weeks staff activity'))
+                    .addSubcommand((subcommand) => subcommand.setName('lastweek').setDescription('Get last weeks staff activity'))
+                    .addSubcommand((subcommand) =>
+                        subcommand
+                            .setName('days')
+                            .setDescription('Get the last X days of staff activity')
+                            .addIntegerOption((option) =>
+                                option
+                                    .setName('days')
+                                    .setDescription('Number of days to get staff activity for')
+                                    .setMinValue(1)
+                                    .setMaxValue(365)
+                                    .setRequired(true)
+                            )
+                    )
+            )
             .addSubcommand((subcommand) => subcommand.setName('panel').setDescription('Send the BGN panel')) as GargoyleSlashCommandBuilder
     ];
     private panelMessage = {
@@ -172,9 +185,27 @@ export default class Brads extends GargoyleModule {
 
         // Staff hours are counted from last Sunday 15:00 to the following Sunday 15:00
         // If specified, only get the last X days
-        const results =
-            lastDays === 0
-                ? await sql`
+        let results = [];
+        if (lastDays === -1) {
+            // Get data from 1 weeks ago Sunday 15:00 to last Sunday 15:00
+            results = await sql`
+                SELECT SteamId, CharacterName, RankId, ConnectDate, DisconnectDate
+                FROM StaffActivities
+                WHERE ConnectDate >= DATE_ADD(
+                    DATE_SUB(CURRENT_DATE(), INTERVAL (WEEKDAY(CURRENT_DATE()) + 8) DAY),
+                    INTERVAL 15 HOUR
+                )
+                AND ConnectDate < DATE_ADD(
+                    DATE_ADD(
+                        DATE_SUB(CURRENT_DATE(), INTERVAL (WEEKDAY(CURRENT_DATE()) + 8) DAY),
+                        INTERVAL 7 DAY
+                    ),
+                    INTERVAL 15 HOUR
+                )
+            `;
+        } else if (lastDays === 0) {
+            // Get data from last Sunday 15:00 to this Sunday 15:00
+            results = await sql`
                 SELECT SteamId, CharacterName, RankId, ConnectDate, DisconnectDate
                 FROM StaffActivities
                 WHERE ConnectDate >= DATE_ADD(
@@ -188,13 +219,15 @@ export default class Brads extends GargoyleModule {
                     ),
                     INTERVAL 15 HOUR
                 )
-            `
-                : await sql`
+            `;
+        } else {
+            results = await sql`
                 SELECT SteamId, CharacterName, RankId, ConnectDate, DisconnectDate
                 FROM StaffActivities
                 WHERE DisconnectDate >= NOW() - INTERVAL ${lastDays || 7} DAY
                 ORDER BY ConnectDate DESC
             `;
+        }
 
         if (results.length === 0) {
             return [];
@@ -248,11 +281,26 @@ export default class Brads extends GargoyleModule {
     }
 
     public override async executeSlashCommand(client: GargoyleClient, interaction: ChatInputCommandInteraction): Promise<void> {
-        if (interaction.options.getSubcommand() === 'staffsheets') {
-            await interaction.deferReply({});
-            const staffMembers = await this.getStaffMemberData(client, interaction.options.getInteger('days', false) || 0);
+        if (interaction.options.getSubcommandGroup() === 'sheets') {
+            if (interaction.options.getSubcommand() === 'week') {
+                await interaction.deferReply({});
+                const staffMembers = await this.getStaffMemberData(client, interaction.options.getInteger('days', false) || 0);
 
-            await interaction.editReply(this.staffActivityMessage(staffMembers, interaction.options.getInteger('days', false) || 0) as MessageEditOptions);
+                await interaction.editReply(
+                    this.staffActivityMessage(staffMembers, interaction.options.getInteger('days', false) || 0, true) as MessageEditOptions
+                );
+            } else if (interaction.options.getSubcommand() === 'lastweek') {
+                await interaction.deferReply({});
+                const staffMembers = await this.getStaffMemberData(client, -1);
+                await interaction.editReply(this.staffActivityMessage(staffMembers, -1, false) as MessageEditOptions);
+            } else if (interaction.options.getSubcommand() === 'days') {
+                await interaction.deferReply({});
+                const staffMembers = await this.getStaffMemberData(client, interaction.options.getInteger('days', true));
+                await interaction.editReply(
+                    this.staffActivityMessage(staffMembers, interaction.options.getInteger('days', true), true) as MessageEditOptions
+                );
+
+            }
         } else if (interaction.options.getSubcommand() === 'panel') {
             if (interaction.guildId !== '324195889977622530') {
                 await interaction.reply("This command can only be used in Brad's RP.");
@@ -407,7 +455,9 @@ export default class Brads extends GargoyleModule {
             steamId: string | null;
             rankId: string | null;
             hours: number;
-        }>, days: number
+        }>,
+        days: number,
+        refresh: boolean
     ) {
         let messageContent = '### Staff Activity Sheets\n\n';
         for (const staffMember of staffMembers) {
@@ -423,14 +473,22 @@ export default class Brads extends GargoyleModule {
             messageContent += userString;
         }
 
+        const container = new ContainerBuilder();
+
+        if (days >= 0 && refresh) {
+            container.addSectionComponents(
+                new SectionBuilder()
+                    .addTextDisplayComponents(new TextDisplayBuilder().setContent(messageContent.substring(0, 4000)))
+                    .setButtonAccessory(
+                        new GargoyleButtonBuilder(this, 'refreshstaffsheets', `${days}`).setLabel('Refresh').setStyle(ButtonStyle.Success)
+                    )
+            );
+        } else {
+            container.addTextDisplayComponents(new TextDisplayBuilder().setContent(messageContent.substring(0, 4000)));
+        }
+
         return {
-            components: [
-                new ContainerBuilder().addSectionComponents(
-                    new SectionBuilder()
-                        .addTextDisplayComponents(new TextDisplayBuilder().setContent(messageContent.substring(0, 2000)))
-                        .setButtonAccessory(new GargoyleButtonBuilder(this, 'refreshstaffsheets', `${days}`).setLabel('Refresh').setStyle(ButtonStyle.Success))
-                )
-            ],
+            components: [container],
             flags: [MessageFlags.IsComponentsV2]
         };
     }
@@ -439,7 +497,11 @@ export default class Brads extends GargoyleModule {
         if (args[0] === 'refreshstaffsheets') {
             await interaction.deferUpdate();
             await interaction.message.edit(
-                (await this.staffActivityMessage(await this.getStaffMemberData(client, args[1] ? parseInt(args[1]) : 0), args[1] ? parseInt(args[1]) : 0)) as MessageEditOptions
+                this.staffActivityMessage(
+                    await this.getStaffMemberData(client, args[1] ? parseInt(args[1]) : 0),
+                    args[1] ? parseInt(args[1]) : 0,
+                    true
+                ) as MessageEditOptions
             );
         } else if (args[0] === 'apply') {
             const member = await interaction.guild!.members.fetch(interaction.user.id).catch(() => null);
