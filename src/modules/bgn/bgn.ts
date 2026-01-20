@@ -132,6 +132,7 @@ export default class Brads extends GargoyleModule {
 
     public override async executeSlashCommand(client: GargoyleClient, interaction: ChatInputCommandInteraction): Promise<void> {
         if (interaction.options.getSubcommand() === 'staffsheets') {
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
             client.logger.trace(`Attempting to get staff sheets at ${process.env.BGN_STAFF_DB_HOST}`);
             const sql = new SQL({
                 adapter: 'mariadb',
@@ -148,10 +149,10 @@ export default class Brads extends GargoyleModule {
 
             // Select all entries where the disconnect date is within the last week
             const results =
-                await sql`SELECT SteamId, CharacterName, RankId, ConnectDate, DisconnectDate FROM StaffActivity WHERE DisconnectDate >= NOW() - INTERVAL 7 DAY ORDER BY ConnectDate DESC`;
+                await sql`SELECT SteamId, CharacterName, RankId, ConnectDate, DisconnectDate FROM StaffActivities WHERE DisconnectDate >= NOW() - INTERVAL 7 DAY ORDER BY ConnectDate DESC`;
 
             if (results.length === 0) {
-                await interaction.reply({ content: 'No staff activity found in the last week.', flags: [MessageFlags.Ephemeral] });
+                await interaction.editReply({ content: 'No staff activity found in the last week.' });
                 return;
             }
 
@@ -181,7 +182,7 @@ export default class Brads extends GargoyleModule {
                 messageContent += `- **${staff.characterName}** (Rank: ${staff.rankId}) - ${staff.hours.toFixed(2)} hours\n`;
             }
 
-            await interaction.reply({ content: messageContent, flags: [MessageFlags.Ephemeral] });
+            await interaction.editReply({ content: messageContent });
             await sql.end();
         } else if (interaction.options.getSubcommand() === 'panel') {
             if (!interaction.channel) {
