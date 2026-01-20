@@ -130,14 +130,16 @@ export default class Brads extends GargoyleModule {
         flags: [MessageFlags.IsComponentsV2]
     } as MessageCreateOptions;
 
-    public override async executeSlashCommand(_client: GargoyleClient, interaction: ChatInputCommandInteraction): Promise<void> {
+    public override async executeSlashCommand(client: GargoyleClient, interaction: ChatInputCommandInteraction): Promise<void> {
         if (interaction.options.getSubcommand() === 'staffsheets') {
+            client.logger.trace(`Attempting to get staff sheets at ${process.env.BGN_STAFF_DB_HOST}`);
             const sql = new SQL({
                 adapter: 'mariadb',
                 hostname: process.env.BGN_STAFF_DB_HOST,
                 username: process.env.BGN_STAFF_DB_USER,
                 password: process.env.BGN_STAFF_DB_PASS,
-                database: process.env.BGN_STAFF_DB_NAME
+                database: process.env.BGN_STAFF_DB_NAME,
+                port: 3306
             });
 
             // Structure:
