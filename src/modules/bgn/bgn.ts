@@ -249,6 +249,7 @@ export default class Brads extends GargoyleModule {
 
     public override async executeSlashCommand(client: GargoyleClient, interaction: ChatInputCommandInteraction): Promise<void> {
         if (interaction.options.getSubcommand() === 'staffsheets') {
+            await interaction.deferReply({});
             const staffMembers = await this.getStaffMemberData(client, interaction.options.getInteger('days', false) || 0);
 
             let messageContent = '### Staff Activity Sheets\n\n';
