@@ -459,7 +459,10 @@ export default class Brads extends GargoyleModule {
         days: number,
         refresh: boolean
     ) {
-        let messageContent = '### Staff Activity Sheets\n\n';
+        let messageContent = '### Staff Activity Sheets\n';
+
+        messageContent += `-# Updated <t:${Math.floor(Date.now() / 1000)}:F>\n\n`;
+
         for (const staffMember of staffMembers) {
             let userString = '';
             if (staffMember.author) userString += `<@!${staffMember.author}> `;
