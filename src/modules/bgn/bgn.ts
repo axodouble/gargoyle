@@ -46,7 +46,7 @@ export default class Brads extends GargoyleModule {
             .setDescription("A command for Brad's RP")
             .setContexts(InteractionContextType.Guild)
             .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
-            .addGuild('324195889977622530')
+            .addGuilds('324195889977622530', '1442961061207736672')
             .addSubcommand((subcommand) => subcommand.setName('staffsheets').setDescription('Get the staff sheets'))
             .addSubcommand((subcommand) => subcommand.setName('panel').setDescription('Send the BGN panel')) as GargoyleSlashCommandBuilder
     ];
@@ -227,6 +227,10 @@ export default class Brads extends GargoyleModule {
             await interaction.editReply({ content: messageContent });
             await sql.end();
         } else if (interaction.options.getSubcommand() === 'panel') {
+            if (interaction.guildId !== '324195889977622530') {
+                await interaction.reply("This command can only be used in Brad's RP.");
+                return;
+            }
             if (!interaction.channel) {
                 interaction.reply('You can only use this interaction in channels.');
                 return;
