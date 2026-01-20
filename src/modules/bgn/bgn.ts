@@ -133,6 +133,43 @@ export default class Brads extends GargoyleModule {
     public override async executeSlashCommand(client: GargoyleClient, interaction: ChatInputCommandInteraction): Promise<void> {
         if (interaction.options.getSubcommand() === 'staffsheets') {
             await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+            const filingChannel = client.channels.cache.get('1442969575003127919') as TextChannel;
+            if (!filingChannel) {
+                await interaction.editReply({ content: 'Could not find the filing channel.' });
+                return;
+            }
+
+            const steamIdsThread = filingChannel.threads.cache.get('1442971015041912842') as ThreadChannel;
+            if (!steamIdsThread) {
+                await interaction.editReply({ content: 'Could not find the steam IDs thread.' });
+                return;
+            }
+
+            // Example message from the steam IDs thread:
+            // Discord Username: <@495315654866501632>  | Cactus
+            // Steam Profile Link: https://steamcommunity.com/profiles/76561199123498942/
+            // Steam 64ID: 76561199123498942
+
+            // Extract the steam ids and the author ids
+            const steamIdMessages = await steamIdsThread.messages.fetch({ limit: 100 });
+
+            const discordSteamMap = new Map<string, string | null>();
+
+            steamIdMessages.forEach((msg) => {
+                const lines = msg.content.split('\n');
+                let discordId = msg.author.id;
+                let steamId: string | null = null;
+
+                for (const line of lines) {
+                    if (line.toLowerCase().startsWith('steam 64id:')) {
+                        steamId = line.replace(/steam 64id:/i, '').trim();
+                    }
+                }
+
+                discordSteamMap.set(discordId, steamId);
+            });
+
             client.logger.trace(`Attempting to get staff sheets at ${process.env.BGN_STAFF_DB_HOST}`);
             const sql = new SQL({
                 adapter: 'mariadb',
@@ -157,29 +194,34 @@ export default class Brads extends GargoyleModule {
             }
 
             // Compile a list of how many hours each staff member has worked
-            const staffHours: { [key: string]: { characterName: string; rankId: string; hours: number } } = {};
+            const staffHours = new Map<string, { characterName: string; steamId: string; rankId: string; hours: number }>();
 
             for (const row of results) {
                 const connectDate = new Date(row.ConnectDate as string);
                 const disconnectDate = new Date(row.DisconnectDate as string);
                 const hoursWorked = (disconnectDate.getTime() - connectDate.getTime()) / (1000 * 60 * 60);
 
-                if (!staffHours[row.SteamId as string]) {
-                    staffHours[row.SteamId as string] = {
+                if (!staffHours.has(row.SteamId as string)) {
+                    staffHours.set(row.SteamId as string, {
                         characterName: row.CharacterName as string,
+                        steamId: row.SteamId as string,
                         rankId: row.RankId as string,
                         hours: 0
-                    };
+                    });
                 }
 
-                staffHours[row.SteamId as string].hours += hoursWorked;
+                staffHours.get(row.SteamId as string)!.hours += hoursWorked;
             }
 
-            let messageContent = '### Staff Activity in the Last Week:\n';
+            // Sort by most hours
+            const sortedStaff = Array.from(staffHours.values()).sort((a, b) => b.hours - a.hours);
 
-            for (const steamId in staffHours) {
-                const staff = staffHours[steamId];
-                messageContent += `- **${staff.characterName}** (Rank: ${staff.rankId}) - ${staff.hours.toFixed(2)} hours\n`;
+            let messageContent = '### Staff Activity Sheets\n\n';
+
+            for (const staff of sortedStaff) {
+                // Find the discord id from the steam id
+                const discordId = Array.from(discordSteamMap.entries()).find(([, steamId]) => steamId === staff.steamId)?.[0];
+                messageContent += `${discordId ? `<@!${discordId}>` : 'Unknown Discord User'} (${staff.characterName}) ${staff.hours.toFixed(2)} hours\n`;
             }
 
             await interaction.editReply({ content: messageContent });
