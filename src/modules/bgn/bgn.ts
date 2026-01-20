@@ -222,7 +222,7 @@ export default class Brads extends GargoyleModule {
 
             await interaction.editReply({
                 components: [new ContainerBuilder().addTextDisplayComponents(new TextDisplayBuilder().setContent(messageContent))],
-                flags: [MessageFlags.SuppressEmbeds]
+                flags: [MessageFlags.SuppressEmbeds, MessageFlags.IsComponentsV2]
             });
             await sql.end();
         } else if (interaction.options.getSubcommand() === 'panel') {
