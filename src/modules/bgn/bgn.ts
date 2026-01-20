@@ -400,7 +400,7 @@ export default class Brads extends GargoyleModule {
         }
     }
 
-    private async staffActivityMessage(
+    private staffActivityMessage(
         staffMembers: Array<{
             author: string | null;
             characterName: string | null;
