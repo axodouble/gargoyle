@@ -162,7 +162,7 @@ export default class Brads extends GargoyleModule {
                 let steamId: string | null = null;
 
                 for (const line of lines) {
-                    if (line.toLowerCase().includes('64id:')) {
+                    if (line.toLowerCase().includes('64id') || line.toLowerCase().includes('64 id')) {
                         steamId = line.split(' ').pop() || null;
                         break;
                     }
@@ -222,10 +222,10 @@ export default class Brads extends GargoyleModule {
             for (const staff of sortedStaff) {
                 // Find the discord id from the steam id
                 const discordId = Array.from(discordSteamMap.entries()).find(([, steamId]) => steamId === staff.steamId)?.[0];
-                messageContent += `${discordId ? `<@!${discordId}>` : 'Unknown Discord User'} (${staff.characterName}) ${staff.hours.toFixed(2)} hours\n`;
+                messageContent += `${discordId ? `<@!${discordId}>` : 'Unknown Discord User'} ([${staff.characterName}](https://steamcommunity.com/profiles/${staff.steamId})) ${staff.hours.toFixed(2)} hours\n`;
             }
 
-            await interaction.editReply({ content: messageContent });
+            await interaction.editReply({ content: messageContent, flags: [MessageFlags.SuppressEmbeds] });
             await sql.end();
         } else if (interaction.options.getSubcommand() === 'panel') {
             if (interaction.guildId !== '324195889977622530') {
