@@ -39,6 +39,7 @@ import GargoyleModalBuilder from '@src/system/backend/builders/gargoyleModalBuil
 import { fetch, SQL } from 'bun';
 import { model, Schema } from 'mongoose';
 import { Canvas } from 'canvas';
+import { FontWeight } from '@src/system/backend/tools/banners.js';
 
 export default class Brads extends GargoyleModule {
     public override name: string = 'bgn';
@@ -112,7 +113,7 @@ export default class Brads extends GargoyleModule {
                 .addTextDisplayComponents(
                     new TextDisplayBuilder().setContent(
                         '# Staff, Support & Appeals' +
-                            '\n> Click the buttons below to get support, be it to report an issue, apply for staff or appeal a ban, if you just have a question feel free to open a ticket.'
+                        '\n> Click the buttons below to get support, be it to report an issue, apply for staff or appeal a ban, if you just have a question feel free to open a ticket.'
                     )
                 )
                 .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Large))
@@ -172,13 +173,13 @@ export default class Brads extends GargoyleModule {
                 .addTextDisplayComponents(
                     new TextDisplayBuilder().setContent(
                         `# If you are having the "missing asset" or "server is running a different version of:" error please try the following.\n` +
-                            `\n` +
-                            `> 1. Unsubscribe from all mods via Steam.\n` +
-                            `> 2. Delete 304390 folder (SteamLibrary -> steamapps -> workshop -> content).\n` +
-                            `> 3. Delete appworkshop_304930.acf (SteamLibrary -> steamapps -> workshop).\n` +
-                            `> 4. Delete Unturned_Data folder  (SteamLibrary -> steamapps -> common -> Unturned).\n` +
-                            `> 5. Verify integrity of Unturned.\n` +
-                            `> 6. Start game and try again.\n`
+                        `\n` +
+                        `> 1. Unsubscribe from all mods via Steam.\n` +
+                        `> 2. Delete 304390 folder (SteamLibrary -> steamapps -> workshop -> content).\n` +
+                        `> 3. Delete appworkshop_304930.acf (SteamLibrary -> steamapps -> workshop).\n` +
+                        `> 4. Delete Unturned_Data folder  (SteamLibrary -> steamapps -> common -> Unturned).\n` +
+                        `> 5. Verify integrity of Unturned.\n` +
+                        `> 6. Start game and try again.\n`
                     )
                 )
                 .setAccentColor(0x0ed6ff)
@@ -395,8 +396,7 @@ export default class Brads extends GargoyleModule {
                             return new SectionBuilder()
                                 .addTextDisplayComponents(
                                     new TextDisplayBuilder().setContent(
-                                        `- ${member ? `<@!${member.id}>` : thread.name.split('-')[1]}${
-                                            thread.createdAt ? ` on <t:${Math.floor(thread.createdAt.getTime() / 1000)}:f>` : ``
+                                        `- ${member ? `<@!${member.id}>` : thread.name.split('-')[1]}${thread.createdAt ? ` on <t:${Math.floor(thread.createdAt.getTime() / 1000)}:f>` : ``
                                         }`
                                     )
                                 )
@@ -454,8 +454,7 @@ export default class Brads extends GargoyleModule {
                                 return new SectionBuilder()
                                     .addTextDisplayComponents(
                                         new TextDisplayBuilder().setContent(
-                                            `- ${member ? `<@!${member.id}>` : thread.name.split('-')[1]}${
-                                                thread.createdAt ? ` on <t:${Math.floor(thread.createdAt.getTime() / 1000)}:f>` : ``
+                                            `- ${member ? `<@!${member.id}>` : thread.name.split('-')[1]}${thread.createdAt ? ` on <t:${Math.floor(thread.createdAt.getTime() / 1000)}:f>` : ``
                                             }`
                                         )
                                     )
@@ -475,125 +474,12 @@ export default class Brads extends GargoyleModule {
                 await interaction.deferReply({});
 
                 const days = interaction.options.getInteger('days', true);
-                const allStockData = await getAllStockPrices(days);
-
-                const series = Object.entries(allStockData) as Array<[BradsStockSymbols, Array<{ price: number; time: number }>]>;
-                const nonEmptySeries = series.filter(([, points]) => points.length > 0);
-
-                if (nonEmptySeries.length === 0) {
-                    await interaction.editReply({ content: 'No stock data found for the requested time range.' });
-                    return;
-                }
-
-                // Flatten all points to compute global bounds (shared axes)
-                const allPoints: Array<{ price: number; time: number }> = nonEmptySeries.flatMap(([, points]) => points);
-
-                const times = allPoints.map((p: { price: number; time: number }) => p.time);
-                const prices = allPoints.map((p: { price: number; time: number }) => p.price);
-
-                const minTime = Math.min(...times);
-                const maxTime = Math.max(...times);
-                const minPrice = Math.min(...prices);
-                const maxPrice = Math.max(...prices);
-
-                const timeRange = Math.max(1, maxTime - minTime);
-                const priceRange = Math.max(1e-9, maxPrice - minPrice);
-
-                const canvas = new Canvas(1000, 600);
-                const ctx = canvas.getContext('2d');
-
-                const padding = 50;
-                const chartWidth = canvas.width - padding * 2;
-                const chartHeight = canvas.height - padding * 2;
-
-                // Background
-                ctx.fillStyle = '#1e1e1e';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-                // Axes
-                ctx.strokeStyle = '#666666';
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.moveTo(padding, padding);
-                ctx.lineTo(padding, padding + chartHeight);
-                ctx.lineTo(padding + chartWidth, padding + chartHeight);
-                ctx.stroke();
-
-                // Title
-                ctx.fillStyle = '#ffffff';
-                ctx.font = 'bold 18px sans-serif';
-                ctx.fillText(`BGN Stocks (Last ${days} days)`, padding, 28);
-
-                const xForTime = (t: number) => padding + ((t - minTime) / timeRange) * chartWidth;
-                const yForPrice = (p: number) => padding + (1 - (p - minPrice) / priceRange) * chartHeight;
-
-                // Draw each stock line
-                for (const [symbol, points] of nonEmptySeries) {
-                    const stock = Object.values(BradsStocks).find((s) => s.symbol === symbol);
-                    const stroke = stock?.color ?? '#ffffff';
-
-                    // Ensure chronological
-                    const sorted = [...points].sort((a, b) => a.time - b.time);
-
-                    ctx.strokeStyle = stroke;
-                    ctx.lineWidth = 2;
-                    ctx.beginPath();
-
-                    sorted.forEach((dataPoint: { price: number; time: number }, index: number) => {
-                        const x = xForTime(dataPoint.time);
-                        const y = yForPrice(dataPoint.price);
-
-                        if (index === 0) ctx.moveTo(x, y);
-                        else ctx.lineTo(x, y);
-                    });
-
-                    ctx.stroke();
-
-                    // Mark last point
-                    const last = sorted[sorted.length - 1];
-                    const lx = xForTime(last.time);
-                    const ly = yForPrice(last.price);
-                    ctx.fillStyle = stroke;
-                    ctx.beginPath();
-                    ctx.arc(lx, ly, 3, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-
-                // Legend (right side)
-                const legendX = padding + chartWidth + 10;
-                let legendY = padding + 10;
-
-                ctx.font = '12px sans-serif';
-                for (const [symbol] of nonEmptySeries) {
-                    const stock = Object.values(BradsStocks).find((s) => s.symbol === symbol);
-                    const name = stock?.name ?? symbol;
-                    const color = stock?.color ?? '#ffffff';
-
-                    ctx.fillStyle = color;
-                    ctx.fillRect(canvas.width - padding + 5, legendY - 10, 10, 10);
-
-                    ctx.fillStyle = '#ffffff';
-                    ctx.fillText(`${stock?.emoji ?? ''} ${name} (${symbol})`.trim(), canvas.width - padding + 20, legendY);
-                    legendY += 16;
-
-                    // Prevent running off canvas; stop legend if too long
-                    if (legendY > canvas.height - padding) break;
-                }
-
-                const lastPrices = nonEmptySeries
-                    .map(([symbol, points]) => {
-                        const stock = Object.values(BradsStocks).find((s) => s.symbol === symbol);
-                        const last = [...points].sort((a, b) => a.time - b.time).at(-1);
-                        return last ? `${stock?.emoji ?? ''}${symbol}: $${last.price.toFixed(2)}` : null;
-                    })
-                    .filter((v): v is string => Boolean(v));
-
+                const stockPrices = await getStockPrices(days);
+                const canvas = await this.generateStockGraph(stockPrices, days);
                 await interaction.editReply({
-                    content:
-                        `Showing ${nonEmptySeries.length} stocks over the last ${days} days.\n` +
-                        `Latest: ${lastPrices.slice(0, 8).join(' | ')}${lastPrices.length > 8 ? ' | …' : ''}`,
-                    files: [{ attachment: canvas.toBuffer('image/png'), name: `bgn_stocks_${days}d.png` }]
+                    files: [{ attachment: canvas.toBuffer('image/png'), name: `stock_graph_${days}_days.png` }]
                 });
+
             } else if (interaction.options.getSubcommand() === 'price') {
                 await interaction.deferReply({});
 
@@ -654,11 +540,56 @@ export default class Brads extends GargoyleModule {
         }
     }
 
+    private async generateStockGraph(stocks: Awaited<ReturnType<typeof getStockPrices>>, days: number) {
+        const canvas = new Canvas(1000, 600);
+        const ctx = canvas.getContext('2d');
+
+
+        const highestPrice = Math.max(
+            ...Object.values(stocks).flatMap((stock) => stock.prices.map((point) => point))
+        );
+        const lowestPrice = Math.min(
+            ...Object.values(stocks).flatMap((stock) => stock.prices.map((point) => point))
+        );
+
+        let i = 0;
+        for (const stock of stocks) {
+            ctx.textAlign = 'left';
+            ctx.fillStyle = '#ffffff';
+            ctx.font = `${FontWeight.Medium} 10px Montserrat`;
+            ctx.fillText(`${stock.symbol}}`, 10, 20 + i * 15);
+
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#ffffff';
+            ctx.fillStyle = Object.values(BradsStocks).find((s) => s.symbol === stock.symbol)?.color || '#ffffff';
+            ctx.fillRect(30, 12 + i * 15, 10, 10);
+
+            ctx.strokeStyle = Object.values(BradsStocks).find((s) => s.symbol === stock.symbol)?.color || '#ffffff';
+            ctx.beginPath();
+            
+            for (let j = 0; j < stock.prices.length; j++) {
+                const x = (j / (days - 1)) * (canvas.width - 60) + 50;
+                const normalizedPrice = (stock.prices[j] - lowestPrice) / (highestPrice - lowestPrice);
+                const y = canvas.height - (normalizedPrice * (canvas.height - 40) + 20);
+
+                if (j === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            ctx.stroke();
+            i++;
+        }
+
+        return canvas;
+    }
+
     public override async executeSelectMenuCommand(_client: GargoyleClient, interaction: AnySelectMenuInteraction, ...args: string[]): Promise<void> {
         if (args[0] === 'remove') {
             await interaction.deferUpdate();
             for (const userId of interaction.values) {
-                await (interaction.channel as PrivateThreadChannel).members.remove(userId).catch(() => {});
+                await (interaction.channel as PrivateThreadChannel).members.remove(userId).catch(() => { });
             }
             interaction.editReply({ content: 'Removed all of the selected members.', components: [] });
         }
@@ -745,12 +676,12 @@ export default class Brads extends GargoyleModule {
                                 ),
                                 new TextDisplayBuilder().setContent(
                                     '## Requirements' +
-                                        '\n> - You must be at least 15 years old.' +
-                                        '\n> - You must have at least had 50 hours of gameplay on the server.' +
-                                        '\n> - You must have linked steam with your discord account.' +
-                                        '\n> - You must have a good understanding of the rules.' +
-                                        '\n> - You must not have received any form of punishment 2 weeks before/after applying.' +
-                                        '\n> - You must not be on a Permanent ban agreement when applying, You may apply once it is over.'
+                                    '\n> - You must be at least 15 years old.' +
+                                    '\n> - You must have at least had 50 hours of gameplay on the server.' +
+                                    '\n> - You must have linked steam with your discord account.' +
+                                    '\n> - You must have a good understanding of the rules.' +
+                                    '\n> - You must not have received any form of punishment 2 weeks before/after applying.' +
+                                    '\n> - You must not be on a Permanent ban agreement when applying, You may apply once it is over.'
                                 )
                             )
                             .addActionRowComponents(
@@ -850,8 +781,8 @@ export default class Brads extends GargoyleModule {
             }
 
             if (thread) {
-                await thread.members.add(member.id).catch(() => {});
-                await thread.members.add(interaction.user.id).catch(() => {});
+                await thread.members.add(member.id).catch(() => { });
+                await thread.members.add(interaction.user.id).catch(() => { });
                 await thread.send({
                     components: [
                         new ContainerBuilder().addTextDisplayComponents(
@@ -1009,21 +940,21 @@ export default class Brads extends GargoyleModule {
                 args[0],
                 args[0] === 'ban'
                     ? {
-                          content:
-                              `Staff member who banned you : \n` +
-                              `In-game name : \n` +
-                              `Steam profile link : \n` +
-                              `Apology / why you think you should be unbanned :`
-                      }
+                        content:
+                            `Staff member who banned you : \n` +
+                            `In-game name : \n` +
+                            `Steam profile link : \n` +
+                            `Apology / why you think you should be unbanned :`
+                    }
                     : args[0] === 'staff'
-                      ? {
+                        ? {
                             content:
                                 `Staff member being reported : \n` +
                                 `Reason for report : \n` +
                                 `Any relevant Information regarding this report : \n` +
                                 `All relevant proof for this report :`
                         }
-                      : undefined,
+                        : undefined,
 
                 {
                     members: [member],
@@ -1076,17 +1007,17 @@ export default class Brads extends GargoyleModule {
                         new ContainerBuilder().addTextDisplayComponents(
                             new TextDisplayBuilder().setContent(
                                 `### Staff Application from <@!${interaction.user.id}>` +
-                                    `\n-# ${staffRoles.map((role) => `<@&${role.id}>`).join(' ')}` +
-                                    `\n**Steam Profile :**` +
-                                    `\n> ${steam}` +
-                                    `\n**Timezone :** ` +
-                                    `\n> ${timezone}` +
-                                    `\n**Other Experience :**` +
-                                    `\n> ${other.replaceAll('\n', '\n> ')}` +
-                                    `\n**Reason for Applying :**` +
-                                    `\n> ${reason.replaceAll('\n', '\n> ')}` +
-                                    `\n**What makes you stand out? :**` +
-                                    `\n> ${stand.replaceAll('\n', '\n> ')}`
+                                `\n-# ${staffRoles.map((role) => `<@&${role.id}>`).join(' ')}` +
+                                `\n**Steam Profile :**` +
+                                `\n> ${steam}` +
+                                `\n**Timezone :** ` +
+                                `\n> ${timezone}` +
+                                `\n**Other Experience :**` +
+                                `\n> ${other.replaceAll('\n', '\n> ')}` +
+                                `\n**Reason for Applying :**` +
+                                `\n> ${reason.replaceAll('\n', '\n> ')}` +
+                                `\n**What makes you stand out? :**` +
+                                `\n> ${stand.replaceAll('\n', '\n> ')}`
                             )
                         ),
                         new ContainerBuilder().addActionRowComponents(
@@ -1317,14 +1248,6 @@ const stocksSchema = new Schema({
 
 const StocksModel = model('BradsStocks', stocksSchema);
 
-async function getStockCurrentPrice(symbol: BradsStockSymbols): Promise<number | null> {
-    const stockData = await getStockSymbol(symbol);
-    if (stockData && stockData.c) {
-        return stockData.c;
-    }
-    return null;
-}
-
 async function getStockPrice(symbol: BradsStockSymbols, days: number): Promise<{ price: number; time: number }[]> {
     const cutoffTime = Date.now() - days * 24 * 60 * 60 * 1000;
     const stockEntries = await StocksModel.find({ symbol: symbol, time: { $gte: cutoffTime } })
@@ -1333,12 +1256,29 @@ async function getStockPrice(symbol: BradsStockSymbols, days: number): Promise<{
     return stockEntries.map((entry) => ({ price: entry.price, time: entry.time }));
 }
 
-async function getAllStockPrices(days: number): Promise<Record<BradsStockSymbols, { price: number; time: number }[]>> {
-    const result: Record<BradsStockSymbols, { price: number; time: number }[]> = {} as Record<BradsStockSymbols, { price: number; time: number }[]>;
-    for (const symbolKey in BradsStockSymbols) {
-        const symbol = BradsStockSymbols[symbolKey as keyof typeof BradsStockSymbols];
-        result[symbol] = await getStockPrice(symbol, days);
+async function getStockPrices(days: number, ...symbols: BradsStockSymbols[]): Promise<{ symbol: BradsStockSymbols; prices: number[]}[]> {
+    let searchList = symbols;
+    if (searchList.length === 0) {
+        searchList = Object.values(BradsStockSymbols);
     }
+
+    const databaseEntries = await StocksModel.find({
+        symbol: { $in: searchList },
+        time: { $gte: Date.now() - days * 24 * 60 * 60 * 1000 }
+    })
+        .sort({ time: 1 })
+        .exec();
+
+    const result: { symbol: BradsStockSymbols; prices: number[] }[] = [];
+    
+    for (const symbol of searchList) {
+        const entries = databaseEntries.filter((entry) => entry.symbol === symbol);
+        result.push({
+            symbol: symbol,
+            prices: entries.map((entry) => entry.price)
+        });
+    }
+
     return result;
 }
 
