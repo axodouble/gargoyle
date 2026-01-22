@@ -1199,11 +1199,6 @@ export default class Brads extends GargoyleModule {
             return 'An unknown error occured';
         }
     }
-
-    public override init(_client: GargoyleClient): void {
-        updateAllBradsStocks();
-        setInterval(updateAllBradsStocks, 5 * 60 * 1000); // Update every 5 minutes
-    }
 }
 
 const stocksSchema = new Schema({
@@ -1252,6 +1247,12 @@ async function updateAllBradsStocks() {
             await stockEntry.save();
         }
     }
+}
+try {
+    updateAllBradsStocks();
+    setInterval(updateAllBradsStocks, 5 * 60 * 1000); // Update every 5 minutes
+} catch (error) {
+    client.logger.error(`Failed to set up stock updates: ${error}`);
 }
 
 enum BradsStockSymbols {
