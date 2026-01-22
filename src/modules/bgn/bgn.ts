@@ -481,60 +481,13 @@ export default class Brads extends GargoyleModule {
                 });
 
             } else if (interaction.options.getSubcommand() === 'price') {
-                await interaction.deferReply({});
+                              await interaction.deferReply({});
 
                 const days = interaction.options.getInteger('days', true);
-                const stockSymbol = interaction.options.getString('symbol', true);
-                const stock = Object.values(BradsStocks).find((s) => s.symbol.toLowerCase() === stockSymbol.toLowerCase())!;
-                client.logger.debug(`Fetching stock data for symbol: ${stockSymbol}`);
-                const stockData = await getStockPrice(stockSymbol.toUpperCase() as BradsStockSymbols, days);
-
-                if (!stockData) {
-                    await interaction.editReply({ content: 'Failed to get stock data. Please try again later.' });
-                    return;
-                }
-
-                const canvas = new Canvas(1000, 600);
-                const ctx = canvas.getContext('2d');
-
-                const padding = 40;
-                const chartWidth = canvas.width - padding * 2;
-                const chartHeight = canvas.height - padding * 2;
-
-                const prices = stockData.map((d) => d.price);
-                const minPrice = Math.min(...prices);
-                const maxPrice = Math.max(...prices);
-                const range = maxPrice - minPrice;
-
-                // Background
-                ctx.fillStyle = '#1e1e1e';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-                // Draw the stock price line
-                ctx.strokeStyle = stock.color;
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-
-                stockData.forEach((dataPoint, index) => {
-                    const denom = stockData.length > 1 ? stockData.length - 1 : 1;
-                    const x = padding + (index / denom) * chartWidth;
-
-                    // If all prices are the same, draw a flat line centered vertically.
-                    const normalized = range === 0 ? 0.5 : (dataPoint.price - minPrice) / range;
-                    const y = padding + (1 - normalized) * chartHeight;
-
-                    if (index === 0) {
-                        ctx.moveTo(x, y);
-                    } else {
-                        ctx.lineTo(x, y);
-                    }
-                });
-
-                ctx.stroke();
-
+                const stockPrices = await getStockPrices(days, (Object.values(BradsStocks).find(stock => stock.symbol.toLowerCase() === interaction.options.getString('symbol', true).toLowerCase())?.symbol)!);
+                const canvas = await this.generateStockGraph(stockPrices, days);
                 await interaction.editReply({
-                    content: `${stock.emoji} ${stock.name} (${stock.symbol}) at \`$${stockData[stockData.length - 1].price}\` - Last ${days} days, with ${stockData.length} data points.`,
-                    files: [{ attachment: canvas.toBuffer('image/png'), name: `${stock.symbol}_chart.png` }]
+                    files: [{ attachment: canvas.toBuffer('image/png'), name: `stock_graph_${days}_days.png` }]
                 });
             }
         }
