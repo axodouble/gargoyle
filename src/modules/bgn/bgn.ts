@@ -554,17 +554,20 @@ export default class Brads extends GargoyleModule {
 
         let i = 0;
         for (const stock of stocks) {
+            const bradsStock = Object.values(BradsStocks).find((s) => s.symbol === stock.symbol);
+
             ctx.textAlign = 'left';
             ctx.fillStyle = '#ffffff';
             ctx.font = `${FontWeight.Medium} 10px Montserrat`;
-            ctx.fillText(`${stock.symbol}}`, 10, 20 + i * 15);
+            ctx.fillText(`${bradsStock?.name}`, 40, 20 + i * 15);
 
             ctx.lineWidth = 2;
             ctx.strokeStyle = '#ffffff';
-            ctx.fillStyle = Object.values(BradsStocks).find((s) => s.symbol === stock.symbol)?.color || '#ffffff';
+            ctx.fillStyle = bradsStock?.color || '#ffffff';
+            ctx.strokeRect(30, 12 + i * 15, 10, 10);
             ctx.fillRect(30, 12 + i * 15, 10, 10);
 
-            ctx.strokeStyle = Object.values(BradsStocks).find((s) => s.symbol === stock.symbol)?.color || '#ffffff';
+            ctx.strokeStyle = bradsStock?.color || '#ffffff';
             ctx.beginPath();
             
             for (let j = 0; j < stock.prices.length; j++) {
