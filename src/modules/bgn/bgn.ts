@@ -36,7 +36,7 @@ import GargoyleButtonBuilder, { GargoyleURLButtonBuilder } from '@src/system/bac
 import { editAsServer } from '@src/system/backend/tools/server.js';
 import { GargoyleStringSelectMenuBuilder } from '@src/system/backend/builders/gargoyleSelectMenuBuilders.js';
 import GargoyleModalBuilder from '@src/system/backend/builders/gargoyleModalBuilder.js';
-import { SQL } from 'bun';
+import { fetch, SQL } from 'bun';
 
 export default class Brads extends GargoyleModule {
     public override name: string = 'bgn';
@@ -66,6 +66,16 @@ export default class Brads extends GargoyleModule {
                                     .setMaxValue(365)
                                     .setRequired(true)
                             )
+                    )
+            )
+            .addSubcommand((subcommand) =>
+                subcommand
+                    .setName('stock')
+                    .setDescription('Get stock data')
+                    .addStringOption((option) =>
+                        option
+                            .setChoices(Object.values(BradsStocks).map((stock) => ({ name: `${stock.name}`, value: stock.symbol })))
+                            .setRequired(true)
                     )
             )
             .addSubcommand((subcommand) => subcommand.setName('panel').setDescription('Send the BGN panel')) as GargoyleSlashCommandBuilder
@@ -433,6 +443,21 @@ export default class Brads extends GargoyleModule {
                 ],
                 flags: [MessageFlags.IsComponentsV2],
                 allowedMentions: { parse: [] }
+            });
+        } else if (interaction.options.getSubcommand() === 'stock') {
+            await interaction.deferReply({});
+
+            const stockSymbol = interaction.options.getString('symbol', true);
+            const stock = Object.values(BradsStocks).find((s) => s.symbol === stockSymbol)!;
+            const stockData = await getStockSymbol(stockSymbol as BradsStockSymbols);
+
+            if (!stockData) {
+                await interaction.editReply({ content: 'Failed to get stock data. Please try again later.' });
+                return;
+            }
+
+            await interaction.editReply({
+                content: `${stock.emoji} ${stock.name} (${stock.symbol})\n> Currently priced at \`$${stockData.c}\``
             });
         }
     }
@@ -1090,4 +1115,43 @@ export default class Brads extends GargoyleModule {
             return 'An unknown error occured';
         }
     }
+}
+
+enum BradsStockSymbols {
+    Pear = 'AAPL',
+    Macrohard = 'MSFT',
+    Abode = 'ADBE',
+    Goggle = 'GOOGL',
+    Amazin = 'AMZN',
+    FaceSpace = 'META',
+    Flicks = 'NFLX',
+    Edison = 'TSLA'
+}
+
+interface BradsStock {
+    name: keyof typeof BradsStockSymbols;
+    symbol: BradsStockSymbols;
+    emoji: string;
+}
+
+const BradsStocks: Record<keyof typeof BradsStockSymbols, BradsStock> = {
+    Pear: { name: 'Pear', symbol: BradsStockSymbols.Pear, emoji: '🍐' },
+    Macrohard: { name: 'Macrohard', symbol: BradsStockSymbols.Macrohard, emoji: '🪟' },
+    Abode: { name: 'Abode', symbol: BradsStockSymbols.Abode, emoji: '🏠' },
+    Goggle: { name: 'Goggle', symbol: BradsStockSymbols.Goggle, emoji: '🔍' },
+    Amazin: { name: 'Amazin', symbol: BradsStockSymbols.Amazin, emoji: '📦' },
+    FaceSpace: { name: 'FaceSpace', symbol: BradsStockSymbols.FaceSpace, emoji: '👥' },
+    Flicks: { name: 'Flicks', symbol: BradsStockSymbols.Flicks, emoji: '🎬' },
+    Edison: { name: 'Edison', symbol: BradsStockSymbols.Edison, emoji: '⚡' }
+};
+
+async function getStockSymbol(symbol: BradsStockSymbols) {
+    if (!process.env.FINNHUB_API_KEY) return null;
+    const data = await fetch(`https://finnhub.io/api/v1/quote?symbol=${symbol}`, {
+        method: 'GET',
+        headers: { 'X-Finnhub-Token': process.env.FINNHUB_API_KEY || '' }
+    });
+    if (data.status !== 200) return null;
+    const json = (await data.json()) as { c: number; d: number; dp: number; h: number; l: number; o: number; pc: number; t: number };
+    return json;
 }
