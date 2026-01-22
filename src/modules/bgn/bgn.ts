@@ -513,6 +513,15 @@ export default class Brads extends GargoyleModule {
                 const canvas = new Canvas(1000, 600);
                 const ctx = canvas.getContext('2d');
 
+                const padding = 40;
+                const chartWidth = canvas.width - padding * 2;
+                const chartHeight = canvas.height - padding * 2;
+
+                const prices = stockData.map((d) => d.price);
+                const minPrice = Math.min(...prices);
+                const maxPrice = Math.max(...prices);
+                const range = maxPrice - minPrice;
+
                 // Background
                 ctx.fillStyle = '#1e1e1e';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -521,26 +530,27 @@ export default class Brads extends GargoyleModule {
                 ctx.strokeStyle = '#0ed6ff';
                 ctx.lineWidth = 2;
                 ctx.beginPath();
-                stockData.forEach((dataPoint, index) => {
-                    const price = dataPoint.price;
 
-                    const x = (index / (stockData.length - 1)) * canvas.width;
-                    const y =
-                        canvas.height -
-                        ((price - Math.min(...stockData.map((d) => d.price))) /
-                            (Math.max(...stockData.map((d) => d.price)) - Math.min(...stockData.map((d) => d.price)))) *
-                            canvas.height;
+                stockData.forEach((dataPoint, index) => {
+                    const denom = stockData.length > 1 ? stockData.length - 1 : 1;
+                    const x = padding + (index / denom) * chartWidth;
+
+                    // If all prices are the same, draw a flat line centered vertically.
+                    const normalized = range === 0 ? 0.5 : (dataPoint.price - minPrice) / range;
+                    const y = padding + (1 - normalized) * chartHeight;
+
                     if (index === 0) {
                         ctx.moveTo(x, y);
                     } else {
                         ctx.lineTo(x, y);
                     }
                 });
+
                 ctx.stroke();
 
                 await interaction.editReply({
                     content: `${stock.emoji} ${stock.name} (${stock.symbol}) at \`$${stockData[stockData.length - 1].price}\` - Last ${days} days, with ${stockData.length} data points.`,
-                    files: [{ attachment: canvas.toBuffer(), name: `${stock.symbol}_chart.png` }]
+                    files: [{ attachment: canvas.toBuffer('image/png'), name: `${stock.symbol}_chart.png` }]
                 });
             }
         }
