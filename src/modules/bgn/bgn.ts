@@ -74,7 +74,7 @@ export default class Brads extends GargoyleModule {
                     .setDescription('Get stock data')
                     .addStringOption((option) =>
                         option
-                            .setChoices(Object.values(BradsStocks).map((stock) => ({ name: `${stock.name}`, value: stock.symbol })))
+                            .setChoices(Object.values(BradsStocks).map((stock) => ({ name: `${stock.name}`, value: stock.symbol.toLowerCase() })))
                             .setRequired(true)
                     )
             )
@@ -448,7 +448,7 @@ export default class Brads extends GargoyleModule {
             await interaction.deferReply({});
 
             const stockSymbol = interaction.options.getString('symbol', true);
-            const stock = Object.values(BradsStocks).find((s) => s.symbol === stockSymbol)!;
+            const stock = Object.values(BradsStocks).find((s) => s.symbol.toLowerCase() === stockSymbol.toLowerCase())!;
             const stockData = await getStockSymbol(stockSymbol as BradsStockSymbols);
 
             if (!stockData) {
