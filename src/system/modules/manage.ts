@@ -231,19 +231,20 @@ export default class Manage extends GargoyleModule {
                     .then((u) => u.tag)
                     .catch(() => 'Unknown User'));
             await interaction.showModal(
-                new GargoyleModalBuilder(this, 'send', args[1]).setTitle(`Send Message to ${username}`).addLabelComponents(
-                    new LabelBuilder()
-
-                        .setLabel('Message')
-                        .setTextInputComponent(
-                            new TextInputBuilder()
-                                .setCustomId('message')
-                                .setMaxLength(1500)
-                                .setRequired(true)
-                                .setPlaceholder('Enter your message here')
-                                .setStyle(TextInputStyle.Paragraph)
-                        )
-                )
+                new GargoyleModalBuilder(this, 'send', args[1])
+                    .setTitle(`Send Message to ${username}`)
+                    .addLabelComponents(
+                        new LabelBuilder()
+                            .setLabel('Message')
+                            .setTextInputComponent(
+                                new TextInputBuilder()
+                                    .setCustomId('message')
+                                    .setMaxLength(1500)
+                                    .setRequired(true)
+                                    .setPlaceholder('Enter your message here')
+                                    .setStyle(TextInputStyle.Paragraph)
+                            )
+                    )
             );
         }
     }

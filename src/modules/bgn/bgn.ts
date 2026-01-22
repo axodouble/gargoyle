@@ -299,7 +299,6 @@ export default class Brads extends GargoyleModule {
                 await interaction.editReply(
                     this.staffActivityMessage(staffMembers, interaction.options.getInteger('days', true), true) as MessageEditOptions
                 );
-
             }
         } else if (interaction.options.getSubcommand() === 'panel') {
             if (interaction.guildId !== '324195889977622530') {

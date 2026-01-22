@@ -372,6 +372,7 @@ class MemberLeave extends GargoyleEvent {
             const crustaceanGuild = await getCrustaceanGuild(member.guild.id);
             if (!crustaceanGuild.enabled) return;
 
+            // @ts-ignore
             const crustaceanChannel = member.guild.channels.cache.get(crustaceanGuild.channel);
 
             if (crustaceanChannel && crustaceanChannel.isSendable()) {
@@ -394,6 +395,7 @@ class MemberJoin extends GargoyleEvent {
         const crustaceanGuild = await getCrustaceanGuild(member.guild.id);
         if (!crustaceanGuild.enabled) return;
 
+        // @ts-ignore
         const crustaceanChannel = member.guild.channels.cache.get(crustaceanGuild.channel);
 
         const crustaceanUser = await getCrustaceanUser(client, member.id, member.guild.id);
