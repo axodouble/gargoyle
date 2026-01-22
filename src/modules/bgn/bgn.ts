@@ -457,7 +457,7 @@ export default class Brads extends GargoyleModule {
             const stockSymbol = interaction.options.getString('symbol', true);
             const stock = Object.values(BradsStocks).find((s) => s.symbol.toLowerCase() === stockSymbol.toLowerCase())!;
             client.logger.debug(`Fetching stock data for symbol: ${stockSymbol}`);
-            const stockData = await getStockSymbol(stockSymbol as BradsStockSymbols);
+            const stockData = await getStockSymbol(stockSymbol.toUpperCase() as BradsStockSymbols);
 
             if (!stockData) {
                 await interaction.editReply({ content: 'Failed to get stock data. Please try again later.' });
