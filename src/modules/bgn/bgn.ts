@@ -76,6 +76,14 @@ export default class Brads extends GargoyleModule {
                     .setDescription('BGN Stocks')
                     .addSubcommand((subcommand) =>
                         subcommand
+                            .setName('graph')
+                            .setDescription('Get a graph of all stock prices over time')
+                            .addIntegerOption((option) =>
+                                option.setName('days').setDescription('Number of days to graph').setMinValue(1).setMaxValue(60).setRequired(true)
+                            )
+                    )
+                    .addSubcommand((subcommand) =>
+                        subcommand
                             .setName('price')
                             .setDescription('Get a stocks price')
                             .addStringOption((option) =>
@@ -90,25 +98,8 @@ export default class Brads extends GargoyleModule {
                                     )
                                     .setRequired(true)
                             )
-                    )
-                    .addSubcommand((subcommand) =>
-                        subcommand
-                            .setName('graph')
-                            .setDescription('Get a stocks price graph')
-                            .addStringOption((option) =>
-                                option
-                                    .setName('symbol')
-                                    .setDescription('Stock symbol to fetch')
-                                    .setChoices(
-                                        ...Object.values(BradsStocks).map((stock) => ({
-                                            name: stock.name,
-                                            value: stock.symbol.toLowerCase()
-                                        }))
-                                    )
-                                    .setRequired(true)
-                            )
                             .addIntegerOption((option) =>
-                                option.setName('days').setDescription('Number of days to graph').setMinValue(1).setMaxValue(365).setRequired(true)
+                                option.setName('days').setDescription('Number of days to graph').setMinValue(1).setMaxValue(60).setRequired(true)
                             )
                     )
             )
@@ -480,23 +471,130 @@ export default class Brads extends GargoyleModule {
                 allowedMentions: { parse: [] }
             });
         } else if (interaction.options.getSubcommandGroup() === 'stocks') {
-            if (interaction.options.getSubcommand() === 'price') {
+            if (interaction.options.getSubcommand() === 'graph') {
                 await interaction.deferReply({});
 
-                const stockSymbol = interaction.options.getString('symbol', true);
-                const stock = Object.values(BradsStocks).find((s) => s.symbol.toLowerCase() === stockSymbol.toLowerCase())!;
-                client.logger.debug(`Fetching stock data for symbol: ${stockSymbol}`);
-                const stockData = await getStockSymbol(stockSymbol.toUpperCase() as BradsStockSymbols);
+                const days = interaction.options.getInteger('days', true);
+                const allStockData = await getAllStockPrices(days);
 
-                if (!stockData) {
-                    await interaction.editReply({ content: 'Failed to get stock data. Please try again later.' });
+                const series = Object.entries(allStockData) as Array<[BradsStockSymbols, Array<{ price: number; time: number }>]>;
+                const nonEmptySeries = series.filter(([, points]) => points.length > 0);
+
+                if (nonEmptySeries.length === 0) {
+                    await interaction.editReply({ content: 'No stock data found for the requested time range.' });
                     return;
                 }
 
+                // Flatten all points to compute global bounds (shared axes)
+                const allPoints: Array<{ price: number; time: number }> = nonEmptySeries.flatMap(([, points]) => points);
+
+                const times = allPoints.map((p: { price: number; time: number }) => p.time);
+                const prices = allPoints.map((p: { price: number; time: number }) => p.price);
+
+                const minTime = Math.min(...times);
+                const maxTime = Math.max(...times);
+                const minPrice = Math.min(...prices);
+                const maxPrice = Math.max(...prices);
+
+                const timeRange = Math.max(1, maxTime - minTime);
+                const priceRange = Math.max(1e-9, maxPrice - minPrice);
+
+                const canvas = new Canvas(1000, 600);
+                const ctx = canvas.getContext('2d');
+
+                const padding = 50;
+                const chartWidth = canvas.width - padding * 2;
+                const chartHeight = canvas.height - padding * 2;
+
+                // Background
+                ctx.fillStyle = '#1e1e1e';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // Axes
+                ctx.strokeStyle = '#666666';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(padding, padding);
+                ctx.lineTo(padding, padding + chartHeight);
+                ctx.lineTo(padding + chartWidth, padding + chartHeight);
+                ctx.stroke();
+
+                // Title
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 18px sans-serif';
+                ctx.fillText(`BGN Stocks (Last ${days} days)`, padding, 28);
+
+                const xForTime = (t: number) => padding + ((t - minTime) / timeRange) * chartWidth;
+                const yForPrice = (p: number) => padding + (1 - (p - minPrice) / priceRange) * chartHeight;
+
+                // Draw each stock line
+                for (const [symbol, points] of nonEmptySeries) {
+                    const stock = Object.values(BradsStocks).find((s) => s.symbol === symbol);
+                    const stroke = stock?.color ?? '#ffffff';
+
+                    // Ensure chronological
+                    const sorted = [...points].sort((a, b) => a.time - b.time);
+
+                    ctx.strokeStyle = stroke;
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+
+                    sorted.forEach((dataPoint: { price: number; time: number }, index: number) => {
+                        const x = xForTime(dataPoint.time);
+                        const y = yForPrice(dataPoint.price);
+
+                        if (index === 0) ctx.moveTo(x, y);
+                        else ctx.lineTo(x, y);
+                    });
+
+                    ctx.stroke();
+
+                    // Mark last point
+                    const last = sorted[sorted.length - 1];
+                    const lx = xForTime(last.time);
+                    const ly = yForPrice(last.price);
+                    ctx.fillStyle = stroke;
+                    ctx.beginPath();
+                    ctx.arc(lx, ly, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // Legend (right side)
+                const legendX = padding + chartWidth + 10;
+                let legendY = padding + 10;
+
+                ctx.font = '12px sans-serif';
+                for (const [symbol] of nonEmptySeries) {
+                    const stock = Object.values(BradsStocks).find((s) => s.symbol === symbol);
+                    const name = stock?.name ?? symbol;
+                    const color = stock?.color ?? '#ffffff';
+
+                    ctx.fillStyle = color;
+                    ctx.fillRect(canvas.width - padding + 5, legendY - 10, 10, 10);
+
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillText(`${stock?.emoji ?? ''} ${name} (${symbol})`.trim(), canvas.width - padding + 20, legendY);
+                    legendY += 16;
+
+                    // Prevent running off canvas; stop legend if too long
+                    if (legendY > canvas.height - padding) break;
+                }
+
+                const lastPrices = nonEmptySeries
+                    .map(([symbol, points]) => {
+                        const stock = Object.values(BradsStocks).find((s) => s.symbol === symbol);
+                        const last = [...points].sort((a, b) => a.time - b.time).at(-1);
+                        return last ? `${stock?.emoji ?? ''}${symbol}: $${last.price.toFixed(2)}` : null;
+                    })
+                    .filter((v): v is string => Boolean(v));
+
                 await interaction.editReply({
-                    content: `${stock.emoji} ${stock.name} (${stock.symbol})\n> Currently priced at \`$${stockData.c}\``
+                    content:
+                        `Showing ${nonEmptySeries.length} stocks over the last ${days} days.\n` +
+                        `Latest: ${lastPrices.slice(0, 8).join(' | ')}${lastPrices.length > 8 ? ' | …' : ''}`,
+                    files: [{ attachment: canvas.toBuffer('image/png'), name: `bgn_stocks_${days}d.png` }]
                 });
-            } else if (interaction.options.getSubcommand() === 'graph') {
+            } else if (interaction.options.getSubcommand() === 'price') {
                 await interaction.deferReply({});
 
                 const days = interaction.options.getInteger('days', true);
@@ -527,7 +625,7 @@ export default class Brads extends GargoyleModule {
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
                 // Draw the stock price line
-                ctx.strokeStyle = '#0ed6ff';
+                ctx.strokeStyle = stock.color;
                 ctx.lineWidth = 2;
                 ctx.beginPath();
 
@@ -1281,18 +1379,19 @@ interface BradsStock {
     name: keyof typeof BradsStockSymbols;
     symbol: BradsStockSymbols;
     emoji: string;
+    color: string;
 }
 
 const BradsStocks: Record<keyof typeof BradsStockSymbols, BradsStock> = {
-    Pear: { name: 'Pear', symbol: BradsStockSymbols.Pear, emoji: '🍐' },
-    Macrohard: { name: 'Macrohard', symbol: BradsStockSymbols.Macrohard, emoji: '🪟' },
-    Abode: { name: 'Abode', symbol: BradsStockSymbols.Abode, emoji: '🏠' },
-    Goggle: { name: 'Goggle', symbol: BradsStockSymbols.Goggle, emoji: '🔍' },
-    Amazin: { name: 'Amazin', symbol: BradsStockSymbols.Amazin, emoji: '📦' },
-    FaceSpace: { name: 'FaceSpace', symbol: BradsStockSymbols.FaceSpace, emoji: '👥' },
-    Flicks: { name: 'Flicks', symbol: BradsStockSymbols.Flicks, emoji: '🎬' },
-    Edison: { name: 'Edison', symbol: BradsStockSymbols.Edison, emoji: '⚡' },
-    Jolo: { name: 'Jolo', symbol: BradsStockSymbols.Jolo, emoji: '🤖' }
+    Pear: { name: 'Pear', symbol: BradsStockSymbols.Pear, emoji: '🍐', color: '#A2AAAD' },
+    Macrohard: { name: 'Macrohard', symbol: BradsStockSymbols.Macrohard, emoji: '🪟', color: '#F25022' },
+    Abode: { name: 'Abode', symbol: BradsStockSymbols.Abode, emoji: '🏠', color: '#FF0000' },
+    Goggle: { name: 'Goggle', symbol: BradsStockSymbols.Goggle, emoji: '🔍', color: '#4285F4' },
+    Amazin: { name: 'Amazin', symbol: BradsStockSymbols.Amazin, emoji: '📦', color: '#FF9900' },
+    FaceSpace: { name: 'FaceSpace', symbol: BradsStockSymbols.FaceSpace, emoji: '👥', color: '#1877F2' },
+    Flicks: { name: 'Flicks', symbol: BradsStockSymbols.Flicks, emoji: '🎬', color: '#E50914' },
+    Edison: { name: 'Edison', symbol: BradsStockSymbols.Edison, emoji: '⚡', color: '#CC0000' },
+    Jolo: { name: 'Jolo', symbol: BradsStockSymbols.Jolo, emoji: '🤖', color: '#0078D7' }
 };
 
 async function getStockSymbol(symbol: BradsStockSymbols) {
