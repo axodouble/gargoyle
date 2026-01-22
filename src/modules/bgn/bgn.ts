@@ -37,6 +37,8 @@ import { editAsServer } from '@src/system/backend/tools/server.js';
 import { GargoyleStringSelectMenuBuilder } from '@src/system/backend/builders/gargoyleSelectMenuBuilders.js';
 import GargoyleModalBuilder from '@src/system/backend/builders/gargoyleModalBuilder.js';
 import { fetch, SQL } from 'bun';
+import { model, Schema } from 'mongoose';
+import { Canvas } from 'canvas';
 
 export default class Brads extends GargoyleModule {
     public override name: string = 'bgn';
@@ -68,25 +70,51 @@ export default class Brads extends GargoyleModule {
                             )
                     )
             )
-            .addSubcommand((subcommand) =>
-                subcommand
-                    .setName('stock')
-                    .setDescription('Get stock data')
-                    .addStringOption((option) =>
-                        option
-                            .setName('symbol')
-                            .setDescription('Stock symbol to fetch')
-                            .setChoices(
-                                ...Object.values(BradsStocks).map((stock) => ({
-                                    name: stock.name,
-                                    value: stock.symbol.toLowerCase()
-                                }))
+            .addSubcommandGroup((group) =>
+                group
+                    .setName('stocks')
+                    .setDescription('BGN Stocks')
+                    .addSubcommand((subcommand) =>
+                        subcommand
+                            .setName('price')
+                            .setDescription('Get a stocks price')
+                            .addStringOption((option) =>
+                                option
+                                    .setName('symbol')
+                                    .setDescription('Stock symbol to fetch')
+                                    .setChoices(
+                                        ...Object.values(BradsStocks).map((stock) => ({
+                                            name: stock.name,
+                                            value: stock.symbol.toLowerCase()
+                                        }))
+                                    )
+                                    .setRequired(true)
                             )
-                            .setRequired(true)
+                    )
+                    .addSubcommand((subcommand) =>
+                        subcommand
+                            .setName('graph')
+                            .setDescription('Get a stocks price graph')
+                            .addStringOption((option) =>
+                                option
+                                    .setName('symbol')
+                                    .setDescription('Stock symbol to fetch')
+                                    .setChoices(
+                                        ...Object.values(BradsStocks).map((stock) => ({
+                                            name: stock.name,
+                                            value: stock.symbol.toLowerCase()
+                                        }))
+                                    )
+                                    .setRequired(true)
+                            )
+                            .addIntegerOption((option) =>
+                                option.setName('days').setDescription('Number of days to graph').setMinValue(1).setMaxValue(365).setRequired(true)
+                            )
                     )
             )
             .addSubcommand((subcommand) => subcommand.setName('panel').setDescription('Send the BGN panel')) as GargoyleSlashCommandBuilder
     ];
+
     private panelMessage = {
         components: [
             new ContainerBuilder()
@@ -451,22 +479,70 @@ export default class Brads extends GargoyleModule {
                 flags: [MessageFlags.IsComponentsV2],
                 allowedMentions: { parse: [] }
             });
-        } else if (interaction.options.getSubcommand() === 'stock') {
-            await interaction.deferReply({});
+        } else if (interaction.options.getSubcommandGroup() === 'stocks') {
+            if (interaction.options.getSubcommand() === 'price') {
+                await interaction.deferReply({});
 
-            const stockSymbol = interaction.options.getString('symbol', true);
-            const stock = Object.values(BradsStocks).find((s) => s.symbol.toLowerCase() === stockSymbol.toLowerCase())!;
-            client.logger.debug(`Fetching stock data for symbol: ${stockSymbol}`);
-            const stockData = await getStockSymbol(stockSymbol.toUpperCase() as BradsStockSymbols);
+                const stockSymbol = interaction.options.getString('symbol', true);
+                const stock = Object.values(BradsStocks).find((s) => s.symbol.toLowerCase() === stockSymbol.toLowerCase())!;
+                client.logger.debug(`Fetching stock data for symbol: ${stockSymbol}`);
+                const stockData = await getStockSymbol(stockSymbol.toUpperCase() as BradsStockSymbols);
 
-            if (!stockData) {
-                await interaction.editReply({ content: 'Failed to get stock data. Please try again later.' });
-                return;
+                if (!stockData) {
+                    await interaction.editReply({ content: 'Failed to get stock data. Please try again later.' });
+                    return;
+                }
+
+                await interaction.editReply({
+                    content: `${stock.emoji} ${stock.name} (${stock.symbol})\n> Currently priced at \`$${stockData.c}\``
+                });
+            } else if (interaction.options.getSubcommand() === 'graph') {
+                await interaction.deferReply({});
+
+                const days = interaction.options.getInteger('days', true);
+                const stockSymbol = interaction.options.getString('symbol', true);
+                const stock = Object.values(BradsStocks).find((s) => s.symbol.toLowerCase() === stockSymbol.toLowerCase())!;
+                client.logger.debug(`Fetching stock data for symbol: ${stockSymbol}`);
+                const stockData = await getStockPrice(stockSymbol.toUpperCase() as BradsStockSymbols, days);
+
+                if (!stockData) {
+                    await interaction.editReply({ content: 'Failed to get stock data. Please try again later.' });
+                    return;
+                }
+
+                const canvas = new Canvas(1000, 600);
+                const ctx = canvas.getContext('2d');
+
+                // Background
+                ctx.fillStyle = '#1e1e1e';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // Draw the stock price line
+                ctx.strokeStyle = '#0ed6ff';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                stockData.forEach((dataPoint, index) => {
+                    const price = dataPoint.price;
+
+                    const x = (index / (stockData.length - 1)) * canvas.width;
+                    const y =
+                        canvas.height -
+                        ((price - Math.min(...stockData.map((d) => d.price))) /
+                            (Math.max(...stockData.map((d) => d.price)) - Math.min(...stockData.map((d) => d.price)))) *
+                            canvas.height;
+                    if (index === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                });
+                ctx.stroke();
+
+                await interaction.editReply({
+                    content: `${stock.emoji} ${stock.name} (${stock.symbol}) - Last ${days} days`,
+                    files: [{ attachment: canvas.toBuffer(), name: `${stock.symbol}_chart.png` }]
+                });
             }
-
-            await interaction.editReply({
-                content: `${stock.emoji} ${stock.name} (${stock.symbol})\n> Currently priced at \`$${stockData.c}\``
-            });
         }
     }
 
@@ -1123,6 +1199,59 @@ export default class Brads extends GargoyleModule {
             return 'An unknown error occured';
         }
     }
+
+    public override init(_client: GargoyleClient): void {
+        updateAllBradsStocks();
+        setInterval(updateAllBradsStocks, 5 * 60 * 1000); // Update every 5 minutes
+    }
+}
+
+const stocksSchema = new Schema({
+    symbol: { type: String, required: true },
+    time: { type: Number, required: true, default: Date.now },
+    price: { type: Number, required: true }
+});
+
+const StocksModel = model('BradsStocks', stocksSchema);
+
+async function getStockCurrentPrice(symbol: BradsStockSymbols): Promise<number | null> {
+    const stockData = await getStockSymbol(symbol);
+    if (stockData && stockData.c) {
+        return stockData.c;
+    }
+    return null;
+}
+
+async function getStockPrice(symbol: BradsStockSymbols, days: number): Promise<{ price: number; time: number }[]> {
+    const cutoffTime = Date.now() - days * 24 * 60 * 60 * 1000;
+    const stockEntries = await StocksModel.find({ symbol: symbol, time: { $gte: cutoffTime } })
+        .sort({ time: 1 })
+        .exec();
+    return stockEntries.map((entry) => ({ price: entry.price, time: entry.time }));
+}
+
+async function getAllStockPrices(days: number): Promise<Record<BradsStockSymbols, { price: number; time: number }[]>> {
+    const result: Record<BradsStockSymbols, { price: number; time: number }[]> = {} as Record<BradsStockSymbols, { price: number; time: number }[]>;
+    for (const symbolKey in BradsStockSymbols) {
+        const symbol = BradsStockSymbols[symbolKey as keyof typeof BradsStockSymbols];
+        result[symbol] = await getStockPrice(symbol, days);
+    }
+    return result;
+}
+
+async function updateAllBradsStocks() {
+    for (const symbolKey in BradsStockSymbols) {
+        const symbol = BradsStockSymbols[symbolKey as keyof typeof BradsStockSymbols];
+        const stockData = await getStockSymbol(symbol);
+        if (stockData && stockData.c) {
+            const stockEntry = new StocksModel({
+                symbol: symbol,
+                time: Date.now(),
+                price: stockData.c
+            });
+            await stockEntry.save();
+        }
+    }
 }
 
 enum BradsStockSymbols {
@@ -1160,6 +1289,15 @@ async function getStockSymbol(symbol: BradsStockSymbols) {
         headers: { 'X-Finnhub-Token': process.env.FINNHUB_API_KEY || '' }
     });
     if (data.status !== 200) return null;
-    const json = (await data.json()) as { c: number; d: number; dp: number; h: number; l: number; o: number; pc: number; t: number };
+    const json = (await data.json()) as {
+        c: number;
+        d: number | undefined;
+        dp: number | undefined;
+        h: number;
+        l: number;
+        o: number;
+        pc: number;
+        t: number;
+    };
     return json;
 }
