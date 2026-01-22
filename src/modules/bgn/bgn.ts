@@ -539,7 +539,7 @@ export default class Brads extends GargoyleModule {
                 ctx.stroke();
 
                 await interaction.editReply({
-                    content: `${stock.emoji} ${stock.name} (${stock.symbol}) - Last ${days} days`,
+                    content: `${stock.emoji} ${stock.name} (${stock.symbol}) at \`$${stockData[stockData.length - 1].price}\` - Last ${days} days, with ${stockData.length} data points.`,
                     files: [{ attachment: canvas.toBuffer(), name: `${stock.symbol}_chart.png` }]
                 });
             }
