@@ -551,6 +551,7 @@ export default class Brads extends GargoyleModule {
         const lowestPrice = Math.min(
             ...Object.values(stocks).flatMap((stock) => stock.prices.map((point) => point))
         );
+        const priceRange = highestPrice - lowestPrice;
 
         let i = 0;
         for (const stock of stocks) {
@@ -570,9 +571,11 @@ export default class Brads extends GargoyleModule {
             ctx.strokeStyle = bradsStock?.color || '#ffffff';
             ctx.beginPath();
             
+            const denom = stock.prices.length > 1 ? stock.prices.length - 1 : 1;
+
             for (let j = 0; j < stock.prices.length; j++) {
-                const x = (j / (days - 1)) * (canvas.width - 60) + 50;
-                const normalizedPrice = (stock.prices[j] - lowestPrice) / (highestPrice - lowestPrice);
+                const x = (j / denom) * (canvas.width - 60) + 50;
+                const normalizedPrice = priceRange === 0 ? 0.5 : (stock.prices[j] - lowestPrice) / priceRange;
                 const y = canvas.height - (normalizedPrice * (canvas.height - 40) + 20);
 
                 if (j === 0) {
