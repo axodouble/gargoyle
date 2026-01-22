@@ -74,7 +74,12 @@ export default class Brads extends GargoyleModule {
                     .setDescription('Get stock data')
                     .addStringOption((option) =>
                         option
-                            .setChoices(Object.values(BradsStocks).map((stock) => ({ name: `${stock.name}`, value: stock.symbol.toLowerCase() })))
+                            .setChoices(
+                                Object.values(BradsStocks).map((stock) => ({
+                                    name: stock.name.toLowerCase(),
+                                    value: stock.symbol.toLowerCase()
+                                }))
+                            )
                             .setRequired(true)
                     )
             )
