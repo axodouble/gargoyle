@@ -521,7 +521,7 @@ export default class Brads extends GargoyleModule {
                     .addTextDisplayComponents(
                         new TextDisplayBuilder().setContent(
                             `### BGN Stock Prices over the last ${days} days` +
-                                `\n-# ${marketOpen ? '🟢' : '⭕'} <t:${Math.floor(Date.now() / 1000)}:f> market is ${marketOpen ? 'open!' : 'closed.'}` +
+                                `\n-# ${marketOpen ? '🟢' : '⭕'} <t:${Math.floor(Date.now() / 1000)}:f> market is ${marketOpen ? 'open!' : 'closed.'}\n` +
                                 this.generateStockPrices(stockPrices).join('\n')
                         )
                     )
@@ -646,11 +646,12 @@ export default class Brads extends GargoyleModule {
 
                         const wentUp = prices[j] >= prices[j - 1];
                         ctx.strokeStyle = wentUp ? '#3eed3e' : '#f53c36';
+                        ctx.lineCap = 'round';
                         ctx.lineWidth = 4;
 
                         ctx.beginPath();
                         ctx.moveTo(prevX, prevY);
-                        ctx.lineTo(x + 1, y);
+                        ctx.lineTo(x, y);
                         ctx.stroke();
                     }
                 }
