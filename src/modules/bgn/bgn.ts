@@ -11,6 +11,8 @@ import {
     ContainerBuilder,
     GuildMember,
     InteractionContextType,
+    MediaGalleryBuilder,
+    MediaGalleryItemBuilder,
     MessageActionRowComponentBuilder,
     MessageCreateOptions,
     MessageEditOptions,
@@ -113,7 +115,7 @@ export default class Brads extends GargoyleModule {
                 .addTextDisplayComponents(
                     new TextDisplayBuilder().setContent(
                         '# Staff, Support & Appeals' +
-                        '\n> Click the buttons below to get support, be it to report an issue, apply for staff or appeal a ban, if you just have a question feel free to open a ticket.'
+                            '\n> Click the buttons below to get support, be it to report an issue, apply for staff or appeal a ban, if you just have a question feel free to open a ticket.'
                     )
                 )
                 .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Large))
@@ -173,13 +175,13 @@ export default class Brads extends GargoyleModule {
                 .addTextDisplayComponents(
                     new TextDisplayBuilder().setContent(
                         `# If you are having the "missing asset" or "server is running a different version of:" error please try the following.\n` +
-                        `\n` +
-                        `> 1. Unsubscribe from all mods via Steam.\n` +
-                        `> 2. Delete 304390 folder (SteamLibrary -> steamapps -> workshop -> content).\n` +
-                        `> 3. Delete appworkshop_304930.acf (SteamLibrary -> steamapps -> workshop).\n` +
-                        `> 4. Delete Unturned_Data folder  (SteamLibrary -> steamapps -> common -> Unturned).\n` +
-                        `> 5. Verify integrity of Unturned.\n` +
-                        `> 6. Start game and try again.\n`
+                            `\n` +
+                            `> 1. Unsubscribe from all mods via Steam.\n` +
+                            `> 2. Delete 304390 folder (SteamLibrary -> steamapps -> workshop -> content).\n` +
+                            `> 3. Delete appworkshop_304930.acf (SteamLibrary -> steamapps -> workshop).\n` +
+                            `> 4. Delete Unturned_Data folder  (SteamLibrary -> steamapps -> common -> Unturned).\n` +
+                            `> 5. Verify integrity of Unturned.\n` +
+                            `> 6. Start game and try again.\n`
                     )
                 )
                 .setAccentColor(0x0ed6ff)
@@ -396,7 +398,8 @@ export default class Brads extends GargoyleModule {
                             return new SectionBuilder()
                                 .addTextDisplayComponents(
                                     new TextDisplayBuilder().setContent(
-                                        `- ${member ? `<@!${member.id}>` : thread.name.split('-')[1]}${thread.createdAt ? ` on <t:${Math.floor(thread.createdAt.getTime() / 1000)}:f>` : ``
+                                        `- ${member ? `<@!${member.id}>` : thread.name.split('-')[1]}${
+                                            thread.createdAt ? ` on <t:${Math.floor(thread.createdAt.getTime() / 1000)}:f>` : ``
                                         }`
                                     )
                                 )
@@ -454,7 +457,8 @@ export default class Brads extends GargoyleModule {
                                 return new SectionBuilder()
                                     .addTextDisplayComponents(
                                         new TextDisplayBuilder().setContent(
-                                            `- ${member ? `<@!${member.id}>` : thread.name.split('-')[1]}${thread.createdAt ? ` on <t:${Math.floor(thread.createdAt.getTime() / 1000)}:f>` : ``
+                                            `- ${member ? `<@!${member.id}>` : thread.name.split('-')[1]}${
+                                                thread.createdAt ? ` on <t:${Math.floor(thread.createdAt.getTime() / 1000)}:f>` : ``
                                             }`
                                         )
                                     )
@@ -476,17 +480,52 @@ export default class Brads extends GargoyleModule {
                 const days = interaction.options.getInteger('days', true);
                 const stockPrices = await getStockPrices(days);
                 const canvas = await this.generateStockGraph(stockPrices, days);
+                const marketOpen = await isStockMarketOpen();
                 await interaction.editReply({
+                    components: [
+                        new ContainerBuilder()
+                            .addTextDisplayComponents(
+                                new TextDisplayBuilder().setContent(
+                                    `### BGN Stock Prices over the last ${days} days` +
+                                        `-# ${marketOpen ? '🟢' : '⭕'} Market is ${marketOpen ? 'Open!' : 'Closed.'}` +
+                                        `-# Updated <t:${Math.floor(Date.now() / 1000)}:F>`
+                                )
+                            )
+                            .addMediaGalleryComponents(
+                                new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(`attachment://stock_graph_${days}_days.png`))
+                            )
+                            .setAccentColor(marketOpen ? 0x3eed3e : 0xf53c36)
+                    ],
                     files: [{ attachment: canvas.toBuffer('image/png'), name: `stock_graph_${days}_days.png` }]
                 });
-
             } else if (interaction.options.getSubcommand() === 'price') {
-                              await interaction.deferReply({});
+                await interaction.deferReply({});
 
                 const days = interaction.options.getInteger('days', true);
-                const stockPrices = await getStockPrices(days, (Object.values(BradsStocks).find(stock => stock.symbol.toLowerCase() === interaction.options.getString('symbol', true).toLowerCase())?.symbol)!);
+                const stockPrices = await getStockPrices(
+                    days,
+                    Object.values(BradsStocks).find(
+                        (stock) => stock.symbol.toLowerCase() === interaction.options.getString('symbol', true).toLowerCase()
+                    )?.symbol!
+                );
                 const canvas = await this.generateStockGraph(stockPrices, days);
+                const marketOpen = await isStockMarketOpen();
                 await interaction.editReply({
+                    components: [
+                        new ContainerBuilder()
+                            .addTextDisplayComponents(
+                                new TextDisplayBuilder().setContent(
+                                    `### BGN Stock Prices over the last ${days} days` +
+                                        `-# ${marketOpen ? '🟢' : '⭕'} Market is ${marketOpen ? 'Open!' : 'Closed.'}` +
+                                        `-# Updated <t:${Math.floor(Date.now() / 1000)}:F>`
+                                )
+                            )
+                            .addMediaGalleryComponents(
+                                new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(`attachment://stock_graph_${days}_days.png`))
+                            )
+                            .setAccentColor(marketOpen ? 0x3eed3e : 0xf53c36)
+                    ],
+
                     files: [{ attachment: canvas.toBuffer('image/png'), name: `stock_graph_${days}_days.png` }]
                 });
             }
@@ -497,13 +536,8 @@ export default class Brads extends GargoyleModule {
         const canvas = new Canvas(1000, 600);
         const ctx = canvas.getContext('2d');
 
-
-        const highestPrice = Math.max(
-            ...Object.values(stocks).flatMap((stock) => stock.prices.map((point) => point))
-        );
-        const lowestPrice = Math.min(
-            ...Object.values(stocks).flatMap((stock) => stock.prices.map((point) => point))
-        );
+        const highestPrice = Math.max(...Object.values(stocks).flatMap((stock) => stock.prices.map((point) => point)));
+        const lowestPrice = Math.min(...Object.values(stocks).flatMap((stock) => stock.prices.map((point) => point)));
         const priceRange = highestPrice - lowestPrice;
 
         let i = 0;
@@ -523,7 +557,7 @@ export default class Brads extends GargoyleModule {
 
             ctx.strokeStyle = bradsStock?.color || '#ffffff';
             ctx.beginPath();
-            
+
             const denom = stock.prices.length > 1 ? stock.prices.length - 1 : 1;
 
             for (let j = 0; j < stock.prices.length; j++) {
@@ -548,7 +582,7 @@ export default class Brads extends GargoyleModule {
         if (args[0] === 'remove') {
             await interaction.deferUpdate();
             for (const userId of interaction.values) {
-                await (interaction.channel as PrivateThreadChannel).members.remove(userId).catch(() => { });
+                await (interaction.channel as PrivateThreadChannel).members.remove(userId).catch(() => {});
             }
             interaction.editReply({ content: 'Removed all of the selected members.', components: [] });
         }
@@ -635,12 +669,12 @@ export default class Brads extends GargoyleModule {
                                 ),
                                 new TextDisplayBuilder().setContent(
                                     '## Requirements' +
-                                    '\n> - You must be at least 15 years old.' +
-                                    '\n> - You must have at least had 50 hours of gameplay on the server.' +
-                                    '\n> - You must have linked steam with your discord account.' +
-                                    '\n> - You must have a good understanding of the rules.' +
-                                    '\n> - You must not have received any form of punishment 2 weeks before/after applying.' +
-                                    '\n> - You must not be on a Permanent ban agreement when applying, You may apply once it is over.'
+                                        '\n> - You must be at least 15 years old.' +
+                                        '\n> - You must have at least had 50 hours of gameplay on the server.' +
+                                        '\n> - You must have linked steam with your discord account.' +
+                                        '\n> - You must have a good understanding of the rules.' +
+                                        '\n> - You must not have received any form of punishment 2 weeks before/after applying.' +
+                                        '\n> - You must not be on a Permanent ban agreement when applying, You may apply once it is over.'
                                 )
                             )
                             .addActionRowComponents(
@@ -740,8 +774,8 @@ export default class Brads extends GargoyleModule {
             }
 
             if (thread) {
-                await thread.members.add(member.id).catch(() => { });
-                await thread.members.add(interaction.user.id).catch(() => { });
+                await thread.members.add(member.id).catch(() => {});
+                await thread.members.add(interaction.user.id).catch(() => {});
                 await thread.send({
                     components: [
                         new ContainerBuilder().addTextDisplayComponents(
@@ -899,21 +933,21 @@ export default class Brads extends GargoyleModule {
                 args[0],
                 args[0] === 'ban'
                     ? {
-                        content:
-                            `Staff member who banned you : \n` +
-                            `In-game name : \n` +
-                            `Steam profile link : \n` +
-                            `Apology / why you think you should be unbanned :`
-                    }
+                          content:
+                              `Staff member who banned you : \n` +
+                              `In-game name : \n` +
+                              `Steam profile link : \n` +
+                              `Apology / why you think you should be unbanned :`
+                      }
                     : args[0] === 'staff'
-                        ? {
+                      ? {
                             content:
                                 `Staff member being reported : \n` +
                                 `Reason for report : \n` +
                                 `Any relevant Information regarding this report : \n` +
                                 `All relevant proof for this report :`
                         }
-                        : undefined,
+                      : undefined,
 
                 {
                     members: [member],
@@ -966,17 +1000,17 @@ export default class Brads extends GargoyleModule {
                         new ContainerBuilder().addTextDisplayComponents(
                             new TextDisplayBuilder().setContent(
                                 `### Staff Application from <@!${interaction.user.id}>` +
-                                `\n-# ${staffRoles.map((role) => `<@&${role.id}>`).join(' ')}` +
-                                `\n**Steam Profile :**` +
-                                `\n> ${steam}` +
-                                `\n**Timezone :** ` +
-                                `\n> ${timezone}` +
-                                `\n**Other Experience :**` +
-                                `\n> ${other.replaceAll('\n', '\n> ')}` +
-                                `\n**Reason for Applying :**` +
-                                `\n> ${reason.replaceAll('\n', '\n> ')}` +
-                                `\n**What makes you stand out? :**` +
-                                `\n> ${stand.replaceAll('\n', '\n> ')}`
+                                    `\n-# ${staffRoles.map((role) => `<@&${role.id}>`).join(' ')}` +
+                                    `\n**Steam Profile :**` +
+                                    `\n> ${steam}` +
+                                    `\n**Timezone :** ` +
+                                    `\n> ${timezone}` +
+                                    `\n**Other Experience :**` +
+                                    `\n> ${other.replaceAll('\n', '\n> ')}` +
+                                    `\n**Reason for Applying :**` +
+                                    `\n> ${reason.replaceAll('\n', '\n> ')}` +
+                                    `\n**What makes you stand out? :**` +
+                                    `\n> ${stand.replaceAll('\n', '\n> ')}`
                             )
                         ),
                         new ContainerBuilder().addActionRowComponents(
@@ -1207,15 +1241,7 @@ const stocksSchema = new Schema({
 
 const StocksModel = model('BradsStocks', stocksSchema);
 
-async function getStockPrice(symbol: BradsStockSymbols, days: number): Promise<{ price: number; time: number }[]> {
-    const cutoffTime = Date.now() - days * 24 * 60 * 60 * 1000;
-    const stockEntries = await StocksModel.find({ symbol: symbol, time: { $gte: cutoffTime } })
-        .sort({ time: 1 })
-        .exec();
-    return stockEntries.map((entry) => ({ price: entry.price, time: entry.time }));
-}
-
-async function getStockPrices(days: number, ...symbols: BradsStockSymbols[]): Promise<{ symbol: BradsStockSymbols; prices: number[]}[]> {
+async function getStockPrices(days: number, ...symbols: BradsStockSymbols[]): Promise<{ symbol: BradsStockSymbols; prices: number[] }[]> {
     let searchList = symbols;
     if (searchList.length === 0) {
         searchList = Object.values(BradsStockSymbols);
@@ -1229,7 +1255,7 @@ async function getStockPrices(days: number, ...symbols: BradsStockSymbols[]): Pr
         .exec();
 
     const result: { symbol: BradsStockSymbols; prices: number[] }[] = [];
-    
+
     for (const symbol of searchList) {
         const entries = databaseEntries.filter((entry) => entry.symbol === symbol);
         result.push({
@@ -1242,6 +1268,8 @@ async function getStockPrices(days: number, ...symbols: BradsStockSymbols[]): Pr
 }
 
 async function updateAllBradsStocks() {
+    const marketOpen = await isStockMarketOpen();
+    if (!marketOpen) return;
     for (const symbolKey in BradsStockSymbols) {
         const symbol = BradsStockSymbols[symbolKey as keyof typeof BradsStockSymbols];
         const stockData = await getStockSymbol(symbol);
@@ -1311,4 +1339,15 @@ async function getStockSymbol(symbol: BradsStockSymbols) {
         t: number;
     };
     return json;
+}
+
+async function isStockMarketOpen(): Promise<boolean> {
+    if (!process.env.FINNHUB_API_KEY) return false;
+    const data = await fetch(`https://finnhub.io/api/v1/stock/market-status?exchange=US`, {
+        method: 'GET',
+        headers: { 'X-Finnhub-Token': process.env.FINNHUB_API_KEY || '' }
+    });
+    if (data.status !== 200) return false;
+    const json = (await data.json()) as { isOpen: boolean };
+    return json.isOpen;
 }
