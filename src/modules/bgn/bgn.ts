@@ -481,24 +481,7 @@ export default class Brads extends GargoyleModule {
                 const stockPrices = await getStockPrices(days);
                 const canvas = await this.generateStockGraph(stockPrices);
                 const marketOpen = await isStockMarketOpen();
-                await interaction.editReply({
-                    components: [
-                        new ContainerBuilder()
-                            .addTextDisplayComponents(
-                                new TextDisplayBuilder().setContent(
-                                    `### BGN Stock Prices over the last ${days} days` +
-                                        `\n-# ${marketOpen ? '🟢' : '⭕'} Market is ${marketOpen ? 'Open!' : 'Closed.'}` +
-                                        `\n-# Updated <t:${Math.floor(Date.now() / 1000)}:F>`
-                                )
-                            )
-                            .addMediaGalleryComponents(
-                                new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(`attachment://stock_graph_${days}_days.png`))
-                            )
-                            .setAccentColor(marketOpen ? 0x3eed3e : 0xf53c36)
-                    ],
-                    files: [{ attachment: canvas.toBuffer('image/png'), name: `stock_graph_${days}_days.png` }],
-                    flags: [MessageFlags.IsComponentsV2]
-                });
+                await interaction.editReply(this.generateStockMessage({ marketOpen, canvas, days }) as MessageEditOptions);
             } else if (interaction.options.getSubcommand() === 'price') {
                 await interaction.deferReply({});
 
@@ -511,26 +494,29 @@ export default class Brads extends GargoyleModule {
                 );
                 const canvas = await this.generateStockGraph(stockPrices);
                 const marketOpen = await isStockMarketOpen();
-                await interaction.editReply({
-                    components: [
-                        new ContainerBuilder()
-                            .addTextDisplayComponents(
-                                new TextDisplayBuilder().setContent(
-                                    `### BGN Stock Prices over the last ${days} days` +
-                                        `\n-# ${marketOpen ? '🟢' : '⭕'} Market is ${marketOpen ? 'Open!' : 'Closed.'}` +
-                                        `\n-# Updated <t:${Math.floor(Date.now() / 1000)}:F>`
-                                )
-                            )
-                            .addMediaGalleryComponents(
-                                new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(`attachment://stock_graph_${days}_days.png`))
-                            )
-                            .setAccentColor(marketOpen ? 0x3eed3e : 0xf53c36)
-                    ],
-                    files: [{ attachment: canvas.toBuffer('image/png'), name: `stock_graph_${days}_days.png` }],
-                    flags: [MessageFlags.IsComponentsV2]
-                });
+                await interaction.editReply(this.generateStockMessage({ marketOpen, canvas, days }) as MessageEditOptions);
             }
         }
+    }
+
+    private generateStockMessage({ marketOpen, canvas, days }: { marketOpen: boolean; canvas: Canvas; days: number }) {
+        return {
+            components: [
+                new ContainerBuilder()
+                    .addTextDisplayComponents(
+                        new TextDisplayBuilder().setContent(
+                            `### BGN Stock Prices over the last ${days} days` +
+                                `\n-# ${marketOpen ? '🟢' : '⭕'} <t:${Math.floor(Date.now() / 1000)}:F> market is ${marketOpen ? 'open!' : 'closed.'}`
+                        )
+                    )
+                    .addMediaGalleryComponents(
+                        new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(`attachment://stock_graph_${days}_days.png`))
+                    )
+                    .setAccentColor(marketOpen ? 0x3eed3e : 0xf53c36)
+            ],
+            files: [{ attachment: canvas.toBuffer('image/png'), name: `stock_graph_${days}_days.png` }],
+            flags: [MessageFlags.IsComponentsV2]
+        };
     }
 
     private async generateStockGraph(stocks: Awaited<ReturnType<typeof getStockPrices>>) {
@@ -544,28 +530,52 @@ export default class Brads extends GargoyleModule {
         // Sort stocks by their latest price
         const stocksSorted = stocks.sort((a, b) => a.prices[a.prices.length - 1]! - b.prices[b.prices.length - 1]!);
 
+        // Draw horizontal grid lines and price labels
+        ctx.strokeStyle = '#444444';
+        ctx.lineWidth = 1;
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `${FontWeight.Regular} 14px Montserrat`;
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        const numGridLines = 10;
+        for (let i = 0; i <= numGridLines; i++) {
+            const y = (i / numGridLines) * (canvas.height - 40) + 20;
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(canvas.width, y);
+            ctx.stroke();
+            const priceLabel = (highestPrice - (i / numGridLines) * priceRange).toFixed(2);
+            ctx.fillText(`$${priceLabel}`, 25, y);
+        }
+
+        // Draw stocks
         let i = 0;
-        for (const stock of stocks) {
+        for (const stock of stocksSorted) {
             const bradsStock = Object.values(BradsStocks).find((s) => s.symbol === stock.symbol);
 
+            // Draw stock name and color box
             ctx.textAlign = 'left';
             ctx.fillStyle = '#ffffff';
             ctx.font = `${FontWeight.Bold} 16px Montserrat`;
             ctx.textBaseline = 'top';
-            ctx.fillText(`${bradsStock?.name}`, 45, 7 + i * 20);
+            ctx.fillText(`${bradsStock?.name}`, 45, 6 + i * 20);
 
+            // Color box
             ctx.lineWidth = 2;
             ctx.strokeStyle = '#ffffff';
             ctx.fillStyle = bradsStock?.color || '#ffffff';
             ctx.fillRect(30, 12 + i * 20, 10, 10);
             ctx.strokeRect(30, 12 + i * 20, 10, 10);
 
+            // Draw stock line
             ctx.lineWidth = 4;
             ctx.strokeStyle = bradsStock?.color || '#ffffff';
             ctx.beginPath();
 
+            // Calculate denominator for x position based on number of prices
             const denom = stock.prices.length > 1 ? stock.prices.length - 1 : 1;
 
+            // Plot each price point
             for (let j = 0; j < stock.prices.length; j++) {
                 const x = (j / denom) * (canvas.width - 60);
                 const normalizedPrice = priceRange === 0 ? 0.5 : (stock.prices[j] - lowestPrice) / priceRange;
