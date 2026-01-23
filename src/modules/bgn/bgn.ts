@@ -552,6 +552,15 @@ export default class Brads extends GargoyleModule {
         for (const stock of stocksSorted) {
             const bradsStock = Object.values(BradsStocks).find((s) => s.symbol === stock.symbol);
 
+            const prices = stock.prices;
+
+            // Nothing to draw
+            if (!prices || prices.length === 0) {
+                i++;
+                continue;
+            }
+
+            // Draw legend only when comparing multiple stocks (keeps your existing behavior)
             if (stocksSorted.length > 1) {
                 // Draw stock name and color box
                 ctx.textAlign = 'left';
@@ -567,51 +576,65 @@ export default class Brads extends GargoyleModule {
                 ctx.fillRect(30, 12 + i * 20, 10, 10);
                 ctx.strokeRect(30, 12 + i * 20, 10, 10);
 
-                // Draw stock line
+                // Draw stock line (single color per stock)
                 ctx.lineWidth = 4;
                 ctx.strokeStyle = bradsStock?.color || '#ffffff';
-                ctx.beginPath();
 
-                // Calculate denominator for x position based on number of prices
-                const denom = stock.prices.length > 1 ? stock.prices.length - 1 : 1;
-
-                // Plot each price point
-                for (let j = 0; j < stock.prices.length; j++) {
-                    const x = (j / denom) * (canvas.width - 60);
-                    const normalizedPrice = priceRange === 0 ? 0.5 : (stock.prices[j] - lowestPrice) / priceRange;
+                if (prices.length === 1) {
+                    // Single point: draw a dot
+                    const normalizedPrice = priceRange === 0 ? 0.5 : (prices[0] - lowestPrice) / priceRange;
+                    const x = 0;
                     const y = canvas.height - (normalizedPrice * (canvas.height - 40) + 20);
 
-                    if (j === 0) {
-                        ctx.moveTo(x, y);
-                    } else {
-                        ctx.lineTo(x, y);
-                    }
-                }
-                ctx.stroke();
-            } else {
-                // Calculate denominator for x position based on number of prices
-                const denom = stock.prices.length > 1 ? stock.prices.length - 1 : 1;
-
-                // Plot each price point
-                let lastY = 0;
-                for (let j = 0; j < stock.prices.length; j++) {
-                    const x = (j / denom) * (canvas.width - 60);
-                    const normalizedPrice = priceRange === 0 ? 0.5 : (stock.prices[j] - lowestPrice) / priceRange;
-                    const y = canvas.height - (normalizedPrice * (canvas.height - 40) + 20);
-                    if (y > lastY) {
-                        ctx.strokeStyle = '#3eed3e';
-                    } else if (y < lastY) {
-                        ctx.strokeStyle = '#f53c36';
-                    }
-                    lastY = y;
-                    ctx.lineWidth = 4;
                     ctx.beginPath();
-                    if (j === 0) {
-                        ctx.moveTo(x, y);
-                    } else {
-                        ctx.lineTo(x, y);
+                    ctx.fillStyle = bradsStock?.color || '#ffffff';
+                    ctx.arc(x, y, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    const denom = prices.length - 1;
+
+                    ctx.beginPath();
+                    for (let j = 0; j < prices.length; j++) {
+                        const x = (j / denom) * (canvas.width - 60);
+                        const normalizedPrice = priceRange === 0 ? 0.5 : (prices[j] - lowestPrice) / priceRange;
+                        const y = canvas.height - (normalizedPrice * (canvas.height - 40) + 20);
+
+                        if (j === 0) ctx.moveTo(x, y);
+                        else ctx.lineTo(x, y);
                     }
                     ctx.stroke();
+                }
+            } else {
+                if (prices.length === 1) {
+                    const normalizedPrice = priceRange === 0 ? 0.5 : (prices[0] - lowestPrice) / priceRange;
+                    const x = 0;
+                    const y = canvas.height - (normalizedPrice * (canvas.height - 40) + 20);
+
+                    ctx.beginPath();
+                    ctx.fillStyle = '#3eed3e'; // default color for a single point
+                    ctx.arc(x, y, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    const denom = prices.length - 1;
+
+                    for (let j = 1; j < prices.length; j++) {
+                        const prevX = ((j - 1) / denom) * (canvas.width - 60);
+                        const prevNorm = priceRange === 0 ? 0.5 : (prices[j - 1] - lowestPrice) / priceRange;
+                        const prevY = canvas.height - (prevNorm * (canvas.height - 40) + 20);
+
+                        const x = (j / denom) * (canvas.width - 60);
+                        const norm = priceRange === 0 ? 0.5 : (prices[j] - lowestPrice) / priceRange;
+                        const y = canvas.height - (norm * (canvas.height - 40) + 20);
+
+                        const wentUp = prices[j] >= prices[j - 1];
+                        ctx.strokeStyle = wentUp ? '#3eed3e' : '#f53c36';
+                        ctx.lineWidth = 4;
+
+                        ctx.beginPath();
+                        ctx.moveTo(prevX, prevY);
+                        ctx.lineTo(x, y);
+                        ctx.stroke();
+                    }
                 }
             }
 
