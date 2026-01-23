@@ -504,7 +504,7 @@ export default class Brads extends GargoyleModule {
             const lowestPrice = Math.min(...stock.prices);
             let change = 0;
             let changePercent = 0;
-            if (stock.prices.length === 0) {
+            if (stock.prices.length === 0 || stock.prices[0] === undefined || stock.prices[stock.prices.length - 1] === undefined) {
                 messages.push(`> ${bradsStock?.emoji} ${bradsStock?.name} (${stock.symbol}): No data available.`);
             } else {
                 change = stock.prices[stock.prices.length - 1]! - stock.prices[0]!;
