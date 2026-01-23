@@ -541,6 +541,9 @@ export default class Brads extends GargoyleModule {
         const lowestPrice = Math.min(...Object.values(stocks).flatMap((stock) => stock.prices.map((point) => point)));
         const priceRange = highestPrice - lowestPrice;
 
+        // Sort stocks by their latest price
+        const stocksSorted = stocks.sort((a, b) => a.prices[a.prices.length - 1]! - b.prices[b.prices.length - 1]!);
+
         let i = 0;
         for (const stock of stocks) {
             const bradsStock = Object.values(BradsStocks).find((s) => s.symbol === stock.symbol);
