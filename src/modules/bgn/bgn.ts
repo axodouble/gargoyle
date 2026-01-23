@@ -479,7 +479,7 @@ export default class Brads extends GargoyleModule {
 
                 const days = interaction.options.getInteger('days', true);
                 const stockPrices = await getStockPrices(days);
-                const canvas = await this.generateStockGraph(stockPrices, days);
+                const canvas = await this.generateStockGraph(stockPrices);
                 const marketOpen = await isStockMarketOpen();
                 await interaction.editReply({
                     components: [
@@ -496,7 +496,8 @@ export default class Brads extends GargoyleModule {
                             )
                             .setAccentColor(marketOpen ? 0x3eed3e : 0xf53c36)
                     ],
-                    files: [{ attachment: canvas.toBuffer('image/png'), name: `stock_graph_${days}_days.png` }]
+                    files: [{ attachment: canvas.toBuffer('image/png'), name: `stock_graph_${days}_days.png` }],
+                    flags: [MessageFlags.IsComponentsV2]
                 });
             } else if (interaction.options.getSubcommand() === 'price') {
                 await interaction.deferReply({});
@@ -508,7 +509,7 @@ export default class Brads extends GargoyleModule {
                         (stock) => stock.symbol.toLowerCase() === interaction.options.getString('symbol', true).toLowerCase()
                     )?.symbol!
                 );
-                const canvas = await this.generateStockGraph(stockPrices, days);
+                const canvas = await this.generateStockGraph(stockPrices);
                 const marketOpen = await isStockMarketOpen();
                 await interaction.editReply({
                     components: [
@@ -525,14 +526,14 @@ export default class Brads extends GargoyleModule {
                             )
                             .setAccentColor(marketOpen ? 0x3eed3e : 0xf53c36)
                     ],
-
-                    files: [{ attachment: canvas.toBuffer('image/png'), name: `stock_graph_${days}_days.png` }]
+                    files: [{ attachment: canvas.toBuffer('image/png'), name: `stock_graph_${days}_days.png` }],
+                    flags: [MessageFlags.IsComponentsV2]
                 });
             }
         }
     }
 
-    private async generateStockGraph(stocks: Awaited<ReturnType<typeof getStockPrices>>, days: number) {
+    private async generateStockGraph(stocks: Awaited<ReturnType<typeof getStockPrices>>) {
         const canvas = new Canvas(1000, 600);
         const ctx = canvas.getContext('2d');
 
