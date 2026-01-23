@@ -33,7 +33,6 @@ import {
     User
 } from 'discord.js';
 import GargoyleSlashCommandBuilder from '@src/system/backend/builders/gargoyleSlashCommandBuilder.js';
-import client from '@src/system/botClient.js';
 import GargoyleButtonBuilder, { GargoyleURLButtonBuilder } from '@src/system/backend/builders/gargoyleButtonBuilder.js';
 import { editAsServer } from '@src/system/backend/tools/server.js';
 import { GargoyleStringSelectMenuBuilder } from '@src/system/backend/builders/gargoyleSelectMenuBuilders.js';
@@ -945,6 +944,7 @@ export default class Brads extends GargoyleModule {
             const member = await interaction.guild.members.fetch(interaction.user.id);
 
             const ticket = await this.makeTicketThread(
+                client,
                 interaction.channel,
                 args[0],
                 args[0] === 'ban'
@@ -1143,6 +1143,7 @@ export default class Brads extends GargoyleModule {
     }
 
     private async makeTicketThread(
+        client: GargoyleClient,
         channel: TextChannel,
         category: string,
         extraMessage: MessageCreateOptions | undefined,
@@ -1247,6 +1248,16 @@ export default class Brads extends GargoyleModule {
             return 'An unknown error occured';
         }
     }
+
+    public override init(client: GargoyleClient): void {
+        try {
+            client.logger.log('Setting up stock updates...');
+            updateAllBradsStocks();
+            setInterval(updateAllBradsStocks, 5 * 60 * 1000);
+        } catch (error) {
+            client.logger.error(`Failed to set up stock updates: ${error}`);
+        }
+    }
 }
 
 const stocksSchema = new Schema({
@@ -1298,12 +1309,6 @@ async function updateAllBradsStocks() {
             await stockEntry.save();
         }
     }
-}
-try {
-    updateAllBradsStocks();
-    setInterval(updateAllBradsStocks, 5 * 60 * 1000); // Update every 5 minutes
-} catch (error) {
-    client.logger.error(`Failed to set up stock updates: ${error}`);
 }
 
 enum BradsStockSymbols {
