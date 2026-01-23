@@ -530,9 +530,9 @@ export default class Brads extends GargoyleModule {
         const stocksSorted = stocks.sort((a, b) => a.prices[a.prices.length - 1]! - b.prices[b.prices.length - 1]!);
 
         // Draw horizontal grid lines and price labels
-        ctx.strokeStyle = '#444444';
+        ctx.strokeStyle = '#ffffff75';
         ctx.lineWidth = 1;
-        ctx.fillStyle = '#ffffff';
+        ctx.fillStyle = '#ffffff75';
         ctx.font = `${FontWeight.Regular} 14px Montserrat`;
         ctx.textAlign = 'right';
         ctx.textBaseline = 'middle';
@@ -544,7 +544,7 @@ export default class Brads extends GargoyleModule {
             ctx.lineTo(canvas.width, y);
             ctx.stroke();
             const priceLabel = (highestPrice - (i / numGridLines) * priceRange).toFixed(2);
-            ctx.fillText(`$${priceLabel}`, 25, y);
+            ctx.fillText(`$${priceLabel}`, canvas.width - 10, y);
         }
 
         // Draw stocks
