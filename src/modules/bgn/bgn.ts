@@ -478,9 +478,8 @@ export default class Brads extends GargoyleModule {
 
                 const days = interaction.options.getInteger('days', true);
                 const stockPrices = await getStockPrices(days);
-                const canvas = await this.generateStockGraph(stockPrices);
-                const marketOpen = await isStockMarketOpen();
-                await interaction.editReply(this.generateStockMessage({ marketOpen, canvas, days }) as MessageEditOptions);
+
+                await interaction.editReply(this.generateStockMessage({ stockPrices, days }) as MessageEditOptions);
             } else if (interaction.options.getSubcommand() === 'price') {
                 await interaction.deferReply({});
 
@@ -491,21 +490,39 @@ export default class Brads extends GargoyleModule {
                         (stock) => stock.symbol.toLowerCase() === interaction.options.getString('symbol', true).toLowerCase()
                     )?.symbol!
                 );
-                const canvas = await this.generateStockGraph(stockPrices);
-                const marketOpen = await isStockMarketOpen();
-                await interaction.editReply(this.generateStockMessage({ marketOpen, canvas, days }) as MessageEditOptions);
+
+                await interaction.editReply((await this.generateStockMessage({ stockPrices, days })) as MessageEditOptions);
             }
         }
     }
 
-    private generateStockMessage({ marketOpen, canvas, days }: { marketOpen: boolean; canvas: Canvas; days: number }) {
+    private generateStockPrices(stockPrices: Awaited<ReturnType<typeof getStockPrices>>): string[] {
+        const messages: string[] = [];
+        for (const stock of stockPrices) {
+            const bradsStock = Object.values(BradsStocks).find((s) => s.symbol === stock.symbol);
+            const highestPrice = Math.max(...stock.prices);
+            const lowestPrice = Math.min(...stock.prices);
+            const change = stock.prices[stock.prices.length - 1]! - stock.prices[0]!;
+            const changePercent = (change / stock.prices[0]!) * 100;
+            messages.push(
+                `${bradsStock?.emoji} ${bradsStock?.name} (${stock.symbol}): \`$${stock.prices[stock.prices.length - 1]!.toFixed(2)}\`\n-# High: \`$${highestPrice.toFixed(2)}\` Low: \`$${lowestPrice.toFixed(2)}\` Change: \`$${change.toFixed(2)}\` (\`${changePercent.toFixed(2)}%\`)`
+            );
+        }
+        return messages;
+    }
+
+    private async generateStockMessage({ stockPrices, days }: { stockPrices: Awaited<ReturnType<typeof getStockPrices>>; days: number }) {
+        const canvas = await this.generateStockGraph(stockPrices);
+        const marketOpen = await isStockMarketOpen();
+
         return {
             components: [
                 new ContainerBuilder()
                     .addTextDisplayComponents(
                         new TextDisplayBuilder().setContent(
                             `### BGN Stock Prices over the last ${days} days` +
-                                `\n-# ${marketOpen ? '🟢' : '⭕'} <t:${Math.floor(Date.now() / 1000)}:F> market is ${marketOpen ? 'open!' : 'closed.'}`
+                                `\n-# ${marketOpen ? '🟢' : '⭕'} <t:${Math.floor(Date.now() / 1000)}:f> market is ${marketOpen ? 'open!' : 'closed.'}` +
+                                this.generateStockPrices(stockPrices).join('\n')
                         )
                     )
                     .addMediaGalleryComponents(
@@ -560,14 +577,15 @@ export default class Brads extends GargoyleModule {
                 continue;
             }
 
-            // Draw legend only when comparing multiple stocks (keeps your existing behavior)
             if (stocksSorted.length > 1) {
                 // Draw stock name and color box
                 ctx.textAlign = 'left';
                 ctx.fillStyle = '#ffffff';
                 ctx.font = `${FontWeight.Bold} 16px Montserrat`;
                 ctx.textBaseline = 'top';
-                ctx.fillText(`${bradsStock?.name}`, 45, 6 + i * 20);
+                const priceChange = prices[prices.length - 1]! - prices[0]!;
+                const priceChangePercent = (priceChange / prices[0]!) * 100;
+                ctx.fillText(`${bradsStock?.name} (${priceChangePercent.toFixed(2)}%)`, 45, 6 + i * 20);
 
                 // Color box
                 ctx.lineWidth = 2;
@@ -632,7 +650,7 @@ export default class Brads extends GargoyleModule {
 
                         ctx.beginPath();
                         ctx.moveTo(prevX, prevY);
-                        ctx.lineTo(x, y);
+                        ctx.lineTo(x + 1, y);
                         ctx.stroke();
                     }
                 }
