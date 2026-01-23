@@ -549,9 +549,9 @@ export default class Brads extends GargoyleModule {
             ctx.fillStyle = '#ffffff';
             ctx.font = `${FontWeight.Bold} 16px Montserrat`;
             ctx.textBaseline = 'top';
-            ctx.fillText(`${bradsStock?.name}`, 45, 12 + i * 20);
+            ctx.fillText(`${bradsStock?.name}`, 45, 7 + i * 20);
 
-            ctx.lineWidth = 3;
+            ctx.lineWidth = 2;
             ctx.strokeStyle = '#ffffff';
             ctx.fillStyle = bradsStock?.color || '#ffffff';
             ctx.fillRect(30, 12 + i * 20, 10, 10);
