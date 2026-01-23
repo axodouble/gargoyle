@@ -487,8 +487,8 @@ export default class Brads extends GargoyleModule {
                             .addTextDisplayComponents(
                                 new TextDisplayBuilder().setContent(
                                     `### BGN Stock Prices over the last ${days} days` +
-                                        `-# ${marketOpen ? '🟢' : '⭕'} Market is ${marketOpen ? 'Open!' : 'Closed.'}` +
-                                        `-# Updated <t:${Math.floor(Date.now() / 1000)}:F>`
+                                        `\n-# ${marketOpen ? '🟢' : '⭕'} Market is ${marketOpen ? 'Open!' : 'Closed.'}` +
+                                        `\n-# Updated <t:${Math.floor(Date.now() / 1000)}:F>`
                                 )
                             )
                             .addMediaGalleryComponents(
@@ -517,8 +517,8 @@ export default class Brads extends GargoyleModule {
                             .addTextDisplayComponents(
                                 new TextDisplayBuilder().setContent(
                                     `### BGN Stock Prices over the last ${days} days` +
-                                        `-# ${marketOpen ? '🟢' : '⭕'} Market is ${marketOpen ? 'Open!' : 'Closed.'}` +
-                                        `-# Updated <t:${Math.floor(Date.now() / 1000)}:F>`
+                                        `\n-# ${marketOpen ? '🟢' : '⭕'} Market is ${marketOpen ? 'Open!' : 'Closed.'}` +
+                                        `\n-# Updated <t:${Math.floor(Date.now() / 1000)}:F>`
                                 )
                             )
                             .addMediaGalleryComponents(
@@ -548,13 +548,13 @@ export default class Brads extends GargoyleModule {
             ctx.textAlign = 'left';
             ctx.fillStyle = '#ffffff';
             ctx.font = `${FontWeight.Medium} 10px Montserrat`;
-            ctx.fillText(`${bradsStock?.name}`, 40, 20 + i * 15);
+            ctx.fillText(`${bradsStock?.name}`, 45, 20 + i * 15);
 
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 4;
             ctx.strokeStyle = '#ffffff';
             ctx.fillStyle = bradsStock?.color || '#ffffff';
-            ctx.strokeRect(30, 12 + i * 15, 10, 10);
             ctx.fillRect(30, 12 + i * 15, 10, 10);
+            ctx.strokeRect(30, 12 + i * 15, 10, 10);
 
             ctx.strokeStyle = bradsStock?.color || '#ffffff';
             ctx.beginPath();
