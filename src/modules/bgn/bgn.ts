@@ -548,7 +548,8 @@ export default class Brads extends GargoyleModule {
             ctx.textAlign = 'left';
             ctx.fillStyle = '#ffffff';
             ctx.font = `${FontWeight.Bold} 16px Montserrat`;
-            ctx.fillText(`${bradsStock?.name}`, 45, 20 + i * 20);
+            ctx.textBaseline = 'top';
+            ctx.fillText(`${bradsStock?.name}`, 45, 12 + i * 20);
 
             ctx.lineWidth = 3;
             ctx.strokeStyle = '#ffffff';
@@ -563,7 +564,7 @@ export default class Brads extends GargoyleModule {
             const denom = stock.prices.length > 1 ? stock.prices.length - 1 : 1;
 
             for (let j = 0; j < stock.prices.length; j++) {
-                const x = (j / denom) * (canvas.width - 60) + 50;
+                const x = (j / denom) * (canvas.width - 60);
                 const normalizedPrice = priceRange === 0 ? 0.5 : (stock.prices[j] - lowestPrice) / priceRange;
                 const y = canvas.height - (normalizedPrice * (canvas.height - 40) + 20);
 
