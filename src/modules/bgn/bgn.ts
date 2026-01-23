@@ -505,12 +505,12 @@ export default class Brads extends GargoyleModule {
             let change = 0;
             let changePercent = 0;
             if (stock.prices.length === 0 || stock.prices[0] === undefined || stock.prices[stock.prices.length - 1] === undefined) {
-                messages.push(`> ${bradsStock?.emoji} ${bradsStock?.name} (${stock.symbol}): No data available.`);
+                messages.push(`${bradsStock?.emoji} ${bradsStock?.name} (\`${bradsStock?.fakeSymbol}\`): No data available.`);
             } else {
                 change = stock.prices[stock.prices.length - 1]! - stock.prices[0]!;
                 changePercent = (change / stock.prices[0]!) * 100;
                 let message = ``;
-                message += `${bradsStock?.emoji} ${bradsStock?.name} (${stock.symbol}): \`$${stock.prices[stock.prices.length - 1]!.toFixed(2)}\``;
+                message += `${bradsStock?.emoji} ${bradsStock?.name} (\`${bradsStock?.fakeSymbol}\`): \`$${stock.prices[stock.prices.length - 1]!.toFixed(2)}\``;
                 if (stockPrices.length > 5) {
                     message += ` Change: \`$${change.toFixed(2)}\` (\`${changePercent.toFixed(2)}%\`)`;
                 } else {
@@ -597,7 +597,7 @@ export default class Brads extends GargoyleModule {
                 ctx.textBaseline = 'top';
                 const priceChange = prices[prices.length - 1]! - prices[0]!;
                 const priceChangePercent = (priceChange / prices[0]!) * 100;
-                ctx.fillText(`${bradsStock?.name} (${priceChangePercent.toFixed(2)}%)`, 45, 6 + i * 20);
+                ctx.fillText(`${bradsStock?.fakeSymbol} ${priceChangePercent.toFixed(2)}%`, 45, 6 + i * 20);
 
                 // Color box
                 ctx.lineWidth = 2;
@@ -1409,21 +1409,22 @@ enum BradsStockSymbols {
 interface BradsStock {
     name: keyof typeof BradsStockSymbols;
     symbol: BradsStockSymbols;
+    fakeSymbol: string;
     emoji: string;
     color: string;
 }
 
 const BradsStocks: Record<keyof typeof BradsStockSymbols, BradsStock> = {
-    Pear: { name: 'Pear', symbol: BradsStockSymbols.Pear, emoji: '🍐', color: '#A2AAAD' },
-    Macrohard: { name: 'Macrohard', symbol: BradsStockSymbols.Macrohard, emoji: '🪟', color: '#F25022' },
-    Abode: { name: 'Abode', symbol: BradsStockSymbols.Abode, emoji: '🏠', color: '#FF0000' },
-    Goggle: { name: 'Goggle', symbol: BradsStockSymbols.Goggle, emoji: '🔍', color: '#4285F4' },
-    Amazin: { name: 'Amazin', symbol: BradsStockSymbols.Amazin, emoji: '📦', color: '#FF9900' },
-    FaceSpace: { name: 'FaceSpace', symbol: BradsStockSymbols.FaceSpace, emoji: '👥', color: '#1877F2' },
-    Flicks: { name: 'Flicks', symbol: BradsStockSymbols.Flicks, emoji: '🎬', color: '#E50914' },
-    Edison: { name: 'Edison', symbol: BradsStockSymbols.Edison, emoji: '⚡', color: '#CC0000' },
-    Jolo: { name: 'Jolo', symbol: BradsStockSymbols.Jolo, emoji: '🤖', color: '#0078D7' },
-    Sans: { name: 'Sans', symbol: BradsStockSymbols.Sans, emoji: '💾', color: '#FFCC00' }
+    Pear: { name: 'Pear', symbol: BradsStockSymbols.Pear, fakeSymbol: 'PEAR', emoji: '🍐', color: '#A2AAAD' },
+    Macrohard: { name: 'Macrohard', symbol: BradsStockSymbols.Macrohard, fakeSymbol: 'MCRO', emoji: '🪟', color: '#F25022' },
+    Abode: { name: 'Abode', symbol: BradsStockSymbols.Abode, fakeSymbol: 'ABDE', emoji: '🏠', color: '#FF0000' },
+    Goggle: { name: 'Goggle', symbol: BradsStockSymbols.Goggle, fakeSymbol: 'GOGG', emoji: '🔍', color: '#4285F4' },
+    Amazin: { name: 'Amazin', symbol: BradsStockSymbols.Amazin, fakeSymbol: 'AZIN', emoji: '📦', color: '#FF9900' },
+    FaceSpace: { name: 'FaceSpace', symbol: BradsStockSymbols.FaceSpace, fakeSymbol: 'FACE', emoji: '👥', color: '#1877F2' },
+    Flicks: { name: 'Flicks', symbol: BradsStockSymbols.Flicks, fakeSymbol: 'FCKS', emoji: '🎬', color: '#E50914' },
+    Edison: { name: 'Edison', symbol: BradsStockSymbols.Edison, fakeSymbol: 'EDSN', emoji: '⚡', color: '#CC0000' },
+    Jolo: { name: 'Jolo', symbol: BradsStockSymbols.Jolo, fakeSymbol: 'JOLO', emoji: '🤖', color: '#0078D7' },
+    Sans: { name: 'Sans', symbol: BradsStockSymbols.Sans, fakeSymbol: 'SANS', emoji: '💾', color: '#FFCC00' }
 };
 
 async function getStockSymbol(symbol: BradsStockSymbols) {
