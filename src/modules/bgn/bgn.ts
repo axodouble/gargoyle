@@ -502,10 +502,17 @@ export default class Brads extends GargoyleModule {
             const bradsStock = Object.values(BradsStocks).find((s) => s.symbol === stock.symbol);
             const highestPrice = Math.max(...stock.prices);
             const lowestPrice = Math.min(...stock.prices);
-            const change = stock.prices[stock.prices.length - 1]! - stock.prices[0]!;
-            const changePercent = (change / stock.prices[0]!) * 100;
+            let change = 0;
+            let changePercent = 0;
+            if (stock.prices.length === 0) {
+                messages.push(`> ${bradsStock?.emoji} ${bradsStock?.name} (${stock.symbol}): No data available.`);
+            } else {
+                change = stock.prices[stock.prices.length - 1]! - stock.prices[0]!;
+                changePercent = (change / stock.prices[0]!) * 100;
+            }
+
             messages.push(
-                `${bradsStock?.emoji} ${bradsStock?.name} (${stock.symbol}): \`$${stock.prices[stock.prices.length - 1]!.toFixed(2)}\`\n-# High: \`$${highestPrice.toFixed(2)}\` Low: \`$${lowestPrice.toFixed(2)}\` Change: \`$${change.toFixed(2)}\` (\`${changePercent.toFixed(2)}%\`)`
+                `> ${bradsStock?.emoji} ${bradsStock?.name} (${stock.symbol}): \`$${stock.prices[stock.prices.length - 1]!.toFixed(2)}\`\n> -# High: \`$${highestPrice.toFixed(2)}\` Low: \`$${lowestPrice.toFixed(2)}\` Change: \`$${change.toFixed(2)}\` (\`${changePercent.toFixed(2)}%\`)`
             );
         }
         return messages;
@@ -522,7 +529,7 @@ export default class Brads extends GargoyleModule {
                         new TextDisplayBuilder().setContent(
                             `### BGN Stock Prices over the last ${days} days` +
                                 `\n-# ${marketOpen ? '🟢' : '⭕'} <t:${Math.floor(Date.now() / 1000)}:f> market is ${marketOpen ? 'open!' : 'closed.'}\n` +
-                                this.generateStockPrices(stockPrices).join('\n')
+                                this.generateStockPrices(stockPrices).join('\n\n')
                         )
                     )
                     .addMediaGalleryComponents(
