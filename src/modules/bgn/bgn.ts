@@ -1300,7 +1300,8 @@ enum BradsStockSymbols {
     FaceSpace = 'META',
     Flicks = 'NFLX',
     Edison = 'TSLA',
-    Jolo = 'JL'
+    Jolo = 'JL',
+    Sans = 'SNDK'
 }
 
 interface BradsStock {
@@ -1319,7 +1320,8 @@ const BradsStocks: Record<keyof typeof BradsStockSymbols, BradsStock> = {
     FaceSpace: { name: 'FaceSpace', symbol: BradsStockSymbols.FaceSpace, emoji: '👥', color: '#1877F2' },
     Flicks: { name: 'Flicks', symbol: BradsStockSymbols.Flicks, emoji: '🎬', color: '#E50914' },
     Edison: { name: 'Edison', symbol: BradsStockSymbols.Edison, emoji: '⚡', color: '#CC0000' },
-    Jolo: { name: 'Jolo', symbol: BradsStockSymbols.Jolo, emoji: '🤖', color: '#0078D7' }
+    Jolo: { name: 'Jolo', symbol: BradsStockSymbols.Jolo, emoji: '🤖', color: '#0078D7' },
+    Sans: { name: 'Sans', symbol: BradsStockSymbols.Sans, emoji: '💾', color: '#FFCC00' }
 };
 
 async function getStockSymbol(symbol: BradsStockSymbols) {
