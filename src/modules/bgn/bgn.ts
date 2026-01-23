@@ -509,11 +509,10 @@ export default class Brads extends GargoyleModule {
             } else {
                 change = stock.prices[stock.prices.length - 1]! - stock.prices[0]!;
                 changePercent = (change / stock.prices[0]!) * 100;
+                messages.push(
+                    `> ${bradsStock?.emoji} ${bradsStock?.name} (${stock.symbol}): \`$${stock.prices[stock.prices.length - 1]!.toFixed(2)}\`\n> -# High: \`$${highestPrice.toFixed(2)}\` Low: \`$${lowestPrice.toFixed(2)}\` Change: \`$${change.toFixed(2)}\` (\`${changePercent.toFixed(2)}%\`)`
+                );
             }
-
-            messages.push(
-                `> ${bradsStock?.emoji} ${bradsStock?.name} (${stock.symbol}): \`$${stock.prices[stock.prices.length - 1]!.toFixed(2)}\`\n> -# High: \`$${highestPrice.toFixed(2)}\` Low: \`$${lowestPrice.toFixed(2)}\` Change: \`$${change.toFixed(2)}\` (\`${changePercent.toFixed(2)}%\`)`
-            );
         }
         return messages;
     }
