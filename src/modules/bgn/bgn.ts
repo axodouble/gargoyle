@@ -479,7 +479,7 @@ export default class Brads extends GargoyleModule {
                 const days = interaction.options.getInteger('days', true);
                 const stockPrices = await getStockPrices(days);
 
-                await interaction.editReply(this.generateStockMessage({ stockPrices, days }) as MessageEditOptions);
+                await interaction.editReply((await this.generateStockMessage({ stockPrices, days })) as MessageEditOptions);
             } else if (interaction.options.getSubcommand() === 'price') {
                 await interaction.deferReply({});
 
