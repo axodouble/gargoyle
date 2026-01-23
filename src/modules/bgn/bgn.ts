@@ -509,9 +509,15 @@ export default class Brads extends GargoyleModule {
             } else {
                 change = stock.prices[stock.prices.length - 1]! - stock.prices[0]!;
                 changePercent = (change / stock.prices[0]!) * 100;
-                messages.push(
-                    `> ${bradsStock?.emoji} ${bradsStock?.name} (${stock.symbol}): \`$${stock.prices[stock.prices.length - 1]!.toFixed(2)}\`\n> -# High: \`$${highestPrice.toFixed(2)}\` Low: \`$${lowestPrice.toFixed(2)}\` Change: \`$${change.toFixed(2)}\` (\`${changePercent.toFixed(2)}%\`)`
-                );
+                let message = ``;
+                message += `${bradsStock?.emoji} ${bradsStock?.name} (${stock.symbol}): \`$${stock.prices[stock.prices.length - 1]!.toFixed(2)}\``;
+                if (stockPrices.length > 5) {
+                    message += ` Change: \`$${change.toFixed(2)}\` (\`${changePercent.toFixed(2)}%\`)`;
+                } else {
+                    message += `\n-# High: \`$${highestPrice.toFixed(2)}\` Low: \`$${lowestPrice.toFixed(2)}\` Change: \`$${change.toFixed(2)}\` (\`${changePercent.toFixed(2)}%\`)`;
+                }
+
+                messages.push(message);
             }
         }
         return messages;
@@ -528,7 +534,7 @@ export default class Brads extends GargoyleModule {
                         new TextDisplayBuilder().setContent(
                             `### BGN Stock Prices over the last ${days} days` +
                                 `\n-# ${marketOpen ? '🟢' : '⭕'} <t:${Math.floor(Date.now() / 1000)}:f> market is ${marketOpen ? 'open!' : 'closed.'}\n` +
-                                this.generateStockPrices(stockPrices).join('\n\n')
+                                this.generateStockPrices(stockPrices).join('\n')
                         )
                     )
                     .addMediaGalleryComponents(
