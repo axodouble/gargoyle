@@ -510,7 +510,7 @@ export default class Brads extends GargoyleModule {
                 change = stock.prices[stock.prices.length - 1]! - stock.prices[0]!;
                 changePercent = (change / stock.prices[0]!) * 100;
                 let message = ``;
-                message += `${bradsStock?.emoji} ${bradsStock?.name} (\`${bradsStock?.fakeSymbol}\`): ${change >= 0 ? StockEmojis.TrendUp : StockEmojis.TrendDown}\`$${stock.prices[stock.prices.length - 1]!.toFixed(2)}\``;
+                message += `${bradsStock?.emoji} ${bradsStock?.name} (\`${bradsStock?.fakeSymbol}\`): \`$${stock.prices[stock.prices.length - 1]!.toFixed(2)}\` ${change >= 0 ? StockEmojis.TrendUp : StockEmojis.TrendDown}`;
                 if (stockPrices.length > 5) {
                     message += ` Change: \`$${change.toFixed(2)}\` (\`${changePercent.toFixed(2)}%\`)`;
                 } else {
@@ -534,7 +534,7 @@ export default class Brads extends GargoyleModule {
                         new TextDisplayBuilder().setContent(
                             `### BGN Stock Prices over the last ${days} days` +
                                 `\n-# ${marketOpen ? StockEmojis.Office : StockEmojis.CalendarX} <t:${Math.floor(Date.now() / 1000)}:f> market is ${marketOpen ? 'open!' : 'closed.'}\n` +
-                                `${marketOpen ? '' : "-# Markets open following [NYSE](https://www.nyse.com/trade/hours-calendars)'s stock trading schedule, `09:30` to `16:00` EST."}` +
+                                `${marketOpen ? '' : "-# Markets open following [NYSE](https://www.nyse.com/trade/hours-calendars)'s stock trading schedule, `09:30` to `16:00` EST.\n"}` +
                                 this.generateStockPrices(stockPrices).join('\n')
                         )
                     )
