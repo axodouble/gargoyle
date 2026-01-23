@@ -552,41 +552,69 @@ export default class Brads extends GargoyleModule {
         for (const stock of stocksSorted) {
             const bradsStock = Object.values(BradsStocks).find((s) => s.symbol === stock.symbol);
 
-            // Draw stock name and color box
-            ctx.textAlign = 'left';
-            ctx.fillStyle = '#ffffff';
-            ctx.font = `${FontWeight.Bold} 16px Montserrat`;
-            ctx.textBaseline = 'top';
-            ctx.fillText(`${bradsStock?.name}`, 45, 6 + i * 20);
+            if (stocksSorted.length > 1) {
+                // Draw stock name and color box
+                ctx.textAlign = 'left';
+                ctx.fillStyle = '#ffffff';
+                ctx.font = `${FontWeight.Bold} 16px Montserrat`;
+                ctx.textBaseline = 'top';
+                ctx.fillText(`${bradsStock?.name}`, 45, 6 + i * 20);
 
-            // Color box
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = '#ffffff';
-            ctx.fillStyle = bradsStock?.color || '#ffffff';
-            ctx.fillRect(30, 12 + i * 20, 10, 10);
-            ctx.strokeRect(30, 12 + i * 20, 10, 10);
+                // Color box
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#ffffff';
+                ctx.fillStyle = bradsStock?.color || '#ffffff';
+                ctx.fillRect(30, 12 + i * 20, 10, 10);
+                ctx.strokeRect(30, 12 + i * 20, 10, 10);
 
-            // Draw stock line
-            ctx.lineWidth = 4;
-            ctx.strokeStyle = bradsStock?.color || '#ffffff';
-            ctx.beginPath();
+                // Draw stock line
+                ctx.lineWidth = 4;
+                ctx.strokeStyle = bradsStock?.color || '#ffffff';
+                ctx.beginPath();
 
-            // Calculate denominator for x position based on number of prices
-            const denom = stock.prices.length > 1 ? stock.prices.length - 1 : 1;
+                // Calculate denominator for x position based on number of prices
+                const denom = stock.prices.length > 1 ? stock.prices.length - 1 : 1;
 
-            // Plot each price point
-            for (let j = 0; j < stock.prices.length; j++) {
-                const x = (j / denom) * (canvas.width - 60);
-                const normalizedPrice = priceRange === 0 ? 0.5 : (stock.prices[j] - lowestPrice) / priceRange;
-                const y = canvas.height - (normalizedPrice * (canvas.height - 40) + 20);
+                // Plot each price point
+                for (let j = 0; j < stock.prices.length; j++) {
+                    const x = (j / denom) * (canvas.width - 60);
+                    const normalizedPrice = priceRange === 0 ? 0.5 : (stock.prices[j] - lowestPrice) / priceRange;
+                    const y = canvas.height - (normalizedPrice * (canvas.height - 40) + 20);
 
-                if (j === 0) {
-                    ctx.moveTo(x, y);
-                } else {
-                    ctx.lineTo(x, y);
+                    if (j === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                }
+                ctx.stroke();
+            } else {
+                // Calculate denominator for x position based on number of prices
+                const denom = stock.prices.length > 1 ? stock.prices.length - 1 : 1;
+
+                // Plot each price point
+                let lastY = 0;
+                for (let j = 0; j < stock.prices.length; j++) {
+                    const x = (j / denom) * (canvas.width - 60);
+                    const normalizedPrice = priceRange === 0 ? 0.5 : (stock.prices[j] - lowestPrice) / priceRange;
+                    const y = canvas.height - (normalizedPrice * (canvas.height - 40) + 20);
+                    if (y > lastY) {
+                        ctx.strokeStyle = '#3eed3e';
+                    } else if (y < lastY) {
+                        ctx.strokeStyle = '#f53c36';
+                    }
+                    lastY = y;
+                    ctx.lineWidth = 4;
+                    ctx.beginPath();
+                    if (j === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                    ctx.stroke();
                 }
             }
-            ctx.stroke();
+
             i++;
         }
 
