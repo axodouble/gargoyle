@@ -527,7 +527,7 @@ export default class Brads extends GargoyleModule {
         const priceRange = highestPrice - lowestPrice;
 
         // Sort stocks by their latest price
-        const stocksSorted = stocks.sort((a, b) => a.prices[a.prices.length - 1]! - b.prices[b.prices.length - 1]!);
+        const stocksSorted = stocks.sort((a, b) => b.prices[b.prices.length - 1]! - a.prices[a.prices.length - 1]!);
 
         // Draw horizontal grid lines and price labels
         ctx.strokeStyle = '#ffffff75';
