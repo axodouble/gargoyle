@@ -105,6 +105,12 @@ export default class Brads extends GargoyleModule {
                             )
                     )
             )
+            .addSubcommand((subcommand) =>
+                subcommand
+                    .setName('link')
+                    .setDescription('Link your Discord account to your BGN staff account')
+                    .addStringOption((option) => option.setName('code').setDescription('The link code from the BGN staff panel').setRequired(false))
+            )
             .addSubcommand((subcommand) => subcommand.setName('panel').setDescription('Send the BGN panel')) as GargoyleSlashCommandBuilder
     ];
 
@@ -472,7 +478,38 @@ export default class Brads extends GargoyleModule {
                 flags: [MessageFlags.IsComponentsV2],
                 allowedMentions: { parse: [] }
             });
-        } else if (interaction.options.getSubcommandGroup() === 'stocks') {
+        } else if (interaction.options.getSubcommand() === 'link') {
+            await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+            const code = interaction.options.getString('code', false);
+
+            if (!code) {
+                let newCode: string;
+                do {
+                    newCode = Math.floor(100000 + Math.random() * 900000).toString();
+                } while (this.linkingCodes.has(newCode));
+                this.linkingCodes.set(newCode, { discordId: interaction.user.id, steamId: null });
+                await interaction.editReply(`To link your account, please enter this code in the BGN Server \`/link ${newCode}\``);
+                return;
+            } else {
+                const entry = this.linkingCodes.get(code);
+                if (!entry) {
+                    await interaction.editReply('Invalid code provided.');
+                    return;
+                }
+                if (entry.discordId && entry.discordId !== interaction.user.id) {
+                    await interaction.editReply('This code has already been used by another Discord account.');
+                    return;
+                }
+                entry.discordId = interaction.user.id;
+                this.linkingCodes.set(code, entry);
+                await interaction.editReply('Successfully linked your Discord account to your BGN staff account.');
+
+                // #TODO:
+                // Add SQL entry to link the accounts in the database
+            }
+
+        }
+         else if (interaction.options.getSubcommandGroup() === 'stocks') {
             if (interaction.options.getSubcommand() === 'graph') {
                 await interaction.deferReply({});
 
@@ -1332,6 +1369,68 @@ export default class Brads extends GargoyleModule {
         }
     }
 
+    private linkingCodes: Map<string, { discordId: string | null; steamId: string | null }> = new Map();
+
+    public override async executeApiRequest(_client: GargoyleClient, request: Request): Promise<Response> {
+        const url = new URL(request.url);
+        if (url.pathname === '/api/bgn/v1/user/link') {
+            const apiKey = process.env.BGN_API_KEY || '';
+            const requestApiKey = url.searchParams.get('apiKey');
+            if (apiKey !== requestApiKey) {
+                return Promise.resolve(new Response('Unauthorized', { status: 401, headers: { 'Content-Type': 'text/plain' } }));
+            }
+            const codeParam = url.searchParams.get('code');
+            const steamIdParam = url.searchParams.get('steamId');
+            if (!codeParam || steamIdParam) {
+                // Linking initiated in the game server
+                // And will be finalized in Discord
+                let code: number;
+                do {
+                    code = Math.floor(100000 + Math.random() * 900000);
+                } while (this.linkingCodes.has(code.toString()));
+
+                this.linkingCodes.set(code.toString(), { discordId: null, steamId: steamIdParam });
+                return Promise.resolve(
+                    new Response(
+                        JSON.stringify({
+                            code: code
+                        }),
+                        { status: 200, headers: { 'Content-Type': 'application/json' } }
+                    )
+                );
+            } else if (codeParam && steamIdParam) {
+                // Linking initiated in Discord
+                // And will be finalized in the game server
+                const entry = this.linkingCodes.get(codeParam);
+                if (!entry) {
+                    return Promise.resolve(new Response('Invalid code', { status: 400, headers: { 'Content-Type': 'text/plain' } }));
+                }
+
+                entry.discordId = steamIdParam;
+                this.linkingCodes.set(codeParam, entry);
+
+                return Promise.resolve(
+                    new Response(JSON.stringify({ discordId: entry.discordId }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+                );
+            } else {
+                return Promise.resolve(new Response('Invalid parameters', { status: 400, headers: { 'Content-Type': 'text/plain' } }));
+            }
+        } else if (url.pathname === '/api/bgn/v1/stocks/latest') {
+            const stocks = Object.values(BradsStockSymbols);
+            const stockPrices = await Promise.all(
+                stocks.map(async (symbol) => {
+                    return await getLatestStockPrice(symbol);
+                })
+            );
+
+            return Promise.resolve(
+                new Response(JSON.stringify({ stocks: stockPrices }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+            );
+        }
+
+        return Promise.resolve(new Response('Not Found', { status: 404, headers: { 'Content-Type': 'text/plain' } }));
+    }
+
     public override init(client: GargoyleClient): void {
         try {
             client.logger.log('Setting up stock updates...');
@@ -1358,6 +1457,15 @@ const stocksSchema = new Schema({
 });
 
 const StocksModel = model('BradsStocks', stocksSchema);
+
+async function getLatestStockPrice(symbol: BradsStockSymbols): Promise<{ symbol: BradsStockSymbols; price: number | null }> {
+    const latestEntry = await StocksModel.findOne({ symbol: symbol }).sort({ time: -1 }).exec();
+
+    return {
+        symbol: symbol,
+        price: latestEntry ? latestEntry.price : null
+    };
+}
 
 async function getStockPrices(days: number, ...symbols: BradsStockSymbols[]): Promise<{ symbol: BradsStockSymbols; prices: number[] }[]> {
     let searchList = symbols;
