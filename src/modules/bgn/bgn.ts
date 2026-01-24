@@ -573,29 +573,21 @@ export default class Brads extends GargoyleModule {
         }
     }
 
-    public override async executeSelectMenuCommand(_client: GargoyleClient, interaction: AnySelectMenuInteraction, ...args: string[]): Promise<void> {
-        if (args[0] === 'remove') {
-            await interaction.deferUpdate();
-            for (const userId of interaction.values) {
-                await (interaction.channel as PrivateThreadChannel).members.remove(userId).catch(() => {});
-            }
-            interaction.editReply({ content: 'Removed all of the selected members.', components: [] });
-        } else if (args[0] === 'track') {
-            await interaction.deferUpdate();
-            const selected = interaction.values;
+    private async stockUiMessage(symbols: BradsStockSymbols[]){
+        const stockPrices = await getStockPrices(3, ...symbols);
+const marketStatus = await isStockMarketOpen()
+        return {
 
-            const selectedStocks = Object.values(BradsStocks).filter((stock) => selected.includes(stock.symbol));
-            const stockPrices = await getStockPrices(3, ...selectedStocks.map((stock) => stock.symbol));
-
-            await (interaction.channel as TextChannel).send({
                 components: [
                     new ContainerBuilder().addSectionComponents(
                         new SectionBuilder().addTextDisplayComponents(
                             new TextDisplayBuilder().setContent(
+                                `## ${marketStatus ? StockEmojis.Office+' Market is open.' : StockEmojis.CalendarX+' Market is closed.'}`+
+                                `\n-# Updated <t:${Math.floor(Date.now() / 1000)}:R>\n`+
                                 this.generateStockPrices(stockPrices).join('\n')
                             )
                         ).setButtonAccessory(
-                            new GargoyleButtonBuilder(this, 'refreshstocks', selected.join('_')).setLabel('Refresh').setStyle(ButtonStyle.Secondary).setEmoji(StockEmojis.Office)
+                            new GargoyleButtonBuilder(this, 'refreshstocks', symbols.join('_')).setLabel('Refresh').setStyle(ButtonStyle.Secondary).setEmoji(StockEmojis.Refresh)
                         )
                     ).addMediaGalleryComponents(
                         new MediaGalleryBuilder().addItems(
@@ -610,8 +602,24 @@ export default class Brads extends GargoyleModule {
                     }
                 ],
                 flags: [MessageFlags.IsComponentsV2]
-            })
+            
+        }
+    }
 
+    public override async executeSelectMenuCommand(_client: GargoyleClient, interaction: AnySelectMenuInteraction, ...args: string[]): Promise<void> {
+        if (args[0] === 'remove') {
+            await interaction.deferUpdate();
+            for (const userId of interaction.values) {
+                await (interaction.channel as PrivateThreadChannel).members.remove(userId).catch(() => {});
+            }
+            interaction.editReply({ content: 'Removed all of the selected members.', components: [] });
+        } else if (args[0] === 'track') {
+            await interaction.deferUpdate();
+            const selected = interaction.values;
+
+            const selectedStocks = Object.values(BradsStocks).filter((stock) => selected.includes(stock.symbol));
+
+            await (interaction.channel as TextChannel).send(await this.stockUiMessage(selectedStocks.map((stock) => stock.symbol)) as MessageCreateOptions);
         }
     }
 
@@ -772,32 +780,7 @@ export default class Brads extends GargoyleModule {
             await interaction.deferUpdate();
             const selected = args[1].split('_');
             const selectedStocks = Object.values(BradsStocks).filter((stock) => selected.includes(stock.symbol.toLowerCase())).map(stock => stock.symbol);
-            const stockPrices = await getStockPrices(3, ...selectedStocks);
-            await interaction.message.edit({
-                components: [
-                    new ContainerBuilder().addSectionComponents(
-                        new SectionBuilder().addTextDisplayComponents(
-                            new TextDisplayBuilder().setContent(
-                                `Updated <t:${Math.floor(Date.now() / 1000)}:R>\n`+
-                                this.generateStockPrices(stockPrices).join('\n')
-                            )
-                        ).setButtonAccessory(
-                            new GargoyleButtonBuilder(this, 'refreshstocks', selected.join('_')).setLabel('Refresh').setStyle(ButtonStyle.Secondary).setEmoji(StockEmojis.Office)
-                        )
-                    ).addMediaGalleryComponents(
-                        new MediaGalleryBuilder().addItems(
-                            new MediaGalleryItemBuilder().setURL('attachment://stocks.png')
-                        )
-                    )
-                ],
-                files: [
-                    {
-                        attachment: (await this.generateStockGraph(stockPrices)).toBuffer(),
-                        name: 'stocks.png'
-                    }
-                ],
-                flags: [MessageFlags.IsComponentsV2]
-            })
+            await interaction.message.edit(await this.stockUiMessage(selectedStocks) as MessageEditOptions);
             return;
         }
 
@@ -1190,7 +1173,7 @@ export default class Brads extends GargoyleModule {
     }
 
     private async generateStockGraph(stocks: Awaited<ReturnType<typeof getStockPrices>>) {
-        if (stocks.length > 3) {
+        if (stocks.length > 1) {
             return this.generateStockGraphLines(stocks);
         } else {
             return this.generateStockGraphBlocks(stocks);
@@ -1243,11 +1226,11 @@ export default class Brads extends GargoyleModule {
                 // Draw stock name and color box
                 ctx.textAlign = 'left';
                 ctx.fillStyle = '#ffffff';
-                ctx.font = `${FontWeight.Bold} 16px Montserrat`;
+                ctx.font = `${FontWeight.SemiBold} 16px Montserrat`;
                 ctx.textBaseline = 'top';
                 const priceChange = prices[prices.length - 1]! - prices[0]!;
                 const priceChangePercent = (priceChange / prices[0]!) * 100;
-                ctx.fillText(`${bradsStock?.fakeSymbol} ${priceChangePercent.toFixed(2)}%`, 45, 6 + i * 20);
+                ctx.fillText(`${bradsStock?.fakeSymbol} ${priceChangePercent.toFixed(2)}%`, 45, 7 + i * 20);
 
                 // Color box
                 ctx.lineWidth = 2;
@@ -1409,7 +1392,7 @@ export default class Brads extends GargoyleModule {
 
         ctx.textAlign = 'left';
         ctx.fillStyle = '#ffffff';
-        ctx.font = `${FontWeight.Bold} 16px Montserrat`;
+        ctx.font = `${FontWeight.SemiBold} 16px Montserrat`;
         ctx.textBaseline = 'top';
 
         let legendIndex = 0;
@@ -1423,7 +1406,7 @@ export default class Brads extends GargoyleModule {
 
             const priceChange = prices[prices.length - 1]! - prices[0]!;
             const priceChangePercent = (priceChange / prices[0]!) * 100;
-            ctx.fillText(`${bradsStock?.fakeSymbol} ${priceChangePercent.toFixed(2)}%`, 45, 6 + legendIndex * 20);
+            ctx.fillText(`${bradsStock?.fakeSymbol} ${priceChangePercent.toFixed(2)}%`, 45, 7 + legendIndex * 20);
 
             ctx.lineWidth = 2;
             ctx.strokeStyle = '#ffffff';
@@ -1710,7 +1693,8 @@ enum StockEmojis {
     TrendUp = '<:trend_up:1464156762780336172>',
     TrendDown = '<:trend_down:1464156713073512480>',
     Office = '<:office:1464156672267390992>',
-    CalendarX = '<:calender_x:1464156625127477413>'
+    CalendarX = '<:calender_x:1464156625127477413>',
+    Refresh = '<:refresh:1464485549510492170>'
 }
 
 const stocksSchema = new Schema({
