@@ -51,7 +51,8 @@ export default class Brads extends GargoyleModule {
             .setDescription("A command for Brad's RP")
             .setContexts(InteractionContextType.Guild)
             .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
-            .addGuilds('324195889977622530', '1442961061207736672')
+            .addGuild('750209335841390642') // Ceraia Guild
+            .addGuilds('324195889977622530', '1442961061207736672') // Brad's Staff & Brad's Network
             .addSubcommandGroup((group) =>
                 group
                     .setName('sheets')
@@ -104,6 +105,7 @@ export default class Brads extends GargoyleModule {
                                 option.setName('days').setDescription('Number of days to graph').setMinValue(1).setMaxValue(60).setRequired(true)
                             )
                     )
+                    .addSubcommand((subcommand) => subcommand.setName('ui').setDescription('Get a stock UI'))
             )
             .addSubcommand((subcommand) =>
                 subcommand
@@ -504,12 +506,24 @@ export default class Brads extends GargoyleModule {
                 this.linkingCodes.set(code, entry);
                 await interaction.editReply('Successfully linked your Discord account to your BGN staff account.');
 
-                // #TODO:
-                // Add SQL entry to link the accounts in the database
-            }
+                const db = new SQL({
+                    adapter: 'mariadb',
+                    hostname: process.env.BGN_STAFF_DB_HOST,
+                    username: process.env.BGN_ADMIN_DB_USER,
+                    password: process.env.BGN_ADMIN_DB_PASS,
+                    database: 'ustocks'
+                });
 
-        }
-         else if (interaction.options.getSubcommandGroup() === 'stocks') {
+                // Schema in LinkeduStock
+                // SteamID     | DiscordID   | AccountID
+                // VarChar(17) | VarChar(20) | Int(20)
+                // @ts-ignore 
+                const newUser = await db`
+                    INSERT INTO LinkeduStock (SteamID, DiscordID)
+                    VALUES (${entry.steamId}, ${entry.discordId})
+                `;
+            }
+        } else if (interaction.options.getSubcommandGroup() === 'stocks') {
             if (interaction.options.getSubcommand() === 'graph') {
                 await interaction.deferReply({});
 
@@ -529,188 +543,34 @@ export default class Brads extends GargoyleModule {
                 );
 
                 await interaction.editReply((await this.generateStockMessage({ stockPrices, days })) as MessageEditOptions);
-            }
-        }
-    }
-
-    private generateStockPrices(stockPrices: Awaited<ReturnType<typeof getStockPrices>>): string[] {
-        const messages: string[] = [];
-        for (const stock of stockPrices) {
-            const bradsStock = Object.values(BradsStocks).find((s) => s.symbol === stock.symbol);
-            const highestPrice = Math.max(...stock.prices);
-            const lowestPrice = Math.min(...stock.prices);
-            let change = 0;
-            let changePercent = 0;
-            if (stock.prices.length === 0 || stock.prices[0] === undefined || stock.prices[stock.prices.length - 1] === undefined) {
-                messages.push(`${bradsStock?.emoji} ${bradsStock?.name} (\`${bradsStock?.fakeSymbol}\`): No data available.`);
-            } else {
-                change = stock.prices[stock.prices.length - 1]! - stock.prices[0]!;
-                changePercent = (change / stock.prices[0]!) * 100;
-                let message = ``;
-                message += `${bradsStock?.emoji} ${bradsStock?.name} (\`${bradsStock?.fakeSymbol}\`): \`$${stock.prices[stock.prices.length - 1]!.toFixed(2)}\` ${change >= 0 ? StockEmojis.TrendUp : StockEmojis.TrendDown}`;
-                if (stockPrices.length > 5) {
-                    message += ` Change: \`$${change.toFixed(2)}\` (\`${changePercent.toFixed(2)}%\`)`;
-                } else {
-                    message += `\n-# High: \`$${highestPrice.toFixed(2)}\` Low: \`$${lowestPrice.toFixed(2)}\` Change: \`$${change.toFixed(2)}\` (\`${changePercent.toFixed(2)}%\`)`;
+            } else if (interaction.options.getSubcommand() === 'ui') {
+                if(interaction.channel?.type !== ChannelType.GuildText) {
+                    await interaction.reply({ content: 'This command can only be used in guild text channels.', flags: [MessageFlags.Ephemeral] });
                 }
-
-                messages.push(message);
+                await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+                await interaction.editReply({
+                    components: [
+                        new ContainerBuilder()
+                            .addTextDisplayComponents(new TextDisplayBuilder().setContent('What Stocks would you like to track?'))
+                            .addActionRowComponents(
+                                new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+                                    new GargoyleStringSelectMenuBuilder(this, 'track')
+                                        .setMinValues(1)
+                                        .setMaxValues(Object.values(BradsStocks).length)
+                                        .setPlaceholder('Select Stocks to Track')
+                                        .setOptions(
+                                            ...Object.values(BradsStocks).map((stock) => ({
+                                                label: stock.emoji + ' ' + stock.name,
+                                                value: stock.symbol
+                                            }))
+                                        )
+                                )
+                            )
+                    ],
+                    flags: [MessageFlags.IsComponentsV2]
+                });
             }
         }
-        return messages;
-    }
-
-    private async generateStockMessage({ stockPrices, days }: { stockPrices: Awaited<ReturnType<typeof getStockPrices>>; days: number }) {
-        const canvas = await this.generateStockGraph(stockPrices);
-        const marketOpen = await isStockMarketOpen();
-
-        return {
-            components: [
-                new ContainerBuilder()
-                    .addTextDisplayComponents(
-                        new TextDisplayBuilder().setContent(
-                            `### BGN Stock Prices over the last ${days} days` +
-                                `\n-# ${marketOpen ? StockEmojis.Office : StockEmojis.CalendarX} <t:${Math.floor(Date.now() / 1000)}:f> market is ${marketOpen ? 'open!' : 'closed.'}\n` +
-                                `${marketOpen ? '' : "-# Markets open following [NYSE](https://www.nyse.com/trade/hours-calendars)'s stock trading schedule, `09:30` to `16:00` EST.\n"}` +
-                                this.generateStockPrices(stockPrices).join('\n')
-                        )
-                    )
-                    .addMediaGalleryComponents(
-                        new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(`attachment://stock_graph_${days}_days.png`))
-                    )
-                    .setAccentColor(marketOpen ? 0x3eed3e : 0xf53c36)
-            ],
-            files: [{ attachment: canvas.toBuffer('image/png'), name: `stock_graph_${days}_days.png` }],
-            flags: [MessageFlags.IsComponentsV2]
-        };
-    }
-
-    private async generateStockGraph(stocks: Awaited<ReturnType<typeof getStockPrices>>) {
-        const canvas = new Canvas(1000, 600);
-        const ctx = canvas.getContext('2d');
-
-        const highestPrice = Math.max(...Object.values(stocks).flatMap((stock) => stock.prices.map((point) => point)));
-        const lowestPrice = Math.min(...Object.values(stocks).flatMap((stock) => stock.prices.map((point) => point)));
-        const priceRange = highestPrice - lowestPrice;
-
-        // Sort stocks by their latest price
-        const stocksSorted = stocks.sort((a, b) => b.prices[b.prices.length - 1]! - a.prices[a.prices.length - 1]!);
-
-        // Draw horizontal grid lines and price labels
-        ctx.strokeStyle = '#ffffff75';
-        ctx.lineWidth = 1;
-        ctx.fillStyle = '#ffffff75';
-        ctx.font = `${FontWeight.Regular} 14px Montserrat`;
-        ctx.textAlign = 'right';
-        ctx.textBaseline = 'middle';
-        const numGridLines = 10;
-        for (let i = 0; i <= numGridLines; i++) {
-            const y = (i / numGridLines) * (canvas.height - 40) + 20;
-            ctx.beginPath();
-            ctx.moveTo(0, y);
-            ctx.lineTo(canvas.width, y);
-            ctx.stroke();
-            const priceLabel = (highestPrice - (i / numGridLines) * priceRange).toFixed(2);
-            ctx.fillText(`$${priceLabel}`, canvas.width - 10, y);
-        }
-
-        // Draw stocks
-        let i = 0;
-        for (const stock of stocksSorted) {
-            const bradsStock = Object.values(BradsStocks).find((s) => s.symbol === stock.symbol);
-
-            const prices = stock.prices;
-
-            // Nothing to draw
-            if (!prices || prices.length === 0) {
-                i++;
-                continue;
-            }
-
-            if (stocksSorted.length > 1) {
-                // Draw stock name and color box
-                ctx.textAlign = 'left';
-                ctx.fillStyle = '#ffffff';
-                ctx.font = `${FontWeight.Bold} 16px Montserrat`;
-                ctx.textBaseline = 'top';
-                const priceChange = prices[prices.length - 1]! - prices[0]!;
-                const priceChangePercent = (priceChange / prices[0]!) * 100;
-                ctx.fillText(`${bradsStock?.fakeSymbol} ${priceChangePercent.toFixed(2)}%`, 45, 6 + i * 20);
-
-                // Color box
-                ctx.lineWidth = 2;
-                ctx.strokeStyle = '#ffffff';
-                ctx.fillStyle = bradsStock?.color || '#ffffff';
-                ctx.fillRect(30, 12 + i * 20, 10, 10);
-                ctx.strokeRect(30, 12 + i * 20, 10, 10);
-
-                // Draw stock line (single color per stock)
-                ctx.lineWidth = 4;
-                ctx.strokeStyle = bradsStock?.color || '#ffffff';
-
-                if (prices.length === 1) {
-                    // Single point: draw a dot
-                    const normalizedPrice = priceRange === 0 ? 0.5 : (prices[0] - lowestPrice) / priceRange;
-                    const x = 0;
-                    const y = canvas.height - (normalizedPrice * (canvas.height - 40) + 20);
-
-                    ctx.beginPath();
-                    ctx.fillStyle = bradsStock?.color || '#ffffff';
-                    ctx.arc(x, y, 4, 0, Math.PI * 2);
-                    ctx.fill();
-                } else {
-                    const denom = prices.length - 1;
-
-                    ctx.beginPath();
-                    for (let j = 0; j < prices.length; j++) {
-                        const x = (j / denom) * (canvas.width - 60);
-                        const normalizedPrice = priceRange === 0 ? 0.5 : (prices[j] - lowestPrice) / priceRange;
-                        const y = canvas.height - (normalizedPrice * (canvas.height - 40) + 20);
-
-                        if (j === 0) ctx.moveTo(x, y);
-                        else ctx.lineTo(x, y);
-                    }
-                    ctx.stroke();
-                }
-            } else {
-                if (prices.length === 1) {
-                    const normalizedPrice = priceRange === 0 ? 0.5 : (prices[0] - lowestPrice) / priceRange;
-                    const x = 0;
-                    const y = canvas.height - (normalizedPrice * (canvas.height - 40) + 20);
-
-                    ctx.beginPath();
-                    ctx.fillStyle = '#3eed3e'; // default color for a single point
-                    ctx.arc(x, y, 4, 0, Math.PI * 2);
-                    ctx.fill();
-                } else {
-                    const denom = prices.length - 1;
-
-                    for (let j = 1; j < prices.length; j++) {
-                        const prevX = ((j - 1) / denom) * (canvas.width - 60);
-                        const prevNorm = priceRange === 0 ? 0.5 : (prices[j - 1] - lowestPrice) / priceRange;
-                        const prevY = canvas.height - (prevNorm * (canvas.height - 40) + 20);
-
-                        const x = (j / denom) * (canvas.width - 60);
-                        const norm = priceRange === 0 ? 0.5 : (prices[j] - lowestPrice) / priceRange;
-                        const y = canvas.height - (norm * (canvas.height - 40) + 20);
-
-                        const wentUp = prices[j] >= prices[j - 1];
-                        ctx.strokeStyle = wentUp ? '#3eed3e' : '#f53c36';
-                        ctx.lineCap = 'round';
-                        ctx.lineWidth = 4;
-
-                        ctx.beginPath();
-                        ctx.moveTo(prevX, prevY);
-                        ctx.lineTo(x, y);
-                        ctx.stroke();
-                    }
-                }
-            }
-
-            i++;
-        }
-
-        return canvas;
     }
 
     public override async executeSelectMenuCommand(_client: GargoyleClient, interaction: AnySelectMenuInteraction, ...args: string[]): Promise<void> {
@@ -720,55 +580,39 @@ export default class Brads extends GargoyleModule {
                 await (interaction.channel as PrivateThreadChannel).members.remove(userId).catch(() => {});
             }
             interaction.editReply({ content: 'Removed all of the selected members.', components: [] });
-        }
-    }
+        } else if (args[0] === 'track') {
+            await interaction.deferUpdate();
+            const selected = interaction.values;
 
-    private staffActivityMessage(
-        staffMembers: Array<{
-            author: string | null;
-            characterName: string | null;
-            steamId: string | null;
-            rankId: string | null;
-            hours: number;
-        }>,
-        days: number,
-        refresh: boolean
-    ) {
-        let messageContent = '### Staff Activity Sheets\n';
+            const selectedStocks = Object.values(BradsStocks).filter((stock) => selected.includes(stock.symbol));
+            const stockPrices = await getStockPrices(3, ...selectedStocks.map((stock) => stock.symbol));
 
-        messageContent += `-# Updated <t:${Math.floor(Date.now() / 1000)}:F>\n\n`;
-
-        for (const staffMember of staffMembers) {
-            let userString = '';
-            if (staffMember.author) userString += `<@!${staffMember.author}> `;
-            else userString += 'Unknown User ';
-
-            if (staffMember.steamId) userString += `[${staffMember.characterName}](https://steamcommunity.com/profiles/${staffMember.steamId}) `;
-            else userString += `${staffMember.characterName || 'Unknown Character '}`;
-
-            userString += ` ${staffMember.hours.toFixed(2)} hours.\n`;
-
-            messageContent += userString;
-        }
-
-        const container = new ContainerBuilder();
-
-        if (days >= 0 && refresh) {
-            container.addSectionComponents(
-                new SectionBuilder()
-                    .addTextDisplayComponents(new TextDisplayBuilder().setContent(messageContent.substring(0, 4000)))
-                    .setButtonAccessory(
-                        new GargoyleButtonBuilder(this, 'refreshstaffsheets', `${days}`).setLabel('Refresh').setStyle(ButtonStyle.Success)
+            await (interaction.channel as TextChannel).send({
+                components: [
+                    new ContainerBuilder().addSectionComponents(
+                        new SectionBuilder().addTextDisplayComponents(
+                            new TextDisplayBuilder().setContent(
+                                this.generateStockPrices(stockPrices).join('\n')
+                            )
+                        ).setButtonAccessory(
+                            new GargoyleButtonBuilder(this, 'refreshstocks', selected.join('_')).setLabel('Refresh').setStyle(ButtonStyle.Secondary).setEmoji(StockEmojis.Office)
+                        )
+                    ).addMediaGalleryComponents(
+                        new MediaGalleryBuilder().addItems(
+                            new MediaGalleryItemBuilder().setURL('attachment://stocks.png')
+                        )
                     )
-            );
-        } else {
-            container.addTextDisplayComponents(new TextDisplayBuilder().setContent(messageContent.substring(0, 4000)));
-        }
+                ],
+                files: [
+                    {
+                        attachment: (await this.generateStockGraph(stockPrices)).toBuffer(),
+                        name: 'stocks.png'
+                    }
+                ],
+                flags: [MessageFlags.IsComponentsV2]
+            })
 
-        return {
-            components: [container],
-            flags: [MessageFlags.IsComponentsV2]
-        };
+        }
     }
 
     public override async executeButtonCommand(client: GargoyleClient, interaction: ButtonInteraction, ...args: string[]): Promise<void> {
@@ -923,6 +767,37 @@ export default class Brads extends GargoyleModule {
                 });
                 await interaction.followUp({ content: `Discussion thread created: <#${thread.id}>`, flags: MessageFlags.Ephemeral });
             }
+            return;
+        } else if (args[0] === 'refreshstocks') {
+            await interaction.deferUpdate();
+            const selected = args[1].split('_');
+            const selectedStocks = Object.values(BradsStocks).filter((stock) => selected.includes(stock.symbol.toLowerCase())).map(stock => stock.symbol);
+            const stockPrices = await getStockPrices(3, ...selectedStocks);
+            await interaction.message.edit({
+                components: [
+                    new ContainerBuilder().addSectionComponents(
+                        new SectionBuilder().addTextDisplayComponents(
+                            new TextDisplayBuilder().setContent(
+                                `Updated <t:${Math.floor(Date.now() / 1000)}:R>\n`+
+                                this.generateStockPrices(stockPrices).join('\n')
+                            )
+                        ).setButtonAccessory(
+                            new GargoyleButtonBuilder(this, 'refreshstocks', selected.join('_')).setLabel('Refresh').setStyle(ButtonStyle.Secondary).setEmoji(StockEmojis.Office)
+                        )
+                    ).addMediaGalleryComponents(
+                        new MediaGalleryBuilder().addItems(
+                            new MediaGalleryItemBuilder().setURL('attachment://stocks.png')
+                        )
+                    )
+                ],
+                files: [
+                    {
+                        attachment: (await this.generateStockGraph(stockPrices)).toBuffer(),
+                        name: 'stocks.png'
+                    }
+                ],
+                flags: [MessageFlags.IsComponentsV2]
+            })
             return;
         }
 
@@ -1260,6 +1135,394 @@ export default class Brads extends GargoyleModule {
                     });
             }
         }
+    }
+
+    private generateStockPrices(stockPrices: Awaited<ReturnType<typeof getStockPrices>>): string[] {
+        const messages: string[] = [];
+        for (const stock of stockPrices) {
+            const bradsStock = Object.values(BradsStocks).find((s) => s.symbol === stock.symbol);
+            const highestPrice = Math.max(...stock.prices);
+            const lowestPrice = Math.min(...stock.prices);
+            let change = 0;
+            let changePercent = 0;
+            if (stock.prices.length === 0 || stock.prices[0] === undefined || stock.prices[stock.prices.length - 1] === undefined) {
+                messages.push(`${bradsStock?.emoji} ${bradsStock?.name} (\`${bradsStock?.fakeSymbol}\`): No data available.`);
+            } else {
+                change = stock.prices[stock.prices.length - 1]! - stock.prices[0]!;
+                changePercent = (change / stock.prices[0]!) * 100;
+                let message = ``;
+                message += `${bradsStock?.emoji} ${bradsStock?.name} (\`${bradsStock?.fakeSymbol}\`): \`$${stock.prices[stock.prices.length - 1]!.toFixed(2)}\` ${change >= 0 ? StockEmojis.TrendUp : StockEmojis.TrendDown}`;
+                if (stockPrices.length > 5) {
+                    message += ` Change: \`$${change.toFixed(2)}\` (\`${changePercent.toFixed(2)}%\`)`;
+                } else {
+                    message += `\n-# High: \`$${highestPrice.toFixed(2)}\` Low: \`$${lowestPrice.toFixed(2)}\` Change: \`$${change.toFixed(2)}\` (\`${changePercent.toFixed(2)}%\`)`;
+                }
+
+                messages.push(message);
+            }
+        }
+        return messages;
+    }
+
+    private async generateStockMessage({ stockPrices, days }: { stockPrices: Awaited<ReturnType<typeof getStockPrices>>; days: number }) {
+        const canvas = await this.generateStockGraph(stockPrices);
+        const marketOpen = await isStockMarketOpen();
+
+        return {
+            components: [
+                new ContainerBuilder()
+                    .addTextDisplayComponents(
+                        new TextDisplayBuilder().setContent(
+                            `### BGN Stock Prices over the last ${days} days` +
+                                `\n-# ${marketOpen ? StockEmojis.Office : StockEmojis.CalendarX} <t:${Math.floor(Date.now() / 1000)}:f> market is ${marketOpen ? 'open!' : 'closed.'}\n` +
+                                `${marketOpen ? '' : "-# Markets open following [NYSE](https://www.nyse.com/trade/hours-calendars)'s stock trading schedule, `09:30` to `16:00` EST.\n"}` +
+                                this.generateStockPrices(stockPrices).join('\n')
+                        )
+                    )
+                    .addMediaGalleryComponents(
+                        new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(`attachment://stock_graph_${days}_days.png`))
+                    )
+                    .setAccentColor(marketOpen ? 0x3eed3e : 0xf53c36)
+            ],
+            files: [{ attachment: canvas.toBuffer('image/png'), name: `stock_graph_${days}_days.png` }],
+            flags: [MessageFlags.IsComponentsV2]
+        };
+    }
+
+    private async generateStockGraph(stocks: Awaited<ReturnType<typeof getStockPrices>>) {
+        if (stocks.length > 3) {
+            return this.generateStockGraphLines(stocks);
+        } else {
+            return this.generateStockGraphBlocks(stocks);
+        }
+    }
+
+    private async generateStockGraphLines(stocks: Awaited<ReturnType<typeof getStockPrices>>) {
+        const canvas = new Canvas(1000, 600);
+        const ctx = canvas.getContext('2d');
+
+        const highestPrice = Math.max(...Object.values(stocks).flatMap((stock) => stock.prices.map((point) => point)));
+        const lowestPrice = Math.min(...Object.values(stocks).flatMap((stock) => stock.prices.map((point) => point)));
+        const priceRange = highestPrice - lowestPrice;
+
+        // Sort stocks by their latest price
+        const stocksSorted = stocks.sort((a, b) => b.prices[b.prices.length - 1]! - a.prices[a.prices.length - 1]!);
+
+        // Draw horizontal grid lines and price labels
+        ctx.strokeStyle = '#ffffff75';
+        ctx.lineWidth = 1;
+        ctx.fillStyle = '#ffffff75';
+        ctx.font = `${FontWeight.Regular} 14px Montserrat`;
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        const numGridLines = 10;
+        for (let i = 0; i <= numGridLines; i++) {
+            const y = (i / numGridLines) * (canvas.height - 40) + 20;
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(canvas.width, y);
+            ctx.stroke();
+            const priceLabel = (highestPrice - (i / numGridLines) * priceRange).toFixed(2);
+            ctx.fillText(`$${priceLabel}`, canvas.width - 10, y);
+        }
+
+        // Draw stocks
+        let i = 0;
+        for (const stock of stocksSorted) {
+            const bradsStock = Object.values(BradsStocks).find((s) => s.symbol === stock.symbol);
+
+            const prices = stock.prices;
+
+            // Nothing to draw
+            if (!prices || prices.length === 0) {
+                i++;
+                continue;
+            }
+
+            if (stocksSorted.length > 1) {
+                // Draw stock name and color box
+                ctx.textAlign = 'left';
+                ctx.fillStyle = '#ffffff';
+                ctx.font = `${FontWeight.Bold} 16px Montserrat`;
+                ctx.textBaseline = 'top';
+                const priceChange = prices[prices.length - 1]! - prices[0]!;
+                const priceChangePercent = (priceChange / prices[0]!) * 100;
+                ctx.fillText(`${bradsStock?.fakeSymbol} ${priceChangePercent.toFixed(2)}%`, 45, 6 + i * 20);
+
+                // Color box
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#ffffff';
+                ctx.fillStyle = bradsStock?.color || '#ffffff';
+                ctx.fillRect(30, 12 + i * 20, 10, 10);
+                ctx.strokeRect(30, 12 + i * 20, 10, 10);
+
+                // Draw stock line (single color per stock)
+                ctx.lineWidth = 4;
+                ctx.strokeStyle = bradsStock?.color || '#ffffff';
+
+                if (prices.length === 1) {
+                    // Single point: draw a dot
+                    const normalizedPrice = priceRange === 0 ? 0.5 : (prices[0] - lowestPrice) / priceRange;
+                    const x = 0;
+                    const y = canvas.height - (normalizedPrice * (canvas.height - 40) + 20);
+
+                    ctx.beginPath();
+                    ctx.fillStyle = bradsStock?.color || '#ffffff';
+                    ctx.arc(x, y, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    const denom = prices.length - 1;
+
+                    ctx.beginPath();
+                    for (let j = 0; j < prices.length; j++) {
+                        const x = (j / denom) * (canvas.width - 60);
+                        const normalizedPrice = priceRange === 0 ? 0.5 : (prices[j] - lowestPrice) / priceRange;
+                        const y = canvas.height - (normalizedPrice * (canvas.height - 40) + 20);
+
+                        if (j === 0) ctx.moveTo(x, y);
+                        else ctx.lineTo(x, y);
+                    }
+                    ctx.stroke();
+                }
+            } else {
+                if (prices.length === 1) {
+                    const normalizedPrice = priceRange === 0 ? 0.5 : (prices[0] - lowestPrice) / priceRange;
+                    const x = 0;
+                    const y = canvas.height - (normalizedPrice * (canvas.height - 40) + 20);
+
+                    ctx.beginPath();
+                    ctx.fillStyle = '#3eed3e'; // default color for a single point
+                    ctx.arc(x, y, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    const denom = prices.length - 1;
+
+                    for (let j = 1; j < prices.length; j++) {
+                        const prevX = ((j - 1) / denom) * (canvas.width - 60);
+                        const prevNorm = priceRange === 0 ? 0.5 : (prices[j - 1] - lowestPrice) / priceRange;
+                        const prevY = canvas.height - (prevNorm * (canvas.height - 40) + 20);
+
+                        const x = (j / denom) * (canvas.width - 60);
+                        const norm = priceRange === 0 ? 0.5 : (prices[j] - lowestPrice) / priceRange;
+                        const y = canvas.height - (norm * (canvas.height - 40) + 20);
+
+                        const wentUp = prices[j] >= prices[j - 1];
+                        ctx.strokeStyle = wentUp ? '#3eed3e' : '#f53c36';
+                        ctx.lineCap = 'round';
+                        ctx.lineWidth = 4;
+
+                        ctx.beginPath();
+                        ctx.moveTo(prevX, prevY);
+                        ctx.lineTo(x, y);
+                        ctx.stroke();
+                    }
+                }
+            }
+
+            i++;
+        }
+
+        return canvas;
+    }
+
+    private async generateStockGraphBlocks(stocks: Awaited<ReturnType<typeof getStockPrices>>) {
+        const canvas = new Canvas(1000, 600);
+        const ctx = canvas.getContext('2d');
+
+        const allPoints = Object.values(stocks).flatMap((stock) => stock.prices);
+        if (allPoints.length === 0) return canvas;
+
+        const highestPrice = Math.max(...allPoints);
+        const lowestPrice = Math.min(...allPoints);
+        const priceRange = highestPrice - lowestPrice;
+
+        // Sort stocks by their latest price
+        const stocksSorted = stocks.sort((a, b) => b.prices[b.prices.length - 1]! - a.prices[a.prices.length - 1]!);
+
+        const plotPaddingTop = 20;
+        const plotPaddingBottom = 20;
+        const plotPaddingLeft = 20;
+        const plotPaddingRight = 60;
+        const plotTop = plotPaddingTop;
+        const plotBottom = canvas.height - plotPaddingBottom;
+        const plotLeft = plotPaddingLeft;
+        const plotRight = canvas.width - plotPaddingRight;
+        const plotHeight = plotBottom - plotTop;
+        const plotWidth = plotRight - plotLeft;
+
+        const bullishColor = '#3eed3e';
+        const bearishColor = '#f53c36';
+
+        const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+        const parseHex = (hex: string): { r: number; g: number; b: number } | null => {
+            const normalized = hex.trim().toLowerCase();
+            const match = /^#?([0-9a-f]{6})$/i.exec(normalized);
+            if (!match) return null;
+            const value = match[1]!;
+            return {
+                r: parseInt(value.slice(0, 2), 16),
+                g: parseInt(value.slice(2, 4), 16),
+                b: parseInt(value.slice(4, 6), 16)
+            };
+        };
+        const toHex = (n: number) => Math.round(n).toString(16).padStart(2, '0');
+        const blend = (a: string, b: string, t: number) => {
+            const ar = parseHex(a);
+            const br = parseHex(b);
+            if (!ar || !br) return b;
+            const tt = clamp01(t);
+            const r = ar.r + (br.r - ar.r) * tt;
+            const g = ar.g + (br.g - ar.g) * tt;
+            const bb = ar.b + (br.b - ar.b) * tt;
+            return `#${toHex(r)}${toHex(g)}${toHex(bb)}`;
+        };
+
+        const priceToY = (price: number) => {
+            const normalized = priceRange === 0 ? 0.5 : (price - lowestPrice) / priceRange;
+            return plotBottom - normalized * plotHeight;
+        };
+
+        const maxPoints = Math.max(...stocksSorted.map((s) => s.prices.length));
+        const daySlotWidth = maxPoints > 0 ? plotWidth / maxPoints : plotWidth;
+        const groupSlotWidth = daySlotWidth * 0.8;
+        const groupCount = Math.max(1, stocksSorted.length);
+        const perStockSlotWidth = groupSlotWidth / groupCount;
+        const candleWidth = Math.max(2, perStockSlotWidth * 0.7);
+
+        // Draw horizontal grid lines and price labels
+        ctx.strokeStyle = '#ffffff75';
+        ctx.lineWidth = 1;
+        ctx.fillStyle = '#ffffff75';
+        ctx.font = `${FontWeight.Regular} 14px Montserrat`;
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        const numGridLines = 10;
+        for (let g = 0; g <= numGridLines; g++) {
+            const y = (g / numGridLines) * (canvas.height - plotPaddingTop - plotPaddingBottom) + plotPaddingTop;
+            ctx.beginPath();
+            ctx.moveTo(plotLeft, y);
+            ctx.lineTo(plotRight, y);
+            ctx.stroke();
+            const priceLabel = (highestPrice - (g / numGridLines) * priceRange).toFixed(2);
+            ctx.fillText(`$${priceLabel}`, canvas.width - 10, y);
+        }
+
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `${FontWeight.Bold} 16px Montserrat`;
+        ctx.textBaseline = 'top';
+
+        let legendIndex = 0;
+        for (const stock of stocksSorted) {
+            const bradsStock = Object.values(BradsStocks).find((s) => s.symbol === stock.symbol);
+            const prices = stock.prices;
+            if (!prices || prices.length === 0) {
+                legendIndex++;
+                continue;
+            }
+
+            const priceChange = prices[prices.length - 1]! - prices[0]!;
+            const priceChangePercent = (priceChange / prices[0]!) * 100;
+            ctx.fillText(`${bradsStock?.fakeSymbol} ${priceChangePercent.toFixed(2)}%`, 45, 6 + legendIndex * 20);
+
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#ffffff';
+            ctx.fillStyle = bradsStock?.color || '#ffffff';
+            ctx.fillRect(30, 12 + legendIndex * 20, 10, 10);
+            ctx.strokeRect(30, 12 + legendIndex * 20, 10, 10);
+
+            legendIndex++;
+        }
+
+        let stockIndex = 0;
+        for (const stock of stocksSorted) {
+            const bradsStock = Object.values(BradsStocks).find((s) => s.symbol === stock.symbol);
+            const prices = stock.prices;
+            if (!prices || prices.length === 0) {
+                stockIndex++;
+                continue;
+            }
+
+            const baseColor = bradsStock?.color || '#ffffff';
+            const seriesOffset = maxPoints - prices.length;
+
+            const stockOffsetInGroup = (stockIndex - (groupCount - 1) / 2) * perStockSlotWidth;
+
+            for (let dayIndex = 0; dayIndex < prices.length; dayIndex++) {
+                const globalDayIndex = seriesOffset + dayIndex;
+                const xCenter = plotLeft + globalDayIndex * daySlotWidth + daySlotWidth / 2 + stockOffsetInGroup;
+
+                const close = prices[dayIndex]!;
+                const open = dayIndex === 0 ? close : prices[dayIndex - 1]!;
+
+                const wentUp = close >= open;
+                const fillColor =
+                    stocksSorted.length > 1 ? blend(baseColor, wentUp ? bullishColor : bearishColor, 0.55) : wentUp ? bullishColor : bearishColor;
+
+                const openY = priceToY(open);
+                const closeY = priceToY(close);
+
+                const bodyTop = Math.min(openY, closeY);
+                const bodyBottom = Math.max(openY, closeY);
+                const bodyHeight = Math.max(2, bodyBottom - bodyTop);
+                const bodyLeft = xCenter - candleWidth / 2;
+
+                ctx.fillStyle = fillColor;
+                ctx.fillRect(bodyLeft, bodyTop, candleWidth, bodyHeight);
+            }
+
+            stockIndex++;
+        }
+
+        return canvas;
+    }
+
+    private staffActivityMessage(
+        staffMembers: Array<{
+            author: string | null;
+            characterName: string | null;
+            steamId: string | null;
+            rankId: string | null;
+            hours: number;
+        }>,
+        days: number,
+        refresh: boolean
+    ) {
+        let messageContent = '### Staff Activity Sheets\n';
+
+        messageContent += `-# Updated <t:${Math.floor(Date.now() / 1000)}:F>\n\n`;
+
+        for (const staffMember of staffMembers) {
+            let userString = '';
+            if (staffMember.author) userString += `<@!${staffMember.author}> `;
+            else userString += 'Unknown User ';
+
+            if (staffMember.steamId) userString += `[${staffMember.characterName}](https://steamcommunity.com/profiles/${staffMember.steamId}) `;
+            else userString += `${staffMember.characterName || 'Unknown Character '}`;
+
+            userString += ` ${staffMember.hours.toFixed(2)} hours.\n`;
+
+            messageContent += userString;
+        }
+
+        const container = new ContainerBuilder();
+
+        if (days >= 0 && refresh) {
+            container.addSectionComponents(
+                new SectionBuilder()
+                    .addTextDisplayComponents(new TextDisplayBuilder().setContent(messageContent.substring(0, 4000)))
+                    .setButtonAccessory(
+                        new GargoyleButtonBuilder(this, 'refreshstaffsheets', `${days}`).setLabel('Refresh').setStyle(ButtonStyle.Success)
+                    )
+            );
+        } else {
+            container.addTextDisplayComponents(new TextDisplayBuilder().setContent(messageContent.substring(0, 4000)));
+        }
+
+        return {
+            components: [container],
+            flags: [MessageFlags.IsComponentsV2]
+        };
     }
 
     private async makeTicketThread(
