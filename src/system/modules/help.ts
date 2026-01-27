@@ -10,11 +10,11 @@ import {
     ChatInputCommandInteraction,
     ContainerBuilder,
     Guild,
+    LabelBuilder,
     Message,
     MessageEditOptions,
     MessageFlags,
     MessageReplyOptions,
-    ModalActionRowComponentBuilder,
     ModalSubmitInteraction,
     PermissionFlagsBits,
     SectionBuilder,
@@ -98,16 +98,17 @@ export default class Help extends GargoyleModule {
 
     private readonly suggestionModal = new GargoyleModalBuilder(this, 'suggest')
         .setTitle('Suggest a bot feature')
-        .setComponents(
-            new ActionRowBuilder<ModalActionRowComponentBuilder>().setComponents(
-                new TextInputBuilder()
-                    .setCustomId('suggestion')
-                    .setLabel('Your suggestion')
-                    .setStyle(TextInputStyle.Paragraph)
-                    .setRequired(true)
-                    .setPlaceholder('What would you like to suggest?')
-                    .setMaxLength(2000)
-            )
+        .addLabelComponents(
+            new LabelBuilder()
+                .setLabel('Your suggestion')
+                .setTextInputComponent(
+                    new TextInputBuilder()
+                        .setCustomId('suggestion')
+                        .setPlaceholder('What would you like to suggest?')
+                        .setStyle(TextInputStyle.Paragraph)
+                        .setRequired(true)
+                        .setMaxLength(2000)
+                )
         );
 
     override async executeSlashCommand(_client: GargoyleClient, interaction: ChatInputCommandInteraction) {

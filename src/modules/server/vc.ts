@@ -16,11 +16,11 @@ import {
     Events,
     InteractionContextType,
     InteractionReplyOptions,
+    LabelBuilder,
     MessageCreateOptions,
     MessageEditOptions,
     MessageFlags,
     MessagePayload,
-    ModalActionRowComponentBuilder,
     ModalSubmitInteraction,
     PermissionFlagsBits,
     SectionBuilder,
@@ -242,17 +242,18 @@ export default class VoicechatCommand extends GargoyleModule {
                 interaction.showModal(
                     new GargoyleModalBuilder(this, 'rename')
                         .setTitle('Rename the VC')
-                        .setComponents(
-                            new ActionRowBuilder<ModalActionRowComponentBuilder>().setComponents(
-                                new TextInputBuilder()
-                                    .setCustomId('name')
-                                    .setPlaceholder('Cool VC!')
-                                    .setMaxLength(maxLength)
-                                    .setMinLength(1)
-                                    .setRequired(true)
-                                    .setLabel('New name for the VC.')
-                                    .setStyle(TextInputStyle.Short)
-                            )
+                        .addLabelComponents(
+                            new LabelBuilder()
+                                .setLabel('New name for the VC.')
+                                .setTextInputComponent(
+                                    new TextInputBuilder()
+                                        .setCustomId('name')
+                                        .setPlaceholder('Cool VC!')
+                                        .setMaxLength(maxLength)
+                                        .setMinLength(1)
+                                        .setRequired(true)
+                                        .setStyle(TextInputStyle.Short)
+                                )
                         )
                 );
                 break;
