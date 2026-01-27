@@ -37,7 +37,7 @@ import GargoyleSlashCommandBuilder from '@src/system/backend/builders/gargoyleSl
 import Emojis from '@src/system/backend/tools/emojis.js';
 
 export default class VoicechatCommand extends GargoyleModule {
-    public override name: string = 'dynvcs';
+    public override name: string = 'vc';
     public override category: string = 'server';
     public override slashCommands = [
         new GargoyleSlashCommandBuilder()
@@ -49,12 +49,12 @@ export default class VoicechatCommand extends GargoyleModule {
             .addSubcommand((subcommand) =>
                 subcommand
                     .setName('create')
-                    .setDescription("Create dynamic vc's")
+                    .setDescription("Create dynamic VC's")
                     .addChannelOption((option) =>
                         option
                             .setName('vc')
                             .setRequired(false)
-                            .setDescription('The VC that will create the dynamic vcs')
+                            .setDescription('The VC that will create the dynamic VCs')
                             .addChannelTypes(ChannelType.GuildVoice)
                     )
             ) as GargoyleSlashCommandBuilder
