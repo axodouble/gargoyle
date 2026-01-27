@@ -504,7 +504,6 @@ export default class Brads extends GargoyleModule {
                 }
                 entry.discordId = interaction.user.id;
                 this.linkingCodes.set(code, entry);
-                await interaction.editReply('Successfully linked your Discord account to your BGN staff account.');
 
                 const db = new SQL({
                     adapter: 'mariadb',
@@ -515,13 +514,17 @@ export default class Brads extends GargoyleModule {
                 });
 
                 // Schema in LinkeduStock
-                // SteamID     | DiscordID   | AccountID
-                // VarChar(17) | VarChar(20) | Int(20)
-                // @ts-ignore 
-                const newUser = await db`
+                // SteamID     | DiscordID
+                // VarChar(17) | VarChar(20)
+                await db`
                     INSERT INTO LinkeduStock (SteamID, DiscordID)
                     VALUES (${entry.steamId}, ${entry.discordId})
                 `;
+
+                await db.end();
+                this.linkingCodes.delete(code);
+
+                await interaction.editReply('Successfully linked your Discord account to your BGN staff account.');
             }
         } else if (interaction.options.getSubcommandGroup() === 'stocks') {
             if (interaction.options.getSubcommand() === 'graph') {
@@ -544,7 +547,7 @@ export default class Brads extends GargoyleModule {
 
                 await interaction.editReply((await this.generateStockMessage({ stockPrices, days })) as MessageEditOptions);
             } else if (interaction.options.getSubcommand() === 'ui') {
-                if(interaction.channel?.type !== ChannelType.GuildText) {
+                if (interaction.channel?.type !== ChannelType.GuildText) {
                     await interaction.reply({ content: 'This command can only be used in guild text channels.', flags: [MessageFlags.Ephemeral] });
                 }
                 await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
@@ -573,37 +576,38 @@ export default class Brads extends GargoyleModule {
         }
     }
 
-    private async stockUiMessage(symbols: BradsStockSymbols[]){
+    private async stockUiMessage(symbols: BradsStockSymbols[]) {
         const stockPrices = await getStockPrices(3, ...symbols);
-const marketStatus = await isStockMarketOpen()
+        const marketStatus = await isStockMarketOpen();
         return {
-
-                components: [
-                    new ContainerBuilder().addSectionComponents(
-                        new SectionBuilder().addTextDisplayComponents(
-                            new TextDisplayBuilder().setContent(
-                                `## ${marketStatus ? StockEmojis.Office+' Market is open.' : StockEmojis.CalendarX+' Market is closed.'}`+
-                                `\n-# Updated <t:${Math.floor(Date.now() / 1000)}:R>\n`+
-                                this.generateStockPrices(stockPrices).join('\n')
+            components: [
+                new ContainerBuilder()
+                    .addSectionComponents(
+                        new SectionBuilder()
+                            .addTextDisplayComponents(
+                                new TextDisplayBuilder().setContent(
+                                    `## ${marketStatus ? StockEmojis.Office + ' Market is open.' : StockEmojis.CalendarX + ' Market is closed.'}` +
+                                        `\n-# Updated <t:${Math.floor(Date.now() / 1000)}:R>\n` +
+                                        this.generateStockPrices(stockPrices).join('\n')
+                                )
                             )
-                        ).setButtonAccessory(
-                            new GargoyleButtonBuilder(this, 'refreshstocks', symbols.join('_')).setLabel('Refresh').setStyle(ButtonStyle.Secondary).setEmoji(StockEmojis.Refresh)
-                        )
-                    ).addMediaGalleryComponents(
-                        new MediaGalleryBuilder().addItems(
-                            new MediaGalleryItemBuilder().setURL('attachment://stocks.png')
-                        )
+                            .setButtonAccessory(
+                                new GargoyleButtonBuilder(this, 'refreshstocks', symbols.join('_'))
+                                    .setLabel('Refresh')
+                                    .setStyle(ButtonStyle.Secondary)
+                                    .setEmoji(StockEmojis.Refresh)
+                            )
                     )
-                ],
-                files: [
-                    {
-                        attachment: (await this.generateStockGraph(stockPrices)).toBuffer(),
-                        name: 'stocks.png'
-                    }
-                ],
-                flags: [MessageFlags.IsComponentsV2]
-            
-        }
+                    .addMediaGalleryComponents(new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL('attachment://stocks.png')))
+            ],
+            files: [
+                {
+                    attachment: (await this.generateStockGraph(stockPrices)).toBuffer(),
+                    name: 'stocks.png'
+                }
+            ],
+            flags: [MessageFlags.IsComponentsV2]
+        };
     }
 
     public override async executeSelectMenuCommand(_client: GargoyleClient, interaction: AnySelectMenuInteraction, ...args: string[]): Promise<void> {
@@ -619,7 +623,9 @@ const marketStatus = await isStockMarketOpen()
 
             const selectedStocks = Object.values(BradsStocks).filter((stock) => selected.includes(stock.symbol));
 
-            await (interaction.channel as TextChannel).send(await this.stockUiMessage(selectedStocks.map((stock) => stock.symbol)) as MessageCreateOptions);
+            await (interaction.channel as TextChannel).send(
+                (await this.stockUiMessage(selectedStocks.map((stock) => stock.symbol))) as MessageCreateOptions
+            );
         }
     }
 
@@ -779,8 +785,10 @@ const marketStatus = await isStockMarketOpen()
         } else if (args[0] === 'refreshstocks') {
             await interaction.deferUpdate();
             const selected = args[1].split('_');
-            const selectedStocks = Object.values(BradsStocks).filter((stock) => selected.includes(stock.symbol.toLowerCase())).map(stock => stock.symbol);
-            await interaction.message.edit(await this.stockUiMessage(selectedStocks) as MessageEditOptions);
+            const selectedStocks = Object.values(BradsStocks)
+                .filter((stock) => selected.includes(stock.symbol.toLowerCase()))
+                .map((stock) => stock.symbol);
+            await interaction.message.edit((await this.stockUiMessage(selectedStocks)) as MessageEditOptions);
             return;
         }
 
