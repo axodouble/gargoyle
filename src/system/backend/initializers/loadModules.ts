@@ -14,9 +14,17 @@ async function loadModules(client: GargoyleClient, ...dirs: string[]): Promise<v
             const stat = await fs.lstat(path.join(__dirname, dir, file));
 
             if (stat.isDirectory()) {
+                if (file.startsWith('_')) {
+                    client.logger.trace(`Skipping directory: ${file}`);
+                    continue;
+                }
                 client.logger.trace(`Loading modules from directory: ${file}`);
                 await loadModules(client, path.join(dir, file));
             } else if (file.endsWith('.ts') || file.endsWith('.js')) {
+                if (file.startsWith('_')) {
+                    client.logger.trace(`Skipping file: ${file}`);
+                    continue;
+                }
                 try {
                     const { default: Module } = await import(path.join(__dirname, dir, file));
                     const module: GargoyleModule = new Module();
@@ -24,8 +32,14 @@ async function loadModules(client: GargoyleClient, ...dirs: string[]): Promise<v
                         client.logger.error(`File ${file} does not export a valid GargoyleCommand.`);
                         continue;
                     }
+
                     if (module.deprecated) {
                         client.logger.info(`Module ${file} is deprecated and will not be registered.`);
+                        continue;
+                    }
+
+                    if (client.modules.some((m) => m.name === module.name)) {
+                        client.logger.error(`Module name conflict: A module with the name ${module.name} is already registered. Skipping ${file}.`);
                         continue;
                     }
 

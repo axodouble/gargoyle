@@ -11,13 +11,13 @@ export default class SlashCommandHandler extends GargoyleEvent {
         if (!interaction.isChatInputCommand()) return;
         if (interaction.isContextMenuCommand()) return;
 
-        const command = client.modules.find((command) => {
-            return command.slashCommands.find((slashcommand) => {
+        const module = client.modules.find((module) => {
+            return module.slashCommands.find((slashcommand) => {
                 return slashcommand.name === interaction.commandName;
             });
         });
 
-        if (!command) {
+        if (!module) {
             interaction.reply('Command not found!').then((msg) => {
                 setTimeout(() => {
                     msg.delete();
@@ -45,8 +45,8 @@ export default class SlashCommandHandler extends GargoyleEvent {
             }
             return;
         } else {
-            await recordModuleUsage(client, command.name);
-            command.executeSlashCommand(client, interaction);
+            await recordModuleUsage(client, module.name);
+            module.executeSlashCommand(client, interaction);
             return client.logger.trace(`${interaction.user} used the ${interaction.commandName} command.`);
         }
     }

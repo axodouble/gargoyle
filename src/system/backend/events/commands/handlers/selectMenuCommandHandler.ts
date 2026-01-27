@@ -10,27 +10,28 @@ export default class SelectCommandHandler extends GargoyleEvent {
 
         const origin = interaction.customId.toLowerCase().split('-')[1];
 
-        const command = client.modules.find((command) => {
+        const module = client.modules.find((module) => {
             return (
-                command.slashCommands.find((slashCommand) => {
+                module.name === origin ||
+                module.slashCommands.find((slashCommand) => {
                     return slashCommand.name === origin;
                 }) ||
-                command.textCommands.find((textCommand) => {
+                module.textCommands.find((textCommand) => {
                     return textCommand.name === origin;
                 })
             );
         });
 
-        if (!command) {
+        if (!module) {
             interaction.reply('Select menu not found!').then((msg) => {
                 setTimeout(() => {
                     msg.delete();
                 }, 5000);
             });
         } else {
-            await recordModuleUsage(client, command.name);
+            await recordModuleUsage(client, module.name);
             const args = interaction.customId.toLowerCase().split('-').slice(2);
-            command.executeSelectMenuCommand(client, interaction, ...args);
+            module.executeSelectMenuCommand(client, interaction, ...args);
             return client.logger.trace(`${interaction.user} used the ${interaction.customId} select menu command.`);
         }
     }

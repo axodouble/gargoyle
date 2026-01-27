@@ -12,11 +12,11 @@ export default class ContextCommandHandler extends GargoyleEvent {
         if (!interaction.isContextMenuCommand()) return;
         if (interaction.user.bot) return;
 
-        const command = client.modules.find((command) =>
-            command.contextCommands?.find((contextCommand) => contextCommand.name === interaction.commandName)
+        const module = client.modules.find((module) =>
+            module.contextCommands?.find((contextCommand) => contextCommand.name === interaction.commandName)
         );
 
-        if (!command) {
+        if (!module) {
             client.logger.error(`Context command not found: ${interaction.commandName}`);
             interaction
                 .reply('Context command not found!')
@@ -32,8 +32,8 @@ export default class ContextCommandHandler extends GargoyleEvent {
             client.logger.warning(`Command not found: ${interaction.commandName}, deleting command.`);
             interaction.command?.delete();
         } else {
-            await recordModuleUsage(client, command.name);
-            command.executeContextMenuCommand(client, interaction);
+            await recordModuleUsage(client, module.name);
+            module.executeContextMenuCommand(client, interaction);
             return client.logger.trace(`${interaction.user} used the ${interaction.commandName} context command.`);
         }
     }
