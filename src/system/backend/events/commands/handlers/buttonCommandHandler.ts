@@ -13,12 +13,12 @@ export default class ButtonCommandHandler extends GargoyleEvent {
 
         const module = client.modules.find((module) => {
             return (
-                module.name === origin ||
+                module.name.toLowerCase() === origin ||
                 module.slashCommands.find((slashCommand) => {
-                    return slashCommand.name === origin;
+                    return slashCommand.name.toLowerCase() === origin;
                 }) ||
                 module.textCommands.find((textCommand) => {
-                    return textCommand.name === origin;
+                    return textCommand.name.toLowerCase() === origin;
                 })
             );
         });
