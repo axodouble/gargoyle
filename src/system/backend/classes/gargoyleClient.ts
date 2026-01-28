@@ -121,7 +121,7 @@ class GargoyleClient extends Client {
                 try {
                     this.logger.debug(`Loading external module from ${moduleUrl}...`);
                     const moduleData = await (await fetch(moduleUrl)).text();
-                    const modulePath = `./src/external_modules/_${Math.random().toString(36).substring(2, 15)}.ts`;
+                    const modulePath = `./src/external_modules/${Math.random().toString(36).substring(2, 15)}.ts`;
                     await Bun.write(modulePath, moduleData);
                 } catch (error) {
                     this.logger.error(`Failed to load external module from ${moduleUrl}: ${error}`);
