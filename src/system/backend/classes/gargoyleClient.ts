@@ -6,6 +6,8 @@ import GargoyleModule from './gargoyleModule.js';
 import loadModules from '../initializers/loadModules.js';
 import executeWebRequest from '../tools/web.js';
 import { model, Schema } from 'mongoose';
+import { mkdirSync, rmSync } from 'node:fs';
+import { fetch } from 'bun';
 /**
  * Represents a client for the Gargoyle system, extending the base Client class.
  * Handles database connection, command loading, and event registration.
@@ -101,6 +103,38 @@ class GargoyleClient extends Client {
     override async login(token?: string): Promise<string> {
         this.startHealthCheckServer();
         this.startApiServer();
+
+        this.logger.log('Checking external modules...');
+
+        if (process.env.EXTERNAL_MODULES) {
+            const externalModules = process.env.EXTERNAL_MODULES.split(',').map((mod) => mod.trim());
+
+            // Prepare external modules loading
+            try {
+                rmSync('./src/external_modules', { recursive: true, force: true });
+                mkdirSync('./src/external_modules', { recursive: true });
+            } catch (error) {
+                this.logger.error(`Failed to create external modules directory: ${error}`);
+            }
+
+            for (const moduleUrl of externalModules) {
+                try {
+                    this.logger.debug(`Loading external module from ${moduleUrl}...`);
+                    const moduleData = await (await fetch(moduleUrl)).text();
+                    const modulePath = `./src/external_modules/_${Math.random().toString(36).substring(2, 15)}.ts`;
+                    await Bun.write(modulePath, moduleData);
+                } catch (error) {
+                    this.logger.error(`Failed to load external module from ${moduleUrl}: ${error}`);
+                }
+            }
+
+            this.logger.log('Registering external modules...');
+            try {
+                await loadModules(this, '../../../external_modules');
+            } catch (error) {
+                this.logger.error(`Failed to register external modules: ${error}`);
+            }
+        }
 
         this.db = new Database(this);
 
