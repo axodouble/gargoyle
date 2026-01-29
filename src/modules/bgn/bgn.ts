@@ -41,6 +41,7 @@ import { fetch, SQL } from 'bun';
 import { model, Schema } from 'mongoose';
 import { Canvas } from 'canvas';
 import { FontWeight } from '@src/system/backend/tools/banners.js';
+import Emojis from '@src/system/backend/tools/emojis.js';
 
 export default class Brads extends GargoyleModule {
     public override name: string = 'bgn';
@@ -333,17 +334,17 @@ export default class Brads extends GargoyleModule {
                 const staffMembers = await this.getStaffMemberData(client, interaction.options.getInteger('days', false) || 0);
 
                 await interaction.editReply(
-                    this.staffActivityMessage(staffMembers, interaction.options.getInteger('days', false) || 0, true) as MessageEditOptions
+                    this.staffActivityMessage(staffMembers, interaction.options.getInteger('days', false) || 0) as MessageEditOptions
                 );
             } else if (interaction.options.getSubcommand() === 'lastweek') {
                 await interaction.deferReply({});
                 const staffMembers = await this.getStaffMemberData(client, -1);
-                await interaction.editReply(this.staffActivityMessage(staffMembers, -1, false) as MessageEditOptions);
+                await interaction.editReply(this.staffActivityMessage(staffMembers, -1) as MessageEditOptions);
             } else if (interaction.options.getSubcommand() === 'days') {
                 await interaction.deferReply({});
                 const staffMembers = await this.getStaffMemberData(client, interaction.options.getInteger('days', true));
                 await interaction.editReply(
-                    this.staffActivityMessage(staffMembers, interaction.options.getInteger('days', true), true) as MessageEditOptions
+                    this.staffActivityMessage(staffMembers, interaction.options.getInteger('days', true)) as MessageEditOptions
                 );
             }
         } else if (interaction.options.getSubcommand() === 'panel') {
@@ -635,8 +636,7 @@ export default class Brads extends GargoyleModule {
             await interaction.message.edit(
                 this.staffActivityMessage(
                     await this.getStaffMemberData(client, args[1] ? parseInt(args[1]) : 0),
-                    args[1] ? parseInt(args[1]) : 0,
-                    true
+                    args[1] ? parseInt(args[1]) : 0
                 ) as MessageEditOptions
             );
         } else if (args[0] === 'apply') {
@@ -1476,8 +1476,7 @@ export default class Brads extends GargoyleModule {
             rankId: string | null;
             hours: number;
         }>,
-        days: number,
-        refresh: boolean
+        days: number
     ) {
         let messageContent = '### Staff Activity Sheets\n';
 
@@ -1489,26 +1488,25 @@ export default class Brads extends GargoyleModule {
             else userString += 'Unknown User ';
 
             if (staffMember.steamId) userString += `[${staffMember.characterName}](https://steamcommunity.com/profiles/${staffMember.steamId}) `;
-            else userString += `${staffMember.characterName || 'Unknown Character '}`;
+            else userString += `${staffMember.characterName || 'Unknown'} `;
 
             userString += ` ${staffMember.hours.toFixed(2)} hours.\n`;
 
-            messageContent += userString;
+            if (messageContent.length + userString.length > 4000 && !messageContent.endsWith('\n-# Message truncated due to length limit.')) {
+                messageContent += '\n-# Message truncated due to length limit. Contact @Axodouble for a full report.';
+                continue;
+            } else messageContent += userString;
         }
 
         const container = new ContainerBuilder();
 
-        if (days >= 0 && refresh) {
-            container.addSectionComponents(
-                new SectionBuilder()
-                    .addTextDisplayComponents(new TextDisplayBuilder().setContent(messageContent.substring(0, 4000)))
-                    .setButtonAccessory(
-                        new GargoyleButtonBuilder(this, 'refreshstaffsheets', `${days}`).setLabel('Refresh').setStyle(ButtonStyle.Success)
-                    )
-            );
-        } else {
-            container.addTextDisplayComponents(new TextDisplayBuilder().setContent(messageContent.substring(0, 4000)));
-        }
+        container.addSectionComponents(
+            new SectionBuilder()
+                .addTextDisplayComponents(new TextDisplayBuilder().setContent(messageContent.substring(0, 4000)))
+                .setButtonAccessory(
+                    new GargoyleButtonBuilder(this, 'refreshstaffsheets', `${days}`).setEmoji(Emojis.Refresh).setStyle(ButtonStyle.Secondary)
+                )
+        );
 
         return {
             components: [container],

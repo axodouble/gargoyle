@@ -18,7 +18,13 @@ enum Emojis {
     WhiteMinus = '<:minus:1422492095117262848>',
     WhitePencil = '<:pencil:1422492000174870572>',
     WhiteGavel = '<:gavel:1422492059310227547>',
-    WhiteLock = '<:lock:1422492269012844546>'
+    WhiteLock = '<:lock:1422492269012844546>',
+    Dollar = '<:dollar:1464156584333807678>',
+    TrendUp = '<:trend_up:1464156762780336172>',
+    TrendDown = '<:trend_down:1464156713073512480>',
+    Office = '<:office:1464156672267390992>',
+    CalendarX = '<:calender_x:1464156625127477413>',
+    Refresh = '<:refresh:1464485549510492170>'
 }
 
 export default Emojis;
