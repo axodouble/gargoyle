@@ -4,6 +4,7 @@ import GargoyleClient from '../classes/gargoyleClient.js';
 import GargoyleModule from '../classes/gargoyleModule.js';
 
 async function loadModules(client: GargoyleClient, ...dirs: string[]): Promise<void> {
+    client.logger.trace(`Loading modules from directories: ${dirs.join(', ')}`);
     for (const dir of dirs) {
         const files = await fs.readdir(path.join(__dirname, dir)).catch((err) => {
             client.logger.error(`Error reading directory: ${dir}`, err as string);
@@ -18,7 +19,6 @@ async function loadModules(client: GargoyleClient, ...dirs: string[]): Promise<v
                     client.logger.trace(`Skipping directory: ${file}`);
                     continue;
                 }
-                client.logger.trace(`Loading modules from directory: ${file}`);
                 await loadModules(client, path.join(dir, file));
             } else if (file.endsWith('.ts') || file.endsWith('.js')) {
                 if (file.startsWith('_')) {
@@ -43,6 +43,8 @@ async function loadModules(client: GargoyleClient, ...dirs: string[]): Promise<v
                         continue;
                     }
 
+                    client.logger.trace(`Registering module: ${module.name} from file: ${file}`);
+                    module.init(client);
                     client.modules.push(module);
                 } catch (err) {
                     client.logger.error(err as string, `Error registering module: ${file}`);
