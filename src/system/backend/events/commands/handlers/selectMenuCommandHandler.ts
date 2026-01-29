@@ -8,7 +8,15 @@ export default class SelectCommandHandler extends GargoyleEvent {
     public async execute(client: GargoyleClient, interaction: AnySelectMenuInteraction): Promise<void> {
         if (!interaction.isAnySelectMenu()) return;
 
-        const origin = interaction.customId.toLowerCase().split('-')[1];
+        let origin = '';
+        let args: string[] = [];
+        if (interaction.customId.toLowerCase().startsWith('cmd')) {
+            origin = interaction.customId.toLowerCase().split('-')[1];
+            args = interaction.customId.toLowerCase().split('-').slice(2);
+        } else if (interaction.customId.toLowerCase().startsWith('gm1')) {
+            origin = interaction.customId.toLowerCase().split(':')[1];
+            args = interaction.customId.toLowerCase().split(':').slice(2);
+        }
 
         const module = client.modules.find((module) => {
             return (
@@ -30,7 +38,6 @@ export default class SelectCommandHandler extends GargoyleEvent {
             });
         } else {
             await recordModuleUsage(client, module.name);
-            const args = interaction.customId.toLowerCase().split('-').slice(2);
             module.executeSelectMenuCommand(client, interaction, ...args);
             return client.logger.trace(`${interaction.user} used the ${interaction.customId} select menu command.`);
         }
