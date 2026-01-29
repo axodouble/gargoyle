@@ -29,7 +29,10 @@ class GargoyleStringSelectMenuBuilder extends StringSelectMenuBuilder {
      */
     constructor(module: GargoyleModule, ...argument: string[]) {
         super();
-        const customId = `cmd-${module.name.toLowerCase()}-${argument.join('-').toLowerCase()}`;
+        if (argument.join('').includes(':')) {
+            throw new Error(`Arguments cannot contain colons (:): ${argument.join(', ')}`);
+        }
+        const customId = `gm1:${module.name.toLowerCase()}:${argument.join(':').toLowerCase()}`;
         if (customId.length > 100) {
             throw new Error(`Custom ID exceeds 100 characters: ${customId}`);
         }
@@ -54,14 +57,15 @@ class GargoyleUserSelectMenuBuilder extends UserSelectMenuBuilder {
     /**
      * Creates an instance of GargoyleUserSelectMenuBuilder.
      *
-     * @param {GargoyleModule} command - The command associated with this select menu.
+     * @param {GargoyleModule} module - The module associated with this select menu.
      * @param {string} argument - The argument to be included in the custom ID.
      */
-    constructor(command: GargoyleModule, ...argument: string[]) {
+    constructor(module: GargoyleModule, ...argument: string[]) {
         super();
-        const customId = `cmd-${
-            command.slashCommands[0].name.toLowerCase() ?? command.textCommands[0].name.toLowerCase()
-        }-${argument.join('-').toLowerCase()}`;
+        if (argument.join('').includes(':')) {
+            throw new Error(`Arguments cannot contain colons (:): ${argument.join(', ')}`);
+        }
+        const customId = `gm1:${module.name.toLowerCase()}:${argument.join(':').toLowerCase()}`;
         if (customId.length > 100) {
             throw new Error(`Custom ID exceeds 100 characters: ${customId}`);
         }
@@ -70,7 +74,7 @@ class GargoyleUserSelectMenuBuilder extends UserSelectMenuBuilder {
 }
 
 /**
- * A custom role select menu builder that sets a custom ID based on the provided command and argument.
+ * A custom role select menu builder that sets a custom ID based on the provided module and argument.
  *
  * @class
  * @extends RoleSelectMenuBuilder
@@ -79,14 +83,15 @@ class GargoyleRoleSelectMenuBuilder extends RoleSelectMenuBuilder {
     /**
      * Creates an instance of GargoyleRoleSelectMenuBuilder.
      *
-     * @param {GargoyleModule} command - The command associated with this select menu.
+     * @param {GargoyleModule} module - The module associated with this select menu.
      * @param {string} argument - The argument to be included in the custom ID.
      */
-    constructor(command: GargoyleModule, ...argument: string[]) {
+    constructor(module: GargoyleModule, ...argument: string[]) {
         super();
-        const customId = `cmd-${
-            command.slashCommands[0].name.toLowerCase() ?? command.textCommands[0].name.toLowerCase()
-        }-${argument.join('-').toLowerCase()}`;
+        if (argument.join('').includes(':')) {
+            throw new Error(`Arguments cannot contain colons (:): ${argument.join(', ')}`);
+        }
+        const customId = `gm1:${module.name.toLowerCase()}:${argument.join(':').toLowerCase()}`;
         if (customId.length > 100) {
             throw new Error(`Custom ID exceeds 100 characters: ${customId}`);
         }
@@ -95,7 +100,7 @@ class GargoyleRoleSelectMenuBuilder extends RoleSelectMenuBuilder {
 }
 
 /**
- * A custom mentionable select menu builder that sets a custom ID based on the provided command and argument.
+ * A custom mentionable select menu builder that sets a custom ID based on the provided module and argument.
  *
  * @class
  * @extends MentionableSelectMenuBuilder
@@ -104,14 +109,15 @@ class GargoyleMentionableSelectMenuBuilder extends MentionableSelectMenuBuilder 
     /**
      * Creates an instance of GargoyleMentionableSelectMenuBuilder.
      *
-     * @param {GargoyleModule} command - The command associated with this select menu.
+     * @param {GargoyleModule} module - The module associated with this select menu.
      * @param {string} argument - The argument to be included in the custom ID.
      */
-    constructor(command: GargoyleModule, ...argument: string[]) {
+    constructor(module: GargoyleModule, ...argument: string[]) {
         super();
-        const customId = `cmd-${
-            command.slashCommands[0].name.toLowerCase() ?? command.textCommands[0].name.toLowerCase()
-        }-${argument.join('-').toLowerCase()}`;
+        if (argument.join('').includes(':')) {
+            throw new Error(`Arguments cannot contain colons (:): ${argument.join(', ')}`);
+        }
+        const customId = `gm1:${module.name.toLowerCase()}:${argument.join(':').toLowerCase()}`;
         if (customId.length > 100) {
             throw new Error(`Custom ID exceeds 100 characters: ${customId}`);
         }
@@ -129,14 +135,15 @@ class GargoyleChannelSelectMenuBuilder extends ChannelSelectMenuBuilder {
     /**
      * Creates an instance of GargoyleChannelSelectMenuBuilder.
      *
-     * @param {GargoyleModule} command - The command associated with this select menu.
+     * @param {GargoyleModule} module - The command associated with this select menu.
      * @param {string} argument - The argument to be included in the custom ID.
      */
-    constructor(command: GargoyleModule, ...argument: string[]) {
+    constructor(module: GargoyleModule, ...argument: string[]) {
         super();
-        const customId = `cmd-${
-            command.slashCommands[0].name.toLowerCase() ?? command.textCommands[0].name.toLowerCase()
-        }-${argument.join('-').toLowerCase()}`;
+        if (argument.join('').includes(':')) {
+            throw new Error(`Arguments cannot contain colons (:): ${argument.join(', ')}`);
+        }
+        const customId = `gm1:${module.name.toLowerCase()}:${argument.join(':').toLowerCase()}`;
         if (customId.length > 100) {
             throw new Error(`Custom ID exceeds 100 characters: ${customId}`);
         }

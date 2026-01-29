@@ -19,7 +19,10 @@ class GargoyleButtonBuilder extends ButtonBuilder {
     constructor(module: GargoyleModule, ...argument: string[]) {
         super();
         if (this.data.style !== ButtonStyle.Link) {
-            const customId = `cmd-${module.name.toLowerCase()}-${argument.join('-').toLowerCase()}`;
+            if (argument.join('').includes(':')) {
+                throw new Error(`Arguments cannot contain colons (:): ${argument.join(', ')}`);
+            }
+            const customId = `gm1:${module.name.toLowerCase()}:${argument.join(':').toLowerCase()}`;
             if (customId.length > 100) {
                 throw new Error(`Custom ID exceeds 100 characters: ${customId}`);
             }
