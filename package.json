@@ -12,22 +12,22 @@
         "ollama": "^0.6.3",
         "opusscript": "^0.1.1",
         "path": "^0.12.7",
-        "steamapi": "^3.1.4",
+        "steamapi": "^3.1.5",
         "tsconfig-paths": "^4.2.0",
-        "zod": "^4.3.5"
+        "zod": "^4.3.6"
     },
     "devDependencies": {
         "@eslint/eslintrc": "^3.3.3",
         "@eslint/js": "^9.39.2",
-        "@types/bun": "^1.3.6",
+        "@types/bun": "^1.3.8",
         "@types/figlet": "^1.7.0",
-        "@types/node": "^25.0.10",
+        "@types/node": "^25.2.0",
         "@types/ws": "^8.18.1",
         "eslint": "^9.39.2",
-        "globals": "^17.0.0",
+        "globals": "^17.3.0",
         "prettier": "^3.8.1",
         "typescript": "~5.9.3",
-        "typescript-eslint": "^8.53.1"
+        "typescript-eslint": "^8.54.0"
     },
     "scripts": {
         "start": "bun run .",

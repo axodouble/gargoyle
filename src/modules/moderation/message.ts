@@ -67,7 +67,7 @@ export default class Moderation extends GargoyleModule {
 
     public override async executeContextMenuCommand(_client: GargoyleClient, interaction: MessageContextMenuCommandInteraction) {
         if (!interaction.channel || interaction.channel.type !== ChannelType.GuildText) return;
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         if (interaction.memberPermissions?.missing(PermissionFlagsBits.ManageMessages).length) {
             return interaction.editReply({
