@@ -2,7 +2,7 @@ import GargoyleSlashCommandBuilder from '@src/system/backend/builders/gargoyleSl
 import GargoyleClient from '@src/system/backend/classes/gargoyleClient.js';
 import GargoyleModule from '@src/system/backend/classes/gargoyleModule.js';
 import { fetch } from 'bun';
-import { ChatInputCommandInteraction, ContainerBuilder, TextChannel, TextDisplayBuilder } from 'discord.js';
+import { ChatInputCommandInteraction, ContainerBuilder, MessageFlags, TextChannel, TextDisplayBuilder } from 'discord.js';
 
 export default class Bible extends GargoyleModule {
     public override name: string = 'bible';
@@ -36,7 +36,7 @@ export default class Bible extends GargoyleModule {
             async () => {
                 const now = new Date();
                 const perthTime = now.toLocaleString('en-AU', { timeZone: 'Australia/Perth', dateStyle: 'short', timeStyle: 'short', hour12: false });
-                if (perthTime.includes(`07:00`) && Date.now() - lastDone > 60 * 1000) {
+                if (perthTime.includes(`07:15`) && Date.now() - lastDone > 60 * 1000) {
                     const data = await fetch('https://discoverybiblestudy.org/daily/api/');
 
                     if (!data.ok) {
@@ -58,7 +58,8 @@ export default class Bible extends GargoyleModule {
                                     `**${verseData.ref}**\n${verseData.text.replaceAll('&quot;', '"')}\n-# <@&1468918715448819743>`
                                 )
                             )
-                        ]
+                        ],
+                        flags: [MessageFlags.IsComponentsV2]
                     });
                     lastDone = Date.now();
                 }
