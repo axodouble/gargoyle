@@ -23,7 +23,16 @@ export default class Bible extends GargoyleModule {
 
             const verseData = (await data.json()) as { text: string; ref: string };
 
-            await interaction.reply({ content: `**${verseData.ref}**\n${verseData.text.replaceAll('&quot;', '"')}` });
+            await interaction.reply({
+                content: `**${verseData.ref}**\n${verseData.text
+                    .replaceAll('&quot;', '"')
+                    .replaceAll('&#039;', "'")
+                    .replaceAll('&apos;', "'")
+                    .replaceAll('&amp;', '&')
+                    .replaceAll('&lt;', '<')
+                    .replaceAll('&gt;', '>')
+                    .replaceAll('&nbsp;', ' ')}`
+            });
         } catch (error) {
             client.logger.error(`Error fetching a verse from the Bible: ${error}`);
             await interaction.reply({ content: 'An error occurred while fetching a verse from the Bible. Please try again later.', ephemeral: true });
@@ -55,7 +64,14 @@ export default class Bible extends GargoyleModule {
                         components: [
                             new ContainerBuilder().addTextDisplayComponents(
                                 new TextDisplayBuilder().setContent(
-                                    `**${verseData.ref}**\n${verseData.text.replaceAll('&quot;', '"')}\n-# <@&1468918715448819743>`
+                                    `**${verseData.ref}**\n${verseData.text
+                                        .replaceAll('&quot;', '"')
+                                        .replaceAll('&#039;', "'")
+                                        .replaceAll('&apos;', "'")
+                                        .replaceAll('&amp;', '&')
+                                        .replaceAll('&lt;', '<')
+                                        .replaceAll('&gt;', '>')
+                                        .replaceAll('&nbsp;', ' ')}\n-# <@&1468918715448819743>`
                                 )
                             )
                         ],
