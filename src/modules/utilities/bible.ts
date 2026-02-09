@@ -40,43 +40,56 @@ export default class Bible extends GargoyleModule {
     }
 
     public override init(client: GargoyleClient): void {
+        async function doBibleVerseOfTheDay() {
+            const data = await fetch('https://discoverybiblestudy.org/daily/api/');
+
+            if (!data.ok) {
+                client.logger.error('Failed to fetch a verse from the Bible for daily update.');
+                return;
+            }
+
+            const verseData = (await data.json()) as { text: string; ref: string };
+
+            const channel = (await client.channels.fetch('1468918008901533849')) as TextChannel | null;
+            if (!channel) {
+                client.logger.error('Failed to fetch the channel for daily Bible verse update.');
+                return;
+            }
+            await channel.send({
+                components: [
+                    new ContainerBuilder().addTextDisplayComponents(
+                        new TextDisplayBuilder().setContent(
+                            `**${verseData.ref}**\n${verseData.text
+                                .replaceAll('&quot;', '"')
+                                .replaceAll('&#039;', "'")
+                                .replaceAll('&apos;', "'")
+                                .replaceAll('&amp;', '&')
+                                .replaceAll('&lt;', '<')
+                                .replaceAll('&gt;', '>')
+                                .replaceAll('&nbsp;', ' ')}\n-# <@&1468918715448819743>`
+                        )
+                    )
+                ],
+                flags: [MessageFlags.IsComponentsV2]
+            });
+        }
         let lastDone = 0;
         setInterval(
             async () => {
                 const now = new Date();
                 const perthTime = now.toLocaleString('en-AU', { timeZone: 'Australia/Perth', dateStyle: 'short', timeStyle: 'short', hour12: false });
                 if (perthTime.includes(`07:15`) && Date.now() - lastDone > 60 * 1000) {
-                    const data = await fetch('https://discoverybiblestudy.org/daily/api/');
-
-                    if (!data.ok) {
-                        client.logger.error('Failed to fetch a verse from the Bible for daily update.');
-                        return;
+                    let retries = 0;
+                    while (retries < 5) {
+                        try {
+                            await doBibleVerseOfTheDay();
+                            break; // Success, exit the retry loop
+                        } catch (error) {
+                            client.logger.error(`Error in daily Bible verse update (attempt ${retries + 1}): ${error}`);
+                            retries++;
+                            await new Promise(resolve => setTimeout(resolve, 15000)); // Wait 15 seconds before retrying
+                        }
                     }
-
-                    const verseData = (await data.json()) as { text: string; ref: string };
-
-                    const channel = (await client.channels.fetch('1468918008901533849')) as TextChannel | null;
-                    if (!channel) {
-                        client.logger.error('Failed to fetch the channel for daily Bible verse update.');
-                        return;
-                    }
-                    await channel.send({
-                        components: [
-                            new ContainerBuilder().addTextDisplayComponents(
-                                new TextDisplayBuilder().setContent(
-                                    `**${verseData.ref}**\n${verseData.text
-                                        .replaceAll('&quot;', '"')
-                                        .replaceAll('&#039;', "'")
-                                        .replaceAll('&apos;', "'")
-                                        .replaceAll('&amp;', '&')
-                                        .replaceAll('&lt;', '<')
-                                        .replaceAll('&gt;', '>')
-                                        .replaceAll('&nbsp;', ' ')}\n-# <@&1468918715448819743>`
-                                )
-                            )
-                        ],
-                        flags: [MessageFlags.IsComponentsV2]
-                    });
                     lastDone = Date.now();
                 }
             },
