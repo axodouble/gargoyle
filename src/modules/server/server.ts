@@ -57,6 +57,12 @@ export default class Server extends GargoyleModule {
                             .addAttachmentOption((option) =>
                                 option.setName('avatar').setDescription('Set a custom avatar for the bot in this server').setRequired(false)
                             )
+                            .addAttachmentOption((option) =>
+                                option
+                                    .setName('banner')
+                                    .setDescription('Set a custom banner for the bot in this server (only visible in the member list)')
+                                    .setRequired(false)
+                            )
                     )
                     .addSubcommand((subcommand) =>
                         subcommand
@@ -79,6 +85,9 @@ export default class Server extends GargoyleModule {
                             .addAttachmentOption((option) => option.setName('attachment0').setDescription('Attachment to send').setRequired(true))
                             .addAttachmentOption((option) =>
                                 option.setName('attachment1').setDescription('Another attachment to send').setRequired(false)
+                            )
+                            .addAttachmentOption((option) =>
+                                option.setName('attachment2').setDescription('Another attachment to send').setRequired(false)
                             )
                             .addAttachmentOption((option) =>
                                 option.setName('attachment3').setDescription('Another attachment to send').setRequired(false)
@@ -255,6 +264,7 @@ export default class Server extends GargoyleModule {
                 if (!interaction.guild) return;
                 const username = interaction.options.getString('username');
                 const avatar = interaction.options.getAttachment('avatar');
+                const banner = interaction.options.getAttachment('banner');
 
                 if (username && username.length > 32) {
                     return interaction.reply({ content: 'Username cannot be longer than 32 characters.', flags: MessageFlags.Ephemeral });
@@ -264,12 +274,17 @@ export default class Server extends GargoyleModule {
                     return interaction.reply({ content: 'Avatar must be an image.', flags: MessageFlags.Ephemeral });
                 }
 
+                if (banner && !banner.contentType?.startsWith('image/')) {
+                    return interaction.reply({ content: 'Banner must be an image.', flags: MessageFlags.Ephemeral });
+                }
+
                 await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
                 await interaction.guild.members
                     .editMe({
                         avatar: avatar ? avatar.url : undefined,
                         nick: username ? username : undefined,
+                        banner: banner ? banner.url : undefined,
                         reason: `Customized by ${interaction.user.tag} (${interaction.user.id})`
                     })
                     .catch(() => {
