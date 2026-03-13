@@ -87,7 +87,7 @@ export default class Bible extends GargoyleModule {
                         } catch (error) {
                             client.logger.error(`Error in daily Bible verse update (attempt ${retries + 1}): ${error}`);
                             retries++;
-                            await new Promise(resolve => setTimeout(resolve, 15000)); // Wait 15 seconds before retrying
+                            await new Promise((resolve) => setTimeout(resolve, 15000)); // Wait 15 seconds before retrying
                         }
                     }
                     lastDone = Date.now();

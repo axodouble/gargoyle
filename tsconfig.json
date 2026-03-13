@@ -18,8 +18,8 @@
 		"lib": [
 			"esnext"
 		],
-		"module": "Node16",
-		"moduleResolution": "Node16",
+		"module": "esnext",
+		"moduleResolution": "bundler",
 		"newLine": "lf",
 		"noEmitHelpers": false,
 		"noFallthroughCasesInSwitch": true,
