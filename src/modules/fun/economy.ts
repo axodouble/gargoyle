@@ -23,6 +23,8 @@ import {
     SeparatorSpacingSize,
     TextDisplayBuilder
 } from 'discord.js';
+
+// #TODO: Move economy related database stuff to Postgres
 import { model, Schema } from 'mongoose';
 
 export default class Economy extends GargoyleModule {
