@@ -1,5 +1,5 @@
 import GargoyleTextCommandBuilder from '@builders/gargoyleTextCommandBuilder.js';
-import GargoyleClient, { databaseClientMetrics } from '@src/system/backend/classes/gargoyleClient.js';
+import GargoyleClient from '@src/system/backend/classes/gargoyleClient.js';
 import GargoyleModule from '@src/system/backend/classes/gargoyleModule.js';
 import {
     ButtonInteraction,
@@ -16,7 +16,8 @@ import {
     TextDisplayBuilder,
     TextInputBuilder,
     TextInputStyle,
-    ThumbnailBuilder} from 'discord.js';
+    ThumbnailBuilder
+} from 'discord.js';
 import GargoyleSlashCommandBuilder from '../backend/builders/gargoyleSlashCommandBuilder.js';
 import GargoyleEvent from '../backend/classes/gargoyleEvent.js';
 import GargoyleModalBuilder from '../backend/builders/gargoyleModalBuilder.js';
@@ -139,28 +140,6 @@ export default class Manage extends GargoyleModule {
                     if (user) {
                         await interaction.reply({ content: `User: ${user.tag}\nID: ${user.id}`, flags: [MessageFlags.Ephemeral] });
                     }
-                }
-            } else if (interaction.options.getSubcommand() === 'metrics') {
-                const metrics = await databaseClientMetrics.findOne({ clientId: client.user?.id! });
-                if (!metrics) {
-                    await interaction.reply({ content: 'No metrics found.', flags: [MessageFlags.Ephemeral] });
-                    return;
-                }
-
-                let metricsMessage = 'Module Usage Metrics:\n';
-                for (const moduleMetric of metrics.modules) {
-                    metricsMessage += `Module: ${moduleMetric.moduleName} - Used: ${moduleMetric.used} times\n`;
-                }
-
-                if (metricsMessage.length > 2000) {
-                    const buffer = Buffer.from(metricsMessage, 'utf-8');
-                    await interaction.reply({
-                        content: 'Metrics are too long, sending as a file.',
-                        files: [{ attachment: buffer, name: 'metrics.txt' }],
-                        flags: [MessageFlags.Ephemeral]
-                    });
-                } else {
-                    await interaction.reply({ content: metricsMessage, flags: [MessageFlags.Ephemeral] });
                 }
             }
         } else {

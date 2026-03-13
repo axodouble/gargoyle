@@ -35,6 +35,8 @@
     },
     "scripts": {
         "start": "bun run .",
+        "db:generate": "bunx drizzle-kit --config ./drizzle.config.ts generate",
+        "db:migrate": "bunx drizzle-kit --config ./drizzle.config.ts migrate",
         "dev": "bun run --watch .",
         "dev:on": "bun run aux:on && bun run app:on",
         "dev:off": "bun run aux:off && bun run app:off",
