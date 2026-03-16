@@ -371,7 +371,7 @@ export default class Server extends GargoyleModule {
                 }
             }
 
-            const dbGuild = await client.db.getGuild(interaction.guildId!);
+            const dbGuild = await client.db.getGuild(interaction.guildId!, { exists: true });
             dbGuild.autoroles = selectedRoles.filter((r) => guildRoles.has(r));
             try {
                 await client.db.setGuild(interaction.guildId!, { autoroles: dbGuild.autoroles });
@@ -436,7 +436,7 @@ class MemberJoin extends GargoyleEvent {
     public override event = Events.GuildMemberAdd as const;
     public override async execute(client: GargoyleClient, member: GuildMember) {
         if (!client.db) return;
-        const dbGuild = await client.db.getGuild(member.guild.id);
+        const dbGuild = await client.db.getGuild(member.guild.id, { exists: true });
         if (dbGuild.autoroles.length > 0) {
             const rolesToAdd = dbGuild.autoroles.filter((roleId) => member.guild.roles.cache.has(roleId));
             if (rolesToAdd.length > 0) {

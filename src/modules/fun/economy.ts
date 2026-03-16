@@ -94,8 +94,8 @@ export default class Economy extends GargoyleModule {
             });
         } else if (interaction.options.getSubcommand() === 'daily') {
             const now = new Date();
-            if (economyUser.lastdaily) {
-                const lastDaily = new Date(economyUser.lastdaily);
+            const lastDaily = new Date(economyUser.lastdaily);
+            if (lastDaily.getTime() > 0) {
                 if (
                     lastDaily.getDate() === now.getDate() &&
                     lastDaily.getMonth() === now.getMonth() &&
@@ -115,6 +115,8 @@ export default class Economy extends GargoyleModule {
                 } else {
                     economyUser.dailystreak = 1;
                 }
+            } else {
+                economyUser.dailystreak = 1;
             }
             const dailyAmount = 50 + economyUser.dailystreak * 10;
             economyUser.balance += dailyAmount;
@@ -128,7 +130,7 @@ export default class Economy extends GargoyleModule {
             await interaction.reply({
                 components: [
                     new GargoyleContainerBuilder(
-                        `You have claimed your daily reward of $${dailyAmount.toLocaleString()}! Your current streak is ${economyUser.dailystreak + 1} days.`
+                        `You have claimed your daily reward of $${dailyAmount.toLocaleString()}! Your current streak is ${economyUser.dailystreak} days.`
                     )
                 ],
                 flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]

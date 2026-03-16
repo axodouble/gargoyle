@@ -42,8 +42,8 @@ class Database {
         }
     }
 
-    public async getGuild(guildId: string, options?: { exists?: true }): Promise<typeof schema.guildsTable.$inferSelect>;
-    public async getGuild(guildId: string, options?: { exists?: false }): Promise<typeof schema.guildsTable.$inferSelect | null>;
+    public async getGuild(guildId: string, options: { exists: true }): Promise<typeof schema.guildsTable.$inferSelect>;
+    public async getGuild(guildId: string, options?: { exists?: false | undefined }): Promise<typeof schema.guildsTable.$inferSelect | null>;
     public async getGuild(guildId: string, options?: { exists?: boolean }): Promise<typeof schema.guildsTable.$inferSelect | null> {
         if (!this.drizzle) {
             throw new Error('Database not connected');
@@ -52,7 +52,7 @@ class Database {
         const guild = await this.drizzle.select().from(schema.guildsTable).where(eq(schema.guildsTable.guild_id, guildId)).execute();
         if (options?.exists && guild.length === 0) {
             await this.drizzle.insert(schema.guildsTable).values({ guild_id: guildId }).execute();
-            return (await this.getGuild(guildId)) as typeof schema.guildsTable.$inferSelect;
+            return (await this.getGuild(guildId, { exists: true })) as typeof schema.guildsTable.$inferSelect;
         }
         return guild[0] || null;
     }
@@ -65,7 +65,7 @@ class Database {
             throw new Error('Database not connected');
         }
 
-        const existingGuild = await this.getGuild(guildId);
+        const existingGuild = await this.getGuild(guildId, { exists: true });
         if (existingGuild) {
             await this.drizzle.update(schema.guildsTable).set(data).where(eq(schema.guildsTable.guild_id, guildId)).execute();
         } else {
@@ -77,11 +77,11 @@ class Database {
         return await this.getGuild(guildId, { exists: true });
     }
 
-    public async getGuildUser(userId: string, guildId: string, options?: { exists?: true }): Promise<typeof schema.guildUsersTable.$inferSelect>;
+    public async getGuildUser(userId: string, guildId: string, options: { exists: true }): Promise<typeof schema.guildUsersTable.$inferSelect>;
     public async getGuildUser(
         userId: string,
         guildId: string,
-        options?: { exists?: false }
+        options?: { exists?: false | undefined }
     ): Promise<typeof schema.guildUsersTable.$inferSelect | null>;
     public async getGuildUser(
         userId: string,
@@ -99,7 +99,7 @@ class Database {
             .execute();
         if (options?.exists && guildUser.length === 0) {
             await this.drizzle.insert(schema.guildUsersTable).values({ user_id: userId, guild_id: guildId }).execute();
-            return (await this.getGuildUser(userId, guildId)) as typeof schema.guildUsersTable.$inferSelect;
+            return (await this.getGuildUser(userId, guildId, { exists: true })) as typeof schema.guildUsersTable.$inferSelect;
         }
         return guildUser[0] || null;
     }
@@ -113,7 +113,7 @@ class Database {
             throw new Error('Database not connected');
         }
 
-        const existingUser = await this.getGuildUser(userId, guildId);
+        const existingUser = await this.getGuildUser(userId, guildId, { exists: true });
         if (existingUser) {
             await this.drizzle
                 .update(schema.guildUsersTable)
