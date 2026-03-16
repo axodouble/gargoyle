@@ -15,4 +15,4 @@ RUN bun install
 
 RUN rm ./package.json
 
-CMD ["bun", "run", "--watch", "."]
+CMD ["sh", "-c", "bun run db:migrate && echo '' && bun run --watch ."]

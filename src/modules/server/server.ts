@@ -30,7 +30,6 @@ import {
     TextInputStyle,
     ThumbnailBuilder
 } from 'discord.js';
-import { eq } from 'drizzle-orm';
 
 export default class Server extends GargoyleModule {
     public override name: string = 'server';
@@ -216,16 +215,18 @@ export default class Server extends GargoyleModule {
             } else if (interaction.options.getSubcommand() === 'auto') {
                 if (!client.db)
                     return interaction.reply({ content: 'Database not available, please try again later', flags: MessageFlags.Ephemeral });
+                if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageRoles)) {
+                    return interaction.reply({ content: 'You do not have permission to manage roles.', flags: MessageFlags.Ephemeral });
+                }
+                if (!interaction.guildId) {
+                    return interaction.reply({ content: 'Guild ID not found in interaction.', flags: MessageFlags.Ephemeral }).catch(() => {});
+                }
                 await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-                const dbGuild = await client.db.getGuild(interaction.guildId!);
+                const dbGuild = await client.db.getGuild(interaction.guildId, { exists: true });
                 const guildRoles = interaction.guild.roles.cache;
 
                 dbGuild.autoroles = dbGuild.autoroles.filter((r) => guildRoles.has(r));
-                await client.db
-                    .drizzle!.update(client.db.schema.guildsTable)
-                    .set({ autoroles: dbGuild.autoroles })
-                    .where(eq(client.db.schema.guildsTable.guild_id, dbGuild.guild_id))
-                    .execute();
+                await client.db.setGuild(interaction.guildId, { autoroles: dbGuild.autoroles });
 
                 await interaction.editReply({
                     components: [
@@ -373,11 +374,7 @@ export default class Server extends GargoyleModule {
             const dbGuild = await client.db.getGuild(interaction.guildId!);
             dbGuild.autoroles = selectedRoles.filter((r) => guildRoles.has(r));
             try {
-                await client.db
-                    .drizzle!.update(client.db.schema.guildsTable)
-                    .set({ autoroles: dbGuild.autoroles })
-                    .where(eq(client.db.schema.guildsTable.guild_id, dbGuild.guild_id))
-                    .execute();
+                await client.db.setGuild(interaction.guildId!, { autoroles: dbGuild.autoroles });
                 await interaction.editReply({ content: 'Auto roles saved successfully.' }).catch(() => {});
             } catch {
                 await interaction.editReply({ content: 'Failed to save auto roles.' }).catch(() => {});

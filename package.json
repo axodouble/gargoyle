@@ -9,7 +9,6 @@
         "discord.js": "^14.25.1",
         "drizzle-orm": "^0.45.1",
         "fs": "^0.0.2",
-        "mongoose": "^9.1.5",
         "ollama": "^0.6.3",
         "opusscript": "^0.1.1",
         "path": "^0.12.7",

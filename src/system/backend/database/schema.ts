@@ -5,7 +5,9 @@ export const guildUsersTable = p.pgTable(
     {
         user_id: p.text().primaryKey().unique().notNull(),
         guild_id: p.text().notNull(),
-        balance: p.bigint({ mode: 'number' }).notNull().default(0),
+        balance: p.bigint({ mode: 'number' }).notNull().default(100),
+        lastdaily: p.timestamp().notNull().default(new Date(0)),
+        dailystreak: p.integer().notNull().default(0),
         experience: p.bigint({ mode: 'number' }).notNull().default(0)
     },
     (t) => [
