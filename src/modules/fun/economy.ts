@@ -132,7 +132,7 @@ export default class Economy extends GargoyleModule {
             });
         } else if (interaction.options.getSubcommand() === 'daily') {
             const now = new Date();
-            const lastDaily = new Date(economyUser.lastdaily);
+            const lastDaily = new Date(economyUser.last_daily);
             if (lastDaily.getTime() > 0) {
                 if (
                     lastDaily.getDate() === now.getDate() &&
@@ -149,26 +149,26 @@ export default class Economy extends GargoyleModule {
                     lastDaily.getMonth() === now.getMonth() &&
                     lastDaily.getFullYear() === now.getFullYear()
                 ) {
-                    economyUser.dailystreak += 1;
+                    economyUser.daily_streak += 1;
                 } else {
-                    economyUser.dailystreak = 1;
+                    economyUser.daily_streak = 1;
                 }
             } else {
-                economyUser.dailystreak = 1;
+                economyUser.daily_streak = 1;
             }
-            const dailyAmount = 50 + economyUser.dailystreak * 10;
+            const dailyAmount = 50 + economyUser.daily_streak * 10;
             economyUser.balance += dailyAmount;
-            client.logger.trace(`User ${interaction.user.id} claimed daily reward of $${dailyAmount} with a streak of ${economyUser.dailystreak}.`);
-            economyUser.lastdaily = now;
+            client.logger.trace(`User ${interaction.user.id} claimed daily reward of $${dailyAmount} with a streak of ${economyUser.daily_streak}.`);
+            economyUser.last_daily = now;
             await client.db.setGuildUser(interaction.user.id, interaction.guildId!, {
                 balance: economyUser.balance,
-                lastdaily: economyUser.lastdaily,
-                dailystreak: economyUser.dailystreak
+                last_daily: economyUser.last_daily,
+                daily_streak: economyUser.daily_streak
             });
             await interaction.reply({
                 components: [
                     new GargoyleContainerBuilder(
-                        `You have claimed your daily reward of $${dailyAmount.toLocaleString()}! Your current streak is ${economyUser.dailystreak} days.`
+                        `You have claimed your daily reward of $${dailyAmount.toLocaleString()}! Your current streak is ${economyUser.daily_streak} days.`
                     )
                 ],
                 flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
@@ -315,7 +315,7 @@ export default class Economy extends GargoyleModule {
                 const status = interaction.options.getString('status', true);
                 const disable = status === 'disable';
                 await client.db.setUser(interaction.user.id, {
-                    disablexpmsg: disable
+                    disable_xp_msg: disable
                 });
                 await interaction.reply({
                     components: [new GargoyleContainerBuilder(`Level up messages have been ${disable ? 'disabled' : 'enabled'} for you!`)],
@@ -691,7 +691,7 @@ class GainExperience extends GargoyleEvent {
         this.lastGainedExperience.set(message.author.id, Date.now());
 
         const user = await client.db.getUser(message.author.id, { exists: true });
-        if (user.disablexpmsg) return;
+        if (user.disable_xp_msg) return;
 
         const economyUser = await client.db.getGuildUser(message.author.id, message.guildId, { exists: true });
 

@@ -225,8 +225,8 @@ export default class Server extends GargoyleModule {
                 const dbGuild = await client.db.getGuild(interaction.guildId, { exists: true });
                 const guildRoles = interaction.guild.roles.cache;
 
-                dbGuild.autoroles = dbGuild.autoroles.filter((r) => guildRoles.has(r));
-                await client.db.setGuild(interaction.guildId, { autoroles: dbGuild.autoroles });
+                dbGuild.auto_roles = dbGuild.auto_roles.filter((r) => guildRoles.has(r));
+                await client.db.setGuild(interaction.guildId, { auto_roles: dbGuild.auto_roles });
 
                 await interaction.editReply({
                     components: [
@@ -235,7 +235,7 @@ export default class Server extends GargoyleModule {
                             .addActionRowComponents(
                                 new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
                                     new GargoyleRoleSelectMenuBuilder(this, 'autoroles')
-                                        .setDefaultRoles(dbGuild.autoroles)
+                                        .setDefaultRoles(dbGuild.auto_roles)
                                         .setPlaceholder('Select roles to auto assign')
                                         .setMaxValues(25)
                                         .setMinValues(0)
@@ -372,9 +372,9 @@ export default class Server extends GargoyleModule {
             }
 
             const dbGuild = await client.db.getGuild(interaction.guildId!, { exists: true });
-            dbGuild.autoroles = selectedRoles.filter((r) => guildRoles.has(r));
+            dbGuild.auto_roles = selectedRoles.filter((r) => guildRoles.has(r));
             try {
-                await client.db.setGuild(interaction.guildId!, { autoroles: dbGuild.autoroles });
+                await client.db.setGuild(interaction.guildId!, { auto_roles: dbGuild.auto_roles });
                 await interaction.editReply({ content: 'Auto roles saved successfully.' }).catch(() => {});
             } catch {
                 await interaction.editReply({ content: 'Failed to save auto roles.' }).catch(() => {});
@@ -437,8 +437,8 @@ class MemberJoin extends GargoyleEvent {
     public override async execute(client: GargoyleClient, member: GuildMember) {
         if (!client.db) return;
         const dbGuild = await client.db.getGuild(member.guild.id, { exists: true });
-        if (dbGuild.autoroles.length > 0) {
-            const rolesToAdd = dbGuild.autoroles.filter((roleId) => member.guild.roles.cache.has(roleId));
+        if (dbGuild.auto_roles.length > 0) {
+            const rolesToAdd = dbGuild.auto_roles.filter((roleId) => member.guild.roles.cache.has(roleId));
             if (rolesToAdd.length > 0) {
                 try {
                     await member.roles.add(rolesToAdd);

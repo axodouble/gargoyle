@@ -6,8 +6,8 @@ export const guildUsersTable = p.pgTable(
         user_id: p.text().notNull(),
         guild_id: p.text().notNull(),
         balance: p.bigint({ mode: 'number' }).notNull().default(100),
-        lastdaily: p.timestamp().notNull().default(new Date(0)),
-        dailystreak: p.integer().notNull().default(0),
+        last_daily: p.timestamp().notNull().default(new Date(0)),
+        daily_streak: p.integer().notNull().default(0),
         experience: p.bigint({ mode: 'number' }).notNull().default(0)
     },
     (t) => [
@@ -23,7 +23,7 @@ export const guildsTable = p.pgTable(
     {
         guild_id: p.text().primaryKey().unique().notNull(),
         prefix: p.text().notNull().default(','),
-        autoroles: p.text().array().notNull().default([]),
+        auto_roles: p.text().array().notNull().default([]),
         experience: p.boolean().notNull().default(true)
     },
     (t) => [p.index('guild_idx').on(t.guild_id)]
@@ -33,7 +33,7 @@ export const usersTable = p.pgTable(
     'users',
     {
         user_id: p.text().primaryKey().unique().notNull(),
-        disablexpmsg: p.boolean().notNull().default(false)
+        disable_xp_msg: p.boolean().notNull().default(false)
     },
     (t) => [p.index('user_idx').on(t.user_id)]
 );
