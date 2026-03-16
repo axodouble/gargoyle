@@ -19,8 +19,8 @@ export const guildsTable = p.pgTable(
     'guilds',
     {
         guild_id: p.text().primaryKey().unique().notNull(),
-        prefix: p.text().notNull().default('!'),
-        autoroles: p.text().array()
+        prefix: p.text().notNull().default(','),
+        autoroles: p.text().array().notNull().default([])
     },
     (t) => [p.index('guild_idx').on(t.guild_id)]
 );
