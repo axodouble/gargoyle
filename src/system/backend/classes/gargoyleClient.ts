@@ -5,7 +5,6 @@ import registerEvents from '../initializers/registerEvents.js';
 import GargoyleModule from './gargoyleModule.js';
 import loadModules from '../initializers/loadModules.js';
 import executeWebRequest from '../tools/web.js';
-import { model, Schema } from 'mongoose';
 import { mkdirSync, rmSync } from 'node:fs';
 import { fetch } from 'bun';
 /**
@@ -193,39 +192,6 @@ class GargoyleClient extends Client {
         });
         this.logger.log('API server is running on port 3001');
     }
-}
-
-const moduleMetrics = new Schema({
-    moduleName: { type: String, required: true, index: true },
-    used: { type: Number, default: 0 }
-});
-
-const clientMetrics = new Schema({
-    clientId: { type: String, required: true, unique: true, index: true },
-    modules: { type: [moduleMetrics], default: [] }
-});
-
-export const databaseClientMetrics = model('ClientMetrics', clientMetrics);
-
-export async function recordModuleUsage(client: GargoyleClient, moduleName: string) {
-    if (!client.db) return;
-
-    let metrics = await databaseClientMetrics.findOne({ clientId: client.user?.id! });
-    if (!metrics) {
-        metrics = new databaseClientMetrics({
-            clientId: client.user?.id!,
-            modules: []
-        });
-    }
-
-    const moduleMetric = metrics.modules.find((m) => m.moduleName === moduleName);
-    if (moduleMetric) {
-        moduleMetric.used += 1;
-    } else {
-        metrics.modules.push({ moduleName, used: 1 });
-    }
-
-    await metrics.save();
 }
 
 export default GargoyleClient;

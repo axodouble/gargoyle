@@ -215,21 +215,27 @@ export default class Server extends GargoyleModule {
             } else if (interaction.options.getSubcommand() === 'auto') {
                 if (!client.db)
                     return interaction.reply({ content: 'Database not available, please try again later', flags: MessageFlags.Ephemeral });
+                if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageRoles)) {
+                    return interaction.reply({ content: 'You do not have permission to manage roles.', flags: MessageFlags.Ephemeral });
+                }
+                if (!interaction.guildId) {
+                    return interaction.reply({ content: 'Guild ID not found in interaction.', flags: MessageFlags.Ephemeral }).catch(() => {});
+                }
                 await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-                const dbGuild = await client.db.getGuild(interaction.guildId!);
+                const dbGuild = await client.db.getGuild(interaction.guildId, { exists: true });
                 const guildRoles = interaction.guild.roles.cache;
 
-                dbGuild.autoRoles = dbGuild.autoRoles.filter((r) => guildRoles.has(r));
-                await dbGuild.save();
+                dbGuild.autoroles = dbGuild.autoroles.filter((r) => guildRoles.has(r));
+                await client.db.setGuild(interaction.guildId, { autoroles: dbGuild.autoroles });
 
-                interaction.editReply({
+                await interaction.editReply({
                     components: [
                         new ContainerBuilder()
                             .addTextDisplayComponents(new TextDisplayBuilder().setContent('Select roles to automatically assign on member join'))
                             .addActionRowComponents(
                                 new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
                                     new GargoyleRoleSelectMenuBuilder(this, 'autoroles')
-                                        .setDefaultRoles(dbGuild.autoRoles)
+                                        .setDefaultRoles(dbGuild.autoroles)
                                         .setPlaceholder('Select roles to auto assign')
                                         .setMaxValues(25)
                                         .setMinValues(0)
@@ -365,13 +371,13 @@ export default class Server extends GargoyleModule {
                 }
             }
 
-            const dbGuild = await client.db.getGuild(interaction.guildId!);
-            dbGuild.autoRoles = selectedRoles.filter((r) => guildRoles.has(r));
+            const dbGuild = await client.db.getGuild(interaction.guildId!, { exists: true });
+            dbGuild.autoroles = selectedRoles.filter((r) => guildRoles.has(r));
             try {
-                await dbGuild.save();
-                interaction.editReply({ content: 'Auto roles saved successfully.' }).catch(() => {});
+                await client.db.setGuild(interaction.guildId!, { autoroles: dbGuild.autoroles });
+                await interaction.editReply({ content: 'Auto roles saved successfully.' }).catch(() => {});
             } catch {
-                interaction.editReply({ content: 'Failed to save auto roles.' }).catch(() => {});
+                await interaction.editReply({ content: 'Failed to save auto roles.' }).catch(() => {});
             }
         }
     }
@@ -430,9 +436,9 @@ class MemberJoin extends GargoyleEvent {
     public override event = Events.GuildMemberAdd as const;
     public override async execute(client: GargoyleClient, member: GuildMember) {
         if (!client.db) return;
-        const dbGuild = await client.db.getGuild(member.guild.id);
-        if (dbGuild.autoRoles.length > 0) {
-            const rolesToAdd = dbGuild.autoRoles.filter((roleId) => member.guild.roles.cache.has(roleId));
+        const dbGuild = await client.db.getGuild(member.guild.id, { exists: true });
+        if (dbGuild.autoroles.length > 0) {
+            const rolesToAdd = dbGuild.autoroles.filter((roleId) => member.guild.roles.cache.has(roleId));
             if (rolesToAdd.length > 0) {
                 try {
                     await member.roles.add(rolesToAdd);

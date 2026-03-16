@@ -293,7 +293,7 @@ export default class Help extends GargoyleModule {
         const container = new ContainerBuilder();
 
         let prefix = client.prefix;
-        if (client.db && guild) prefix = (await client.db.getGuild(guild.id)).prefix;
+        if (client.db && guild) prefix = (await client.db.getGuild(guild.id))?.prefix || client.prefix;
 
         container.addTextDisplayComponents(new TextDisplayBuilder().setContent('Text Commands'));
         container.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true));

@@ -13,4 +13,4 @@ RUN bun install
 
 COPY . .
 
-CMD ["bun", "run", "."]
+CMD ["sh", "-c", "bun run db:migrate && echo '' && bun run ."]

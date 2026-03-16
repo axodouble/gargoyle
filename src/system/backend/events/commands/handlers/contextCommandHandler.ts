@@ -1,4 +1,4 @@
-import GargoyleClient, { recordModuleUsage } from '@src/system/backend/classes/gargoyleClient.js';
+import GargoyleClient from '@src/system/backend/classes/gargoyleClient.js';
 import GargoyleEvent from '@src/system/backend/classes/gargoyleEvent.js';
 import { ContextMenuCommandInteraction, MessageContextMenuCommandInteraction, UserContextMenuCommandInteraction } from 'discord.js';
 
@@ -32,7 +32,6 @@ export default class ContextCommandHandler extends GargoyleEvent {
             client.logger.warning(`Command not found: ${interaction.commandName}, deleting command.`);
             interaction.command?.delete();
         } else {
-            await recordModuleUsage(client, module.name);
             module.executeContextMenuCommand(client, interaction);
             return client.logger.trace(`${interaction.user} used the ${interaction.commandName} context command.`);
         }

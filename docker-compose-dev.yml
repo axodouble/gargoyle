@@ -10,7 +10,6 @@ services:
     environment:
       DISCORD_TOKEN: ${DISCORD_TOKEN}
       PREFIX: ','
-      MONGO_URI: ${MONGO_URI}
       STEAM_API: ${STEAM_API}
       SUGGESTION_CHANNEL_ID: ${SUGGESTION_CHANNEL_ID}
       CERSH_API_KEY: ${CERSH_API_KEY}
@@ -27,28 +26,34 @@ services:
       BGN_ADMIN_DB_PASS: ${BGN_ADMIN_DB_PASS}
       BGN_API_KEY: ${BGN_API_KEY}
       EXTERNAL_MODULES: ${EXTERNAL_MODULES}
-
+      PG_USER: ${PG_USER}
+      PG_PASSWORD: ${PG_PASSWORD}
+      PG_DB: ${PG_DB}
+      PG_HOST: postgres
     ports:
       - 3001:3001
     networks:
       - gargoyle
 
-  mongo:
-    hostname: mongo
-    image: mongo:latest
+  postgres:
+    hostname: postgres
+    image: postgres:18
     ports:
-      - 27017:27017
+      - 5432:5432
     profiles:
       - aux
     environment:
-      MONGO_INITDB_ROOT_USERNAME: ${DBUSERNAME}
-      MONGO_INITDB_ROOT_PASSWORD: ${DBPASSWORD}
+      POSTGRES_USER: ${PG_USER}
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
+      POSTGRES_DB: ${PG_DB}
     volumes:
-      - ./container/db:/data/db
-      - ./container/configdb:/data/configdb
+      - postgres:/var/lib/postgresql
     networks:
       - gargoyle
 
 networks:
   gargoyle:
     driver: bridge
+
+volumes:
+  postgres:

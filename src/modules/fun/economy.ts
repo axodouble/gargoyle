@@ -23,7 +23,6 @@ import {
     SeparatorSpacingSize,
     TextDisplayBuilder
 } from 'discord.js';
-import { model, Schema } from 'mongoose';
 
 export default class Economy extends GargoyleModule {
     public override name: string = 'economy';
@@ -59,6 +58,14 @@ export default class Economy extends GargoyleModule {
             return;
         }
 
+        if (!interaction.guildId) {
+            await interaction.reply({
+                components: [new GargoyleContainerBuilder('This command can only be used in a server!')],
+                flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
+            });
+            return;
+        }
+
         if (interaction.commandName === 'carddraw') {
             await interaction.deferReply({ flags: MessageFlags.Ephemeral });
             const count = interaction.options.getInteger('count') ?? 1;
@@ -79,7 +86,7 @@ export default class Economy extends GargoyleModule {
             return;
         }
 
-        const economyUser = await getEconomyUser(interaction.user.id);
+        const economyUser = await client.db.getGuildUser(interaction.user.id, interaction.guildId!, { exists: true });
         if (interaction.options.getSubcommand() === 'balance') {
             await interaction.reply({
                 components: [new GargoyleContainerBuilder(`$${economyUser.balance.toLocaleString()}`)],
@@ -87,8 +94,8 @@ export default class Economy extends GargoyleModule {
             });
         } else if (interaction.options.getSubcommand() === 'daily') {
             const now = new Date();
-            if (economyUser.lastDaily) {
-                const lastDaily = new Date(economyUser.lastDaily);
+            const lastDaily = new Date(economyUser.lastdaily);
+            if (lastDaily.getTime() > 0) {
                 if (
                     lastDaily.getDate() === now.getDate() &&
                     lastDaily.getMonth() === now.getMonth() &&
@@ -104,20 +111,26 @@ export default class Economy extends GargoyleModule {
                     lastDaily.getMonth() === now.getMonth() &&
                     lastDaily.getFullYear() === now.getFullYear()
                 ) {
-                    economyUser.dailyStreak += 1;
+                    economyUser.dailystreak += 1;
                 } else {
-                    economyUser.dailyStreak = 1;
+                    economyUser.dailystreak = 1;
                 }
+            } else {
+                economyUser.dailystreak = 1;
             }
-            const dailyAmount = 50 + economyUser.dailyStreak * 10;
+            const dailyAmount = 50 + economyUser.dailystreak * 10;
             economyUser.balance += dailyAmount;
-            client.logger.trace(`User ${interaction.user.id} claimed daily reward of $${dailyAmount} with a streak of ${economyUser.dailyStreak}.`);
-            economyUser.lastDaily = now;
-            await economyUser.save();
+            client.logger.trace(`User ${interaction.user.id} claimed daily reward of $${dailyAmount} with a streak of ${economyUser.dailystreak}.`);
+            economyUser.lastdaily = now;
+            await client.db.setGuildUser(interaction.user.id, interaction.guildId!, {
+                balance: economyUser.balance,
+                lastdaily: economyUser.lastdaily,
+                dailystreak: economyUser.dailystreak
+            });
             await interaction.reply({
                 components: [
                     new GargoyleContainerBuilder(
-                        `You have claimed your daily reward of $${dailyAmount.toLocaleString()}! Your current streak is ${economyUser.dailyStreak + 1} days.`
+                        `You have claimed your daily reward of $${dailyAmount.toLocaleString()}! Your current streak is ${economyUser.dailystreak} days.`
                     )
                 ],
                 flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
@@ -146,11 +159,17 @@ export default class Economy extends GargoyleModule {
                 });
                 return;
             }
-            const recipientEconomyUser = await getEconomyUser(user.id);
+            const recipientEconomyUser = await client.db.getGuildUser(user.id, interaction.guildId!, { exists: true });
             economyUser.balance -= amount;
             recipientEconomyUser.balance += amount;
-            await economyUser.save();
-            await recipientEconomyUser.save();
+
+            await client.db.setGuildUser(interaction.user.id, interaction.guildId!, {
+                balance: economyUser.balance
+            });
+            await client.db.setGuildUser(user.id, interaction.guildId!, {
+                balance: recipientEconomyUser.balance
+            });
+
             await interaction.reply({
                 components: [
                     new GargoyleContainerBuilder(
@@ -216,7 +235,9 @@ export default class Economy extends GargoyleModule {
             });
 
             economyUser.balance -= bet;
-            await economyUser.save();
+            await client.db.setGuildUser(interaction.user.id, interaction.guildId!, {
+                balance: economyUser.balance
+            });
 
             // Hand out cards
             const gameData = this.cardMap.get(interaction.user.id);
@@ -226,7 +247,9 @@ export default class Economy extends GargoyleModule {
                     flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
                 });
                 economyUser.balance += bet;
-                await economyUser.save();
+                await client.db.setGuildUser(interaction.user.id, interaction.guildId!, {
+                    balance: economyUser.balance
+                });
                 this.cardMap.delete(interaction.user.id);
                 return;
             }
@@ -241,7 +264,9 @@ export default class Economy extends GargoyleModule {
                     components: [new GargoyleContainerBuilder('Failed to start a game of blackjack, please try again later.')]
                 });
                 economyUser.balance += bet;
-                await economyUser.save();
+                await client.db.setGuildUser(interaction.user.id, interaction.guildId!, {
+                    balance: economyUser.balance
+                });
                 this.cardMap.delete(interaction.user.id);
                 return;
             }
@@ -282,7 +307,7 @@ export default class Economy extends GargoyleModule {
                 return;
             }
 
-            const economyUser = await getEconomyUser(interaction.user.id);
+            const economyUser = await client.db.getGuildUser(interaction.user.id, interaction.guildId!, { exists: true });
             if (economyUser.balance < Number(args[2])) {
                 await interaction.update({
                     components: [new GargoyleContainerBuilder('You do not have enough money to rematch!')],
@@ -292,7 +317,9 @@ export default class Economy extends GargoyleModule {
             }
 
             economyUser.balance -= Number(args[2]);
-            await economyUser.save();
+            await client.db.setGuildUser(interaction.user.id, interaction.guildId!, {
+                balance: economyUser.balance
+            });
 
             const shuffledCards = [...cards].sort(() => Math.random() - 0.5);
             this.cardMap.set(interaction.user.id, {
@@ -312,7 +339,9 @@ export default class Economy extends GargoyleModule {
                     flags: [MessageFlags.IsComponentsV2]
                 });
                 economyUser.balance += Number(args[2]);
-                await economyUser.save();
+                await client.db.setGuildUser(interaction.user.id, interaction.guildId!, {
+                    balance: economyUser.balance
+                });
                 this.cardMap.delete(interaction.user.id);
                 return;
             }
@@ -381,7 +410,7 @@ export default class Economy extends GargoyleModule {
                 }
                 game.messageState += 1;
             }
-            const economyUser = await getEconomyUser(interaction.user.id);
+            const economyUser = await client.db.getGuildUser(interaction.user.id, interaction.guildId!, { exists: true });
 
             if (dealerTotal > 21 || userTotal > dealerTotal) {
                 economyUser.balance += game.wager * 2;
@@ -392,7 +421,9 @@ export default class Economy extends GargoyleModule {
             } else {
                 game.state = GameState.PlayerLose;
             }
-            await economyUser.save();
+            await client.db.setGuildUser(interaction.user.id, interaction.guildId!, {
+                balance: economyUser.balance
+            });
             const edit = await this.drawGame(interaction.user.id);
             if (edit) {
                 await interaction.message.edit(edit);
@@ -404,10 +435,12 @@ export default class Economy extends GargoyleModule {
             }
         } else if (args[0] === 'forfeit') {
             game.messageState += 1;
-            const economyUser = await getEconomyUser(interaction.user.id);
+            const economyUser = await client.db.getGuildUser(interaction.user.id, interaction.guildId!, { exists: true });
             const forfeitAmount = Math.floor(game.wager / 2);
             economyUser.balance += forfeitAmount;
-            await economyUser.save();
+            await client.db.setGuildUser(interaction.user.id, interaction.guildId!, {
+                balance: economyUser.balance
+            });
             await interaction.update({
                 components: [
                     new ContainerBuilder()
@@ -743,35 +776,3 @@ const cards: Card[] = [
     { suit: Suit.Spades, value: CardValue.King },
     { suit: Suit.Spades, value: CardValue.Ace }
 ];
-
-async function getEconomyUser(userId: string) {
-    const economyUser = await databaseEconomyUsers.findOne({ userId });
-    if (!economyUser) {
-        const newEconomyUser = new databaseEconomyUsers({ userId });
-        await newEconomyUser.save();
-        return newEconomyUser;
-    }
-    return economyUser;
-}
-
-const economyUserSchema = new Schema({
-    userId: {
-        type: String,
-        required: true,
-        unique: true
-    },
-    balance: {
-        type: Number,
-        default: 100
-    },
-    lastDaily: {
-        type: Date,
-        default: null
-    },
-    dailyStreak: {
-        type: Number,
-        default: 0
-    }
-});
-
-const databaseEconomyUsers = model('EconomyUsers', economyUserSchema);

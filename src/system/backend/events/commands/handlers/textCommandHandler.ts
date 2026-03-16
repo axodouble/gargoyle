@@ -1,4 +1,4 @@
-import GargoyleClient, { recordModuleUsage } from '@src/system/backend/classes/gargoyleClient.js';
+import GargoyleClient from '@src/system/backend/classes/gargoyleClient.js';
 import GargoyleEvent from '@src/system/backend/classes/gargoyleEvent.js';
 import { ChannelType, InteractionContextType, Message } from 'discord.js';
 
@@ -64,7 +64,6 @@ export default class TextCommandHandler extends GargoyleEvent {
                 return;
             }
 
-            await recordModuleUsage(client, command.name);
             command.executeTextCommand(client, message, ...message.content.slice(client.prefix.length).trim().split(' '));
             client.logger.trace(`${message.author.tag} used the ${textCommand.name} command.`);
         }
