@@ -23,7 +23,17 @@ export const guildsTable = p.pgTable(
     {
         guild_id: p.text().primaryKey().unique().notNull(),
         prefix: p.text().notNull().default(','),
-        autoroles: p.text().array().notNull().default([])
+        autoroles: p.text().array().notNull().default([]),
+        experience: p.boolean().notNull().default(true)
     },
     (t) => [p.index('guild_idx').on(t.guild_id)]
+);
+
+export const usersTable = p.pgTable(
+    'users',
+    {
+        user_id: p.text().primaryKey().unique().notNull(),
+        disablexpmsg: p.boolean().notNull().default(false)
+    },
+    (t) => [p.index('user_idx').on(t.user_id)]
 );

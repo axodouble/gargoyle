@@ -2,6 +2,7 @@ import GargoyleButtonBuilder from '@src/system/backend/builders/gargoyleButtonBu
 import GargoyleContainerBuilder from '@src/system/backend/builders/gargoyleContainerBuilder.js';
 import GargoyleSlashCommandBuilder from '@src/system/backend/builders/gargoyleSlashCommandBuilder.js';
 import GargoyleClient from '@src/system/backend/classes/gargoyleClient.js';
+import GargoyleEvent from '@src/system/backend/classes/gargoyleEvent';
 import GargoyleModule from '@src/system/backend/classes/gargoyleModule.js';
 import { FontWeight } from '@src/system/backend/tools/banners.js';
 import Emojis from '@src/system/backend/tools/emojis.js';
@@ -13,16 +14,22 @@ import {
     ButtonInteraction,
     ButtonStyle,
     ChatInputCommandInteraction,
+    ClientEvents,
     ContainerBuilder,
+    Events,
+    GuildMember,
     MediaGalleryBuilder,
     MediaGalleryItemBuilder,
+    Message,
     MessageActionRowComponentBuilder,
+    MessageCreateOptions,
     MessageEditOptions,
     MessageFlags,
     SeparatorBuilder,
     SeparatorSpacingSize,
     TextDisplayBuilder
 } from 'discord.js';
+import { desc, eq } from 'drizzle-orm';
 
 export default class Economy extends GargoyleModule {
     public override name: string = 'economy';
@@ -33,6 +40,37 @@ export default class Economy extends GargoyleModule {
             .setIntegrationTypes(ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall)
             .setDescription('Economy commands')
             .addSubcommand((subcommand) => subcommand.setName('balance').setDescription('Check your balance'))
+            .addSubcommandGroup((group) =>
+                group
+                    .setName('experience')
+                    .setDescription('Experience related commands')
+                    .addSubcommand((subcommand) =>
+                        subcommand
+                            .setName('user')
+                            .setDescription('Disable / enable level up messages for yourself')
+                            .addStringOption((option) =>
+                                option
+                                    .setName('status')
+                                    .setDescription('Enable or disable level up messages')
+                                    .addChoices({ name: 'Enable', value: 'enable' }, { name: 'Disable', value: 'disable' })
+                            )
+                    )
+                    .addSubcommand((subcommand) =>
+                        subcommand
+                            .setName('server')
+                            .setDescription('Disable / enable level up messages for the server')
+                            .addStringOption((option) =>
+                                option
+                                    .setName('status')
+                                    .setDescription('Enable or disable level up messages')
+                                    .addChoices({ name: 'Enable', value: 'enable' }, { name: 'Disable', value: 'disable' })
+                            )
+                    )
+                    .addSubcommand((subcommand) =>
+                        subcommand.setName('leaderboard').setDescription('Show the experience leaderboard for this server')
+                    )
+            )
+
             .addSubcommand((subcommand) => subcommand.setName('daily').setDescription('Claim your daily reward'))
             .addSubcommand((subcommand) =>
                 subcommand
@@ -271,6 +309,64 @@ export default class Economy extends GargoyleModule {
                 return;
             }
             await message.edit(edit);
+        } else if (interaction.options.getSubcommandGroup() === 'experience') {
+            const subcommand = interaction.options.getSubcommand();
+            if (subcommand === 'user') {
+                const status = interaction.options.getString('status', true);
+                const disable = status === 'disable';
+                await client.db.setUser(interaction.user.id, {
+                    disablexpmsg: disable
+                });
+                await interaction.reply({
+                    components: [new GargoyleContainerBuilder(`Level up messages have been ${disable ? 'disabled' : 'enabled'} for you!`)],
+                    flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
+                });
+            } else if (subcommand === 'server') {
+                if (!interaction.member || !(interaction.member instanceof GuildMember) || !interaction.member.permissions.has('ManageGuild')) {
+                    await interaction.reply({
+                        components: [new GargoyleContainerBuilder('You do not have permission to use this command!')],
+                        flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
+                    });
+                    return;
+                }
+                const status = interaction.options.getString('status', true);
+                const disable = status === 'disable';
+                await client.db.setGuild(interaction.guildId!, {
+                    experience: !disable
+                });
+                await interaction.reply({
+                    components: [new GargoyleContainerBuilder(`Level up messages have been ${disable ? 'disabled' : 'enabled'} for this server!`)],
+                    flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
+                });
+            } else if (subcommand === 'leaderboard') {
+                const guildUsers = await client.db.drizzle
+                    ?.select()
+                    .from(client.db.schema.guildUsersTable)
+                    .where(eq(client.db.schema.guildUsersTable.guild_id, interaction.guildId!))
+                    .orderBy(desc(client.db.schema.guildUsersTable.experience))
+                    .limit(10);
+
+                if (!guildUsers || guildUsers.length === 0) {
+                    await interaction.reply({
+                        components: [new GargoyleContainerBuilder('Failed to fetch the leaderboard, please try again later.')],
+                        flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
+                    });
+                    return;
+                }
+
+                let users = `# ${interaction.guild?.name} XP Leaderboard\n\n`;
+                for (let i = 0; i < guildUsers.length; i++) {
+                    const user = await client.users.fetch(guildUsers[i].user_id).catch(() => null);
+                    if (!user) continue;
+                    users += `**\`${i + 1}.\` <@!${user.id}> (${user.tag})**\n> Level ${calculateLevel(guildUsers[i].experience)} (${guildUsers[i].experience} XP)\n`;
+                }
+
+                await interaction.reply({
+                    components: [new GargoyleContainerBuilder(users)],
+                    flags: [MessageFlags.IsComponentsV2],
+                    allowedMentions: { users: [] }
+                });
+            }
         } else {
             await interaction.reply({
                 components: [new GargoyleContainerBuilder('Unknown subcommand!')],
@@ -578,6 +674,121 @@ export default class Economy extends GargoyleModule {
         string,
         { state: GameState; messageState: number; wager: number; cards: Card[]; playerHand: Card[]; dealerHand: Card[] }
     >();
+
+    public override events: GargoyleEvent[] = [new GainExperience()];
+}
+
+class GainExperience extends GargoyleEvent {
+    private lastGainedExperience = new Map<string, number>();
+    public override event: keyof ClientEvents = Events.MessageCreate as const;
+    public override async execute(client: GargoyleClient, message: Message, ..._args: any[]): Promise<void> {
+        if (!message.guildId || message.author.bot) return;
+        if (!client.db) return;
+        const dbGuild = await client.db.getGuild(message.guildId, { exists: true });
+
+        if (this.lastGainedExperience.has(message.author.id) && Date.now() - this.lastGainedExperience.get(message.author.id)! < 60000) return;
+
+        this.lastGainedExperience.set(message.author.id, Date.now());
+
+        const user = await client.db.getUser(message.author.id, { exists: true });
+        if (user.disablexpmsg) return;
+
+        const economyUser = await client.db.getGuildUser(message.author.id, message.guildId, { exists: true });
+
+        const experienceGained = Math.floor(Math.random() * 10) + 15; // Random experience between 15 and 25
+
+        // Level up
+        if (calculateLevel(economyUser.experience) < calculateLevel(economyUser.experience + experienceGained)) {
+            if (!dbGuild.experience) {
+                return;
+            }
+
+            try {
+                await message.reply(
+                    (await levelUpMessage(message.member!, calculateLevel(economyUser.experience + experienceGained))) as MessageCreateOptions
+                );
+            } catch (error) {
+                client.logger.error('Failed to send level up message:', `${error}`);
+            }
+
+            // Pay out level up reward
+            economyUser.balance += calculateLevel(economyUser.experience + experienceGained) * 100;
+            await client.db.setGuildUser(message.author.id, message.guildId, {
+                balance: economyUser.balance
+            });
+        }
+
+        // Update user experience
+        economyUser.experience += experienceGained;
+        await client.db.setGuildUser(message.author.id, message.guildId, {
+            experience: economyUser.experience
+        });
+    }
+}
+
+async function levelUpMessage(member: GuildMember, newLevel: number) {
+    const canvas = new Canvas(800, 200);
+    const ctx = canvas.getContext('2d');
+
+    // Draw user avatar as a circle on the left side
+    // With 5 px margins on the left, top and bottom
+    const avatarSize = 150;
+    const avatarX = 5;
+    const avatarY = 5;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.clip();
+    const avatar = await loadImage(member.user.displayAvatarURL({ extension: 'png', size: 512 }));
+    ctx.drawImage(avatar, avatarX, avatarY, avatarSize, avatarSize);
+    ctx.restore();
+
+    // Draw level up text
+    ctx.fillStyle = 'white';
+    ctx.font = `${FontWeight.ExtraLight} 32px Montserrat`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'bottom';
+    const textX = avatarX + avatarSize + 20;
+    const textY = 50;
+    ctx.fillText(`Congratulations, you reached level ${newLevel}!`, textX, textY);
+
+    ctx.font = `${FontWeight.ExtraLight} 16px Montserrat`;
+    const textY2 = textY + 30;
+    ctx.fillText(`Keep chatting to earn more experience and level up!\nYou've earned $${newLevel * 100}!`, textX, textY2);
+
+    const textY3 = 200 - 10;
+    ctx.fillText('This message can be disabled with /economy experience user disable', textX, textY3);
+
+    return {
+        components: [
+            new ContainerBuilder().addMediaGalleryComponents(
+                new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(`attachment://levelup.png`))
+            )
+        ],
+        flags: [MessageFlags.IsComponentsV2],
+        allowedMentions: { users: [] },
+        files: [
+            {
+                attachment: canvas.toBuffer(),
+                name: 'levelup.png'
+            }
+        ]
+    };
+}
+
+function calculateLevel(experience: number): number {
+    let level = 0;
+    if (experience >= 20000) {
+        level = 7 + Math.floor((experience - 20000) / 20000);
+    } else if (experience >= 10000) level = 6;
+    else if (experience >= 4000) level = 5;
+    else if (experience >= 2000) level = 4;
+    else if (experience >= 1000) level = 3;
+    else if (experience >= 400) level = 2;
+    else if (experience >= 200) level = 1;
+
+    return level;
 }
 
 enum GameState {
