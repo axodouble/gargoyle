@@ -30,7 +30,7 @@ class Database {
                 throw new Error('Missing PostgreSQL credentials');
             }
             const sqlClient = new SQL({
-                url: `postgresql://${process.env.PG_USER}:${process.env.PG_PASSWORD}@${process.env.PG_HOST}:5432/${process.env.PG_DB}`
+                url: `postgresql://${encodeURIComponent(process.env.PG_USER)}:${encodeURIComponent(process.env.PG_PASSWORD)}@${process.env.PG_HOST}:5432/${process.env.PG_DB}`
             });
             this.sql = sqlClient;
             this.drizzle = drizzle(sqlClient, { schema });

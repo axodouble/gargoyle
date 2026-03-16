@@ -5,7 +5,6 @@ import { ActivityType, Events } from 'discord.js';
 export default class Ready extends GargoyleEvent {
     public event = Events.ClientReady as const;
     override once = true;
-    private hasShownBirthdayMessage = false;
 
     public execute(client: GargoyleClient): void {
         setInterval(async () => {
@@ -21,8 +20,6 @@ export default class Ready extends GargoyleEvent {
             if (today.getMonth() === 0 && today.getDate() === 1) {
                 state = '🎉 Happy New Year!';
             }
-
-            this.hasShownBirthdayMessage = !this.hasShownBirthdayMessage;
 
             client.user?.setActivity({
                 name: 'custom',

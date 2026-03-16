@@ -32,7 +32,6 @@ export default class Manage extends GargoyleModule {
             .addGuild('750209335841390642')
             .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
             .setPrivate(true)
-            .addSubcommand((subcommand) => subcommand.setName('metrics').setDescription('Get bot metrics'))
             .addSubcommandGroup((group) =>
                 group
                     .setName('support')
