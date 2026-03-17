@@ -146,7 +146,7 @@ export default class Economy extends GargoyleModule {
                                 'You have already claimed your daily reward today!\n-# You can claim a daily reward in every guild you are in, so try claiming in another server if you want more rewards!'
                             )
                         ],
-                        flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
+                        flags: [MessageFlags.IsComponentsV2]
                     });
                     return;
                 } else if (
