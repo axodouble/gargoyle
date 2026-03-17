@@ -164,6 +164,49 @@ class Database {
         return await this.getUser(userId, { exists: true });
     }
 
+    /**
+     * This will set multiple users at once in a single transaction.
+     * This is necessary for transactions which require atomicity,
+     * such as transferring balance.
+     * @param users The users to set
+     */
+    public async setUsers(
+        users: Array<{ user_id: string } & Omit<Partial<typeof schema.usersTable.$inferInsert>, 'user_id'>>
+    ): Promise<Array<typeof schema.usersTable.$inferSelect>> {
+        if (!this.drizzle) {
+            throw new Error('Database not connected');
+        }
+
+        await this.drizzle.transaction(async (tx) => {
+            for (const user of users) {
+                if (!user.user_id) {
+                    throw new Error('User ID is required');
+                }
+                const existingUser = await tx.select().from(schema.usersTable).where(eq(schema.usersTable.user_id, user.user_id)).execute();
+                if (existingUser.length > 0) {
+                    await tx.update(schema.usersTable).set(user).where(eq(schema.usersTable.user_id, user.user_id)).execute();
+                } else {
+                    await tx
+                        .insert(schema.usersTable)
+                        .values(user as typeof schema.usersTable.$inferInsert)
+                        .execute();
+                }
+            }
+        });
+
+        const data: Array<typeof schema.usersTable.$inferSelect> = [];
+        for (const user of users) {
+            if (!user.user_id) {
+                throw new Error('User ID is required');
+            }
+            const updatedUser = await this.getUser(user.user_id, { exists: true });
+            if (updatedUser) {
+                data.push(updatedUser);
+            }
+        }
+        return data;
+    }
+
     public async getFullUser(
         userId: string,
         guildId: string

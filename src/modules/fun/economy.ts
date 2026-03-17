@@ -211,12 +211,10 @@ export default class Economy extends GargoyleModule {
             user.balance -= amount;
             recipientEconomyUser.balance += amount;
 
-            await client.db.setUser(interaction.user.id, {
-                balance: user.balance
-            });
-            await client.db.setUser(target.id, {
-                balance: recipientEconomyUser.balance
-            });
+            await client.db.setUsers([
+                { user_id: interaction.user.id, balance: user.balance },
+                { user_id: target.id, balance: recipientEconomyUser.balance }
+            ]);
 
             await interaction.reply({
                 components: [
