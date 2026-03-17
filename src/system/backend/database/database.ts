@@ -163,6 +163,24 @@ class Database {
         }
         return await this.getUser(userId, { exists: true });
     }
+
+    public async getFullUser(
+        userId: string,
+        guildId: string
+    ): Promise<{ user: typeof schema.usersTable.$inferSelect; guildUser: typeof schema.guildUsersTable.$inferSelect }> {
+        if (!this.drizzle) {
+            throw new Error('Database not connected');
+        }
+
+        const user = await this.getUser(userId, { exists: true });
+        const guildUser = await this.getGuildUser(userId, guildId, { exists: true });
+
+        if (!user || !guildUser) {
+            throw new Error('User or guild user not found');
+        }
+
+        return { user, guildUser };
+    }
 }
 
 export default Database;

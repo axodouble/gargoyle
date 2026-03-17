@@ -124,15 +124,16 @@ export default class Economy extends GargoyleModule {
             return;
         }
 
-        const economyUser = await client.db.getGuildUser(interaction.user.id, interaction.guildId!, { exists: true });
+        const guildUser = await client.db.getGuildUser(interaction.user.id, interaction.guildId!, { exists: true });
+        const user = await client.db.getUser(interaction.user.id, { exists: true });
         if (interaction.options.getSubcommand() === 'balance') {
             await interaction.reply({
-                components: [new GargoyleContainerBuilder(`$${economyUser.balance.toLocaleString()}`)],
+                components: [new GargoyleContainerBuilder(`$${user.balance.toLocaleString()}`)],
                 flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
             });
         } else if (interaction.options.getSubcommand() === 'daily') {
             const now = new Date();
-            const lastDaily = new Date(economyUser.last_daily);
+            const lastDaily = new Date(guildUser.last_daily);
             if (lastDaily.getTime() > 0) {
                 if (
                     lastDaily.getDate() === now.getDate() &&
@@ -140,7 +141,11 @@ export default class Economy extends GargoyleModule {
                     lastDaily.getFullYear() === now.getFullYear()
                 ) {
                     await interaction.reply({
-                        components: [new GargoyleContainerBuilder('You have already claimed your daily reward today!')],
+                        components: [
+                            new GargoyleContainerBuilder(
+                                'You have already claimed your daily reward today!\n-# You can claim a daily reward in every guild you are in, so try claiming in another server if you want more rewards!'
+                            )
+                        ],
                         flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
                     });
                     return;
@@ -149,34 +154,39 @@ export default class Economy extends GargoyleModule {
                     lastDaily.getMonth() === now.getMonth() &&
                     lastDaily.getFullYear() === now.getFullYear()
                 ) {
-                    economyUser.daily_streak += 1;
+                    guildUser.daily_streak += 1;
                 } else {
-                    economyUser.daily_streak = 1;
+                    guildUser.daily_streak = 1;
                 }
             } else {
-                economyUser.daily_streak = 1;
+                guildUser.daily_streak = 1;
             }
-            const dailyAmount = 50 + economyUser.daily_streak * 10;
-            economyUser.balance += dailyAmount;
-            client.logger.trace(`User ${interaction.user.id} claimed daily reward of $${dailyAmount} with a streak of ${economyUser.daily_streak}.`);
-            economyUser.last_daily = now;
-            await client.db.setGuildUser(interaction.user.id, interaction.guildId!, {
-                balance: economyUser.balance,
-                last_daily: economyUser.last_daily,
-                daily_streak: economyUser.daily_streak
+            const dailyAmount = 50 + guildUser.daily_streak * 10;
+            user.balance += dailyAmount;
+            client.logger.trace(`User ${interaction.user.id} claimed daily reward of $${dailyAmount} with a streak of ${guildUser.daily_streak}.`);
+            guildUser.last_daily = now;
+
+            await client.db.setUser(interaction.user.id, {
+                balance: user.balance
             });
+            await client.db.setGuildUser(interaction.user.id, interaction.guildId!, {
+                last_daily: guildUser.last_daily,
+                daily_streak: guildUser.daily_streak
+            });
+
             await interaction.reply({
                 components: [
                     new GargoyleContainerBuilder(
-                        `You have claimed your daily reward of $${dailyAmount.toLocaleString()}! Your current streak is ${economyUser.daily_streak} days.`
+                        `You have claimed your daily reward of $${dailyAmount.toLocaleString()}! Your current streak is ${guildUser.daily_streak} days.` +
+                            `\n-# You can claim a daily reward multiple times in every guild you are in, so try claiming in another server if you want more rewards!`
                     )
                 ],
                 flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
             });
         } else if (interaction.options.getSubcommand() === 'pay') {
-            const user = interaction.options.getUser('user', true);
+            const target = interaction.options.getUser('user', true);
             const amount = interaction.options.getNumber('amount', true);
-            if (user.id === interaction.user.id) {
+            if (target.id === interaction.user.id) {
                 await interaction.reply({
                     components: [new GargoyleContainerBuilder('You cannot pay yourself!')],
                     flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
@@ -190,28 +200,28 @@ export default class Economy extends GargoyleModule {
                 });
                 return;
             }
-            if (economyUser.balance < amount) {
+            if (user.balance < amount) {
                 await interaction.reply({
                     components: [new GargoyleContainerBuilder('You do not have enough money to pay that amount!')],
                     flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
                 });
                 return;
             }
-            const recipientEconomyUser = await client.db.getGuildUser(user.id, interaction.guildId!, { exists: true });
-            economyUser.balance -= amount;
+            const recipientEconomyUser = await client.db.getUser(target.id, { exists: true });
+            user.balance -= amount;
             recipientEconomyUser.balance += amount;
 
-            await client.db.setGuildUser(interaction.user.id, interaction.guildId!, {
-                balance: economyUser.balance
+            await client.db.setUser(interaction.user.id, {
+                balance: user.balance
             });
-            await client.db.setGuildUser(user.id, interaction.guildId!, {
+            await client.db.setUser(target.id, {
                 balance: recipientEconomyUser.balance
             });
 
             await interaction.reply({
                 components: [
                     new GargoyleContainerBuilder(
-                        `You have paid $${amount.toLocaleString()} to <@!${user.id}>! Your new balance is $${economyUser.balance.toLocaleString()}.`
+                        `You have paid $${amount.toLocaleString()} to <@!${target.id}>! Your new balance is $${user.balance.toLocaleString()}.`
                     )
                 ],
                 flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2],
@@ -228,7 +238,7 @@ export default class Economy extends GargoyleModule {
                 return;
             }
 
-            if (economyUser.balance < bet) {
+            if (user.balance < bet) {
                 await interaction.editReply({
                     components: [new GargoyleContainerBuilder('You do not have enough money to make that bet!')],
                     flags: [MessageFlags.IsComponentsV2]
@@ -272,9 +282,9 @@ export default class Economy extends GargoyleModule {
                 wager: bet
             });
 
-            economyUser.balance -= bet;
-            await client.db.setGuildUser(interaction.user.id, interaction.guildId!, {
-                balance: economyUser.balance
+            user.balance -= bet;
+            await client.db.setUser(interaction.user.id, {
+                balance: user.balance
             });
 
             // Hand out cards
@@ -284,9 +294,9 @@ export default class Economy extends GargoyleModule {
                     components: [new GargoyleContainerBuilder('Failed to start a game of blackjack, please try again later.')],
                     flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
                 });
-                economyUser.balance += bet;
-                await client.db.setGuildUser(interaction.user.id, interaction.guildId!, {
-                    balance: economyUser.balance
+                user.balance += bet;
+                await client.db.setUser(interaction.user.id, {
+                    balance: user.balance
                 });
                 this.cardMap.delete(interaction.user.id);
                 return;
@@ -301,9 +311,9 @@ export default class Economy extends GargoyleModule {
                 await interaction.followUp({
                     components: [new GargoyleContainerBuilder('Failed to start a game of blackjack, please try again later.')]
                 });
-                economyUser.balance += bet;
-                await client.db.setGuildUser(interaction.user.id, interaction.guildId!, {
-                    balance: economyUser.balance
+                user.balance += bet;
+                await client.db.setUser(interaction.user.id, {
+                    balance: user.balance
                 });
                 this.cardMap.delete(interaction.user.id);
                 return;
@@ -403,8 +413,8 @@ export default class Economy extends GargoyleModule {
                 return;
             }
 
-            const economyUser = await client.db.getGuildUser(interaction.user.id, interaction.guildId!, { exists: true });
-            if (economyUser.balance < Number(args[2])) {
+            const user = await client.db.getUser(interaction.user.id, { exists: true });
+            if (user.balance < Number(args[2])) {
                 await interaction.update({
                     components: [new GargoyleContainerBuilder('You do not have enough money to rematch!')],
                     flags: [MessageFlags.IsComponentsV2]
@@ -412,9 +422,9 @@ export default class Economy extends GargoyleModule {
                 return;
             }
 
-            economyUser.balance -= Number(args[2]);
-            await client.db.setGuildUser(interaction.user.id, interaction.guildId!, {
-                balance: economyUser.balance
+            user.balance -= Number(args[2]);
+            await client.db.setUser(interaction.user.id, {
+                balance: user.balance
             });
 
             const shuffledCards = [...cards].sort(() => Math.random() - 0.5);
@@ -434,9 +444,9 @@ export default class Economy extends GargoyleModule {
                     components: [new GargoyleContainerBuilder('Failed to start a rematch, please try again later.')],
                     flags: [MessageFlags.IsComponentsV2]
                 });
-                economyUser.balance += Number(args[2]);
-                await client.db.setGuildUser(interaction.user.id, interaction.guildId!, {
-                    balance: economyUser.balance
+                user.balance += Number(args[2]);
+                await client.db.setUser(interaction.user.id, {
+                    balance: user.balance
                 });
                 this.cardMap.delete(interaction.user.id);
                 return;
@@ -506,19 +516,19 @@ export default class Economy extends GargoyleModule {
                 }
                 game.messageState += 1;
             }
-            const economyUser = await client.db.getGuildUser(interaction.user.id, interaction.guildId!, { exists: true });
+            const user = await client.db.getUser(interaction.user.id, { exists: true });
 
             if (dealerTotal > 21 || userTotal > dealerTotal) {
-                economyUser.balance += game.wager * 2;
+                user.balance += game.wager * 2;
                 game.state = GameState.PlayerWin;
             } else if (dealerTotal === userTotal) {
-                economyUser.balance += game.wager;
+                user.balance += game.wager;
                 game.state = GameState.Tie;
             } else {
                 game.state = GameState.PlayerLose;
             }
-            await client.db.setGuildUser(interaction.user.id, interaction.guildId!, {
-                balance: economyUser.balance
+            await client.db.setUser(interaction.user.id, {
+                balance: user.balance
             });
             const edit = await this.drawGame(interaction.user.id);
             if (edit) {
@@ -531,11 +541,11 @@ export default class Economy extends GargoyleModule {
             }
         } else if (args[0] === 'forfeit') {
             game.messageState += 1;
-            const economyUser = await client.db.getGuildUser(interaction.user.id, interaction.guildId!, { exists: true });
+            const user = await client.db.getUser(interaction.user.id, { exists: true });
             const forfeitAmount = Math.floor(game.wager / 2);
-            economyUser.balance += forfeitAmount;
-            await client.db.setGuildUser(interaction.user.id, interaction.guildId!, {
-                balance: economyUser.balance
+            user.balance += forfeitAmount;
+            await client.db.setUser(interaction.user.id, {
+                balance: user.balance
             });
             await interaction.update({
                 components: [
@@ -548,7 +558,7 @@ export default class Economy extends GargoyleModule {
                         .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Large))
                         .addTextDisplayComponents(
                             new TextDisplayBuilder().setContent(
-                                `You forfeited the game and lost $${forfeitAmount.toLocaleString()}. Your new balance is $${economyUser.balance.toLocaleString()}.`
+                                `You forfeited the game and lost $${forfeitAmount.toLocaleString()}. Your new balance is $${user.balance.toLocaleString()}.`
                             )
                         )
                 ],
@@ -712,9 +722,9 @@ class GainExperience extends GargoyleEvent {
             }
 
             // Pay out level up reward
-            economyUser.balance += calculateLevel(economyUser.experience + experienceGained) * 100;
-            await client.db.setGuildUser(message.author.id, message.guildId, {
-                balance: economyUser.balance
+            user.balance += calculateLevel(economyUser.experience + experienceGained) * 100;
+            await client.db.setUser(message.author.id, {
+                balance: user.balance
             });
         }
 

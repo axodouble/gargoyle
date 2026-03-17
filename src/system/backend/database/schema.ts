@@ -5,7 +5,6 @@ export const guildUsersTable = p.pgTable(
     {
         user_id: p.text().notNull(),
         guild_id: p.text().notNull(),
-        balance: p.bigint({ mode: 'number' }).notNull().default(100),
         last_daily: p.timestamp().notNull().default(new Date(0)),
         daily_streak: p.integer().notNull().default(0),
         experience: p.bigint({ mode: 'number' }).notNull().default(0)
@@ -33,6 +32,7 @@ export const usersTable = p.pgTable(
     'users',
     {
         user_id: p.text().primaryKey().unique().notNull(),
+        balance: p.bigint({ mode: 'number' }).notNull().default(100),
         disable_xp_msg: p.boolean().notNull().default(false)
     },
     (t) => [p.index('user_idx').on(t.user_id)]
