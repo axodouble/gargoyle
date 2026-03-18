@@ -115,12 +115,12 @@ export default class Economy extends GargoyleModule {
 
         const guildUser = await client.db.getGuildUser(interaction.user.id, interaction.guildId!, { exists: true });
         const user = await client.db.getUser(interaction.user.id, { exists: true });
-        if (interaction.options.getSubcommand() === 'balance' || interaction.commandName === 'balance') {
+        if (interaction.options.getSubcommand(false) === 'balance' || interaction.commandName === 'balance') {
             await interaction.reply({
                 components: [new GargoyleContainerBuilder(`$${user.balance.toLocaleString()}`)],
                 flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
             });
-        } else if (interaction.options.getSubcommand() === 'daily' || interaction.commandName === 'daily') {
+        } else if (interaction.options.getSubcommand(false) === 'daily' || interaction.commandName === 'daily') {
             const now = new Date();
             const lastDaily = new Date(guildUser.last_daily);
             if (lastDaily.getTime() > 0) {
@@ -172,7 +172,7 @@ export default class Economy extends GargoyleModule {
                 ],
                 flags: [MessageFlags.IsComponentsV2]
             });
-        } else if (interaction.options.getSubcommand() === 'pay' || interaction.commandName === 'pay') {
+        } else if (interaction.options.getSubcommand(false) === 'pay' || interaction.commandName === 'pay') {
             const target = interaction.options.getUser('user', true);
             const amount = interaction.options.getNumber('amount', true);
             if (target.id === interaction.user.id) {
@@ -214,7 +214,7 @@ export default class Economy extends GargoyleModule {
                 flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2],
                 allowedMentions: { users: [] }
             });
-        } else if (interaction.options.getSubcommand() === 'blackjack') {
+        } else if (interaction.options.getSubcommand(false) === 'blackjack') {
             const bet = interaction.options.getInteger('bet', true);
             await interaction.deferReply();
             if (bet <= 0) {
@@ -306,7 +306,7 @@ export default class Economy extends GargoyleModule {
                 return;
             }
             await message.edit(edit);
-        } else if (interaction.options.getSubcommandGroup() === 'experience') {
+        } else if (interaction.options.getSubcommandGroup(false) === 'experience') {
             const subcommand = interaction.options.getSubcommand();
             if (subcommand === 'user') {
                 const status = interaction.options.getString('status', true);
