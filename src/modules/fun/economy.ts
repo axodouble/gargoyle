@@ -35,7 +35,12 @@ export default class Economy extends GargoyleModule {
     public override name: string = 'economy';
     public override category: string = 'fun';
     public override slashCommands: GargoyleSlashCommandBuilder[] = [
-        new GargoyleSlashCommandBuilder().setName('balance').setDescription('Check your balance') as GargoyleSlashCommandBuilder,
+        new GargoyleSlashCommandBuilder()
+            .setName('balance')
+            .setDescription('Check your balance')
+            .addUserOption((option) =>
+                option.setName('user').setDescription('The user to check balance for').setRequired(false)
+            ) as GargoyleSlashCommandBuilder,
         new GargoyleSlashCommandBuilder().setName('daily').setDescription('Claim your daily reward') as GargoyleSlashCommandBuilder,
         new GargoyleSlashCommandBuilder()
             .setName('pay')
@@ -48,7 +53,12 @@ export default class Economy extends GargoyleModule {
             .setName('economy')
             .setIntegrationTypes(ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall)
             .setDescription('Economy commands')
-            .addSubcommand((subcommand) => subcommand.setName('balance').setDescription('Check your balance'))
+            .addSubcommand((subcommand) =>
+                subcommand
+                    .setName('balance')
+                    .setDescription('Check your balance')
+                    .addUserOption((option) => option.setName('user').setDescription('The user to check balance for').setRequired(false))
+            )
             .addSubcommandGroup((group) =>
                 group
                     .setName('experience')
@@ -79,7 +89,6 @@ export default class Economy extends GargoyleModule {
                         subcommand.setName('leaderboard').setDescription('Show the experience leaderboard for this server')
                     )
             )
-
             .addSubcommand((subcommand) => subcommand.setName('daily').setDescription('Claim your daily reward'))
             .addSubcommand((subcommand) =>
                 subcommand
@@ -114,12 +123,15 @@ export default class Economy extends GargoyleModule {
         }
 
         const guildUser = await client.db.getGuildUser(interaction.user.id, interaction.guildId!, { exists: true });
-        const user = await client.db.getUser(interaction.user.id, { exists: true });
+        let user = await client.db.getUser(interaction.user.id, { exists: true });
         if (interaction.options.getSubcommand(false) === 'balance' || interaction.commandName === 'balance') {
+            if (interaction.options.getUser('user', false))
+                user = await client.db.getUser(interaction.options.getUser('user', true).id, { exists: true });
             await interaction.reply({
                 components: [new GargoyleContainerBuilder(`$${user.balance.toLocaleString()}`)],
                 flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
             });
+            return;
         } else if (interaction.options.getSubcommand(false) === 'daily' || interaction.commandName === 'daily') {
             const now = new Date();
             const lastDaily = new Date(guildUser.last_daily);
