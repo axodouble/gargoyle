@@ -35,6 +35,15 @@ export default class Economy extends GargoyleModule {
     public override name: string = 'economy';
     public override category: string = 'fun';
     public override slashCommands: GargoyleSlashCommandBuilder[] = [
+        new GargoyleSlashCommandBuilder().setName('balance').setDescription('Check your balance') as GargoyleSlashCommandBuilder,
+        new GargoyleSlashCommandBuilder().setName('daily').setDescription('Claim your daily reward') as GargoyleSlashCommandBuilder,
+        new GargoyleSlashCommandBuilder()
+            .setName('pay')
+            .setDescription('Pay another user')
+            .addUserOption((option) => option.setName('user').setDescription('The user to pay').setRequired(true))
+            .addNumberOption((option) =>
+                option.setName('amount').setDescription('The amount to pay').setRequired(true)
+            ) as GargoyleSlashCommandBuilder,
         new GargoyleSlashCommandBuilder()
             .setName('economy')
             .setIntegrationTypes(ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall)
@@ -104,34 +113,14 @@ export default class Economy extends GargoyleModule {
             return;
         }
 
-        if (interaction.commandName === 'carddraw') {
-            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-            const count = interaction.options.getInteger('count') ?? 1;
-            const chosenCards = [];
-            for (let i = 0; i < count; i++) {
-                chosenCards.push(cards[Math.floor(Math.random() * cards.length)]);
-            }
-            const image = await drawCards(chosenCards, interaction.options.getInteger('hidden', true));
-            await interaction.editReply({
-                files: [{ attachment: image, name: 'cards.png' }],
-                components: [
-                    new ContainerBuilder().addMediaGalleryComponents(
-                        new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL('attachment://cards.png'))
-                    )
-                ],
-                flags: [MessageFlags.IsComponentsV2]
-            });
-            return;
-        }
-
         const guildUser = await client.db.getGuildUser(interaction.user.id, interaction.guildId!, { exists: true });
         const user = await client.db.getUser(interaction.user.id, { exists: true });
-        if (interaction.options.getSubcommand() === 'balance') {
+        if (interaction.options.getSubcommand() === 'balance' || interaction.commandName === 'balance') {
             await interaction.reply({
                 components: [new GargoyleContainerBuilder(`$${user.balance.toLocaleString()}`)],
                 flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
             });
-        } else if (interaction.options.getSubcommand() === 'daily') {
+        } else if (interaction.options.getSubcommand() === 'daily' || interaction.commandName === 'daily') {
             const now = new Date();
             const lastDaily = new Date(guildUser.last_daily);
             if (lastDaily.getTime() > 0) {
@@ -183,7 +172,7 @@ export default class Economy extends GargoyleModule {
                 ],
                 flags: [MessageFlags.IsComponentsV2]
             });
-        } else if (interaction.options.getSubcommand() === 'pay') {
+        } else if (interaction.options.getSubcommand() === 'pay' || interaction.commandName === 'pay') {
             const target = interaction.options.getUser('user', true);
             const amount = interaction.options.getNumber('amount', true);
             if (target.id === interaction.user.id) {
