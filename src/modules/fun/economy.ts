@@ -61,6 +61,24 @@ export default class Economy extends GargoyleModule {
             )
             .addSubcommandGroup((group) =>
                 group
+                    .setName('leaderboard')
+                    .setDescription('View leaderboards')
+                    .addSubcommand((subcommand) => subcommand.setName('experience').setDescription('View the experience leaderboard for this server'))
+                    .addSubcommand((subcommand) =>
+                        subcommand
+                            .setName('balance')
+                            .setDescription('View the balance leaderboard for this server')
+                            .addStringOption((option) =>
+                                option
+                                    .setName('scope')
+                                    .setDescription('The scope of the leaderboard')
+                                    .addChoices({ name: 'Global', value: 'global' }, { name: 'Server', value: 'server' })
+                                    .setRequired(true)
+                            )
+                    )
+            )
+            .addSubcommandGroup((group) =>
+                group
                     .setName('experience')
                     .setDescription('Experience related commands')
                     .addSubcommand((subcommand) =>
@@ -84,9 +102,6 @@ export default class Economy extends GargoyleModule {
                                     .setDescription('Enable or disable level up messages')
                                     .addChoices({ name: 'Enable', value: 'enable' }, { name: 'Disable', value: 'disable' })
                             )
-                    )
-                    .addSubcommand((subcommand) =>
-                        subcommand.setName('leaderboard').setDescription('Show the experience leaderboard for this server')
                     )
             )
             .addSubcommand((subcommand) => subcommand.setName('daily').setDescription('Claim your daily reward'))
@@ -124,12 +139,117 @@ export default class Economy extends GargoyleModule {
 
         const guildUser = await client.db.getGuildUser(interaction.user.id, interaction.guildId!, { exists: true });
         let user = await client.db.getUser(interaction.user.id, { exists: true });
-        if (interaction.options.getSubcommand(false) === 'balance' || interaction.commandName === 'balance') {
+        if (interaction.options.getSubcommandGroup(false) === 'leaderboard') {
+            if (interaction.options.getSubcommand(false) === 'experience') {
+                const guildUsers = await client.db.drizzle
+                    ?.select()
+                    .from(client.db.schema.guildUsersTable)
+                    .where(eq(client.db.schema.guildUsersTable.guild_id, interaction.guildId!))
+                    .orderBy(desc(client.db.schema.guildUsersTable.experience))
+                    .limit(10);
+
+                if (!guildUsers || guildUsers.length === 0) {
+                    await interaction.reply({
+                        components: [new GargoyleContainerBuilder('Failed to fetch the leaderboard, please try again later.')],
+                        flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
+                    });
+                    return;
+                }
+
+                let users = `# ${interaction.guild?.name} XP Leaderboard\n\n`;
+                for (let i = 0; i < guildUsers.length; i++) {
+                    const user = await client.users.fetch(guildUsers[i].user_id).catch(() => null);
+                    if (!user) continue;
+                    users += `**\`${i + 1}.\` <@!${user.id}> (${user.tag})**\n> Level ${calculateLevel(guildUsers[i].experience)} (${guildUsers[i].experience} XP)\n`;
+                }
+
+                await interaction.reply({
+                    components: [new GargoyleContainerBuilder(users)],
+                    flags: [MessageFlags.IsComponentsV2],
+                    allowedMentions: { users: [] }
+                });
+            } else if (interaction.options.getSubcommand(false) === 'balance') {
+                const scope = interaction.options.getString('scope', true);
+                let users: (typeof client.db.schema.usersTable.$inferSelect)[] = [];
+
+                if (scope === 'global') {
+                    users =
+                        (await client.db.drizzle
+                            ?.select()
+                            .from(client.db.schema.usersTable)
+                            .orderBy(desc(client.db.schema.usersTable.balance))
+                            .limit(10)) || [];
+                } else {
+                    users =
+                        (
+                            await client.db.drizzle
+                                ?.select()
+                                .from(client.db.schema.usersTable)
+                                .innerJoin(
+                                    client.db.schema.guildUsersTable,
+                                    eq(client.db.schema.usersTable.user_id, client.db.schema.guildUsersTable.user_id)
+                                )
+                                .where(eq(client.db.schema.guildUsersTable.guild_id, interaction.guildId!))
+                                .orderBy(desc(client.db.schema.usersTable.balance))
+                                .limit(10)
+                        )?.map((user) => user.users) || [];
+                }
+
+                if (users.length === 0) {
+                    await interaction.reply({
+                        components: [new GargoyleContainerBuilder('Failed to fetch the leaderboard, please try again later.')],
+                        flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
+                    });
+                    return;
+                }
+
+                let leaderboard = `# ${interaction.guild?.name} Balance Leaderboard (${scope === 'global' ? 'Global' : 'Server'})\n\n`;
+                for (let i = 0; i < users.length; i++) {
+                    const user = await client.users.fetch(users[i].user_id).catch(() => null);
+                    leaderboard += `**\`${i + 1}.\` <@!${users[i].user_id}> (${user?.tag ?? 'Unknown User'})**\n> $${users[i].balance.toLocaleString()}\n`;
+                }
+                await interaction.reply({
+                    components: [new GargoyleContainerBuilder(leaderboard)],
+                    flags: [MessageFlags.IsComponentsV2],
+                    allowedMentions: { users: [] }
+                });
+            }
+        } else if (interaction.options.getSubcommandGroup(false) === 'experience') {
+            const subcommand = interaction.options.getSubcommand();
+            if (subcommand === 'user') {
+                const status = interaction.options.getString('status', true);
+                const disable = status === 'disable';
+                await client.db.setUser(interaction.user.id, {
+                    disable_xp_msg: disable
+                });
+                await interaction.reply({
+                    components: [new GargoyleContainerBuilder(`Level up messages have been ${disable ? 'disabled' : 'enabled'} for you!`)],
+                    flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
+                });
+            } else if (subcommand === 'server') {
+                if (!interaction.member || !(interaction.member instanceof GuildMember) || !interaction.member.permissions.has('ManageGuild')) {
+                    await interaction.reply({
+                        components: [new GargoyleContainerBuilder('You do not have permission to use this command!')],
+                        flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
+                    });
+                    return;
+                }
+                const status = interaction.options.getString('status', true);
+                const disable = status === 'disable';
+                await client.db.setGuild(interaction.guildId!, {
+                    experience: !disable
+                });
+                await interaction.reply({
+                    components: [new GargoyleContainerBuilder(`Level up messages have been ${disable ? 'disabled' : 'enabled'} for this server!`)],
+                    flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
+                });
+            }
+        } else if (interaction.options.getSubcommand(false) === 'balance' || interaction.commandName === 'balance') {
             if (interaction.options.getUser('user', false))
                 user = await client.db.getUser(interaction.options.getUser('user', true).id, { exists: true });
             await interaction.reply({
                 components: [new GargoyleContainerBuilder(`$${user.balance.toLocaleString()}`)],
-                flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
+                flags: [MessageFlags.IsComponentsV2]
             });
             return;
         } else if (interaction.options.getSubcommand(false) === 'daily' || interaction.commandName === 'daily') {
@@ -318,64 +438,6 @@ export default class Economy extends GargoyleModule {
                 return;
             }
             await message.edit(edit);
-        } else if (interaction.options.getSubcommandGroup(false) === 'experience') {
-            const subcommand = interaction.options.getSubcommand();
-            if (subcommand === 'user') {
-                const status = interaction.options.getString('status', true);
-                const disable = status === 'disable';
-                await client.db.setUser(interaction.user.id, {
-                    disable_xp_msg: disable
-                });
-                await interaction.reply({
-                    components: [new GargoyleContainerBuilder(`Level up messages have been ${disable ? 'disabled' : 'enabled'} for you!`)],
-                    flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
-                });
-            } else if (subcommand === 'server') {
-                if (!interaction.member || !(interaction.member instanceof GuildMember) || !interaction.member.permissions.has('ManageGuild')) {
-                    await interaction.reply({
-                        components: [new GargoyleContainerBuilder('You do not have permission to use this command!')],
-                        flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
-                    });
-                    return;
-                }
-                const status = interaction.options.getString('status', true);
-                const disable = status === 'disable';
-                await client.db.setGuild(interaction.guildId!, {
-                    experience: !disable
-                });
-                await interaction.reply({
-                    components: [new GargoyleContainerBuilder(`Level up messages have been ${disable ? 'disabled' : 'enabled'} for this server!`)],
-                    flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
-                });
-            } else if (subcommand === 'leaderboard') {
-                const guildUsers = await client.db.drizzle
-                    ?.select()
-                    .from(client.db.schema.guildUsersTable)
-                    .where(eq(client.db.schema.guildUsersTable.guild_id, interaction.guildId!))
-                    .orderBy(desc(client.db.schema.guildUsersTable.experience))
-                    .limit(10);
-
-                if (!guildUsers || guildUsers.length === 0) {
-                    await interaction.reply({
-                        components: [new GargoyleContainerBuilder('Failed to fetch the leaderboard, please try again later.')],
-                        flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
-                    });
-                    return;
-                }
-
-                let users = `# ${interaction.guild?.name} XP Leaderboard\n\n`;
-                for (let i = 0; i < guildUsers.length; i++) {
-                    const user = await client.users.fetch(guildUsers[i].user_id).catch(() => null);
-                    if (!user) continue;
-                    users += `**\`${i + 1}.\` <@!${user.id}> (${user.tag})**\n> Level ${calculateLevel(guildUsers[i].experience)} (${guildUsers[i].experience} XP)\n`;
-                }
-
-                await interaction.reply({
-                    components: [new GargoyleContainerBuilder(users)],
-                    flags: [MessageFlags.IsComponentsV2],
-                    allowedMentions: { users: [] }
-                });
-            }
         } else {
             await interaction.reply({
                 components: [new GargoyleContainerBuilder('Unknown subcommand!')],
