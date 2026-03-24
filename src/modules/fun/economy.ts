@@ -833,9 +833,6 @@ async function levelUpMessage(member: GuildMember, newLevel: number) {
 
     return {
         components: [
-            new ContainerBuilder().addMediaGalleryComponents(
-                new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(`attachment://levelup.png`))
-            )
         ],
         flags: [MessageFlags.IsComponentsV2],
         allowedMentions: { users: [] },
