@@ -120,6 +120,15 @@ export default class Economy extends GargoyleModule {
             ) as GargoyleSlashCommandBuilder
     ];
 
+    // public override textCommands: GargoyleTextCommandBuilder[] = [
+    //     new GargoyleTextCommandBuilder().setName('test')
+    // ]
+
+    // public override async executeTextCommand(client: GargoyleClient, message: Message, ..._args: string[]): Promise<void> {
+    //     const dbuser = await client.db?.getGuildUser(message.author.id, message.guildId!, {exists: true})
+    //     message.reply(await levelUpMessage(message.member!, 1))
+    // }
+
     public override async executeSlashCommand(client: GargoyleClient, interaction: ChatInputCommandInteraction): Promise<void> {
         if (!client.db) {
             await interaction.reply({
@@ -832,10 +841,6 @@ async function levelUpMessage(member: GuildMember, newLevel: number) {
     ctx.fillText('This message can be disabled with /economy experience user disable', textX, textY3);
 
     return {
-        components: [
-        ],
-        flags: [MessageFlags.IsComponentsV2],
-        allowedMentions: { users: [] },
         files: [
             {
                 attachment: canvas.toBuffer(),
