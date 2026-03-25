@@ -194,11 +194,16 @@ export default class Gargle extends GargoyleModule {
     public override category: string = 'cc';
     public override name: string = 'gargle';
     public guilds = ['750209335841390642', '1009048008857493624', '800358349543178251', '1475065895742214267'];
-    public override events: GargoyleEvent[] = [new GargleMessageEvent()];
+    public override events: GargoyleEvent[] = [new GargleMessageEvent(this)];
 }
 
 class GargleMessageEvent extends GargoyleEvent {
     public override event: keyof ClientEvents = Events.MessageCreate as const;
+    private module: Gargle;
+    constructor(module: Gargle) {
+        super();
+        this.module = module;
+    }
 
     public override async execute(client: GargoyleClient, message: Message): Promise<void> {
         if (message.author.bot) return;
@@ -212,6 +217,7 @@ class GargleMessageEvent extends GargoyleEvent {
         const userMessage = `${userLabel}: ${contentForPrompt}`;
 
         if (!message.mentions.has(client.user.id)) return;
+        if (!message.guildId || !this.module.guilds.includes(message.guildId)) return;
 
         const channel = message.channel;
         if (channel instanceof PartialGroupDMChannel) return;
