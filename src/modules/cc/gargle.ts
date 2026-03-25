@@ -216,7 +216,7 @@ class GargleMessageEvent extends GargoyleEvent {
         if (!contentForPrompt) return;
         const userMessage = `${userLabel}: ${contentForPrompt}`;
 
-        if (!message.mentions.has(client.user.id)) return;
+        if (!message.content.includes(client.user.id)) return;
         if (!message.guildId || !this.module.guilds.includes(message.guildId)) return;
 
         const channel = message.channel;
