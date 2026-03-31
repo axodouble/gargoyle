@@ -1,0 +1,1 @@
+ALTER TABLE "bgn_april_first" ADD COLUMN "amount_spent" integer DEFAULT 0 NOT NULL;

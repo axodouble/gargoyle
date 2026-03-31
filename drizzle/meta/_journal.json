@@ -50,6 +50,13 @@
       "when": 1773730816230,
       "tag": "0006_rapid_korvac",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1774929651361,
+      "tag": "0007_gray_brother_voodoo",
+      "breakpoints": true
     }
   ]
 }

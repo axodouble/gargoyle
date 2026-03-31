@@ -155,7 +155,8 @@ export default class AprilFirst extends GargoyleModule {
             await client.db.setAprilFirstUser(interaction.user.id, {
                 message_rights: aprilUser.message_rights,
                 mention_rights: aprilUser.mention_rights,
-                timeout_30: aprilUser.timeout_30
+                timeout_30: aprilUser.timeout_30,
+                amount_spent: aprilUser.amount_spent + cost
             });
             await client.db.setUser(interaction.user.id, {
                 balance: user.balance
