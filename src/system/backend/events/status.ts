@@ -44,16 +44,19 @@ function getStatusMessage(client: GargoyleClient): string {
 
     const messages = [
         `${client.guilds.cache.size} servers strong!`,
+        `All hail now the panopticon`,
         'Developed with duct tape and dreams.',
         'Running....',
-        `${process.uptime()} seconds of uptime.`,
+        `${Math.round(process.uptime())} seconds of uptime.`,
         `Watching ${client.users.cache.random()?.username}...`,
         `{bodies} bodies, 0 found`,
         `just ${daysUntilOct5} more days...`,
         '🍺 God gives his tastiest beers to his drunkest drivers.',
         'The voices are getting louder',
         'Nevermind change of plans, tomorrow.',
-        'I see dead pixels.'
+        'Use /daily!',
+        'Use /disguise to disguise the bot as someone else!',
+        'I cried against an ocean of light'
     ];
 
     let status = messages[Math.floor(Math.random() * messages.length)];
