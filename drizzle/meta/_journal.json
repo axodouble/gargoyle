@@ -43,6 +43,13 @@
       "when": 1773714348291,
       "tag": "0005_misty_mister_sinister",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1773730816230,
+      "tag": "0006_rapid_korvac",
+      "breakpoints": true
     }
   ]
 }

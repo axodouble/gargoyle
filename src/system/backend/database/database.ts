@@ -224,6 +224,44 @@ class Database {
 
         return { user, guildUser };
     }
+
+    public async getAprilFirstUser(userId: string, options: { exists: true }): Promise<typeof schema.aprilFirstTable.$inferSelect>;
+    public async getAprilFirstUser(
+        userId: string,
+        options?: { exists?: false | undefined }
+    ): Promise<typeof schema.aprilFirstTable.$inferSelect | null>;
+    public async getAprilFirstUser(userId: string, options?: { exists?: boolean }): Promise<typeof schema.aprilFirstTable.$inferSelect | null> {
+        if (!this.drizzle) {
+            throw new Error('Database not connected');
+        }
+
+        const aprilUser = await this.drizzle.select().from(schema.aprilFirstTable).where(eq(schema.aprilFirstTable.user_id, userId)).execute();
+        if (options?.exists && aprilUser.length === 0) {
+            await this.drizzle.insert(schema.aprilFirstTable).values({ user_id: userId }).execute();
+            return (await this.getAprilFirstUser(userId, { exists: true })) as typeof schema.aprilFirstTable.$inferSelect;
+        }
+        return aprilUser[0] || null;
+    }
+
+    public async setAprilFirstUser(
+        userId: string,
+        data: Partial<Omit<typeof schema.aprilFirstTable.$inferInsert, 'user_id'>>
+    ): Promise<typeof schema.aprilFirstTable.$inferSelect> {
+        if (!this.drizzle) {
+            throw new Error('Database not connected');
+        }
+
+        const existingUser = await this.getAprilFirstUser(userId, { exists: true });
+        if (existingUser) {
+            await this.drizzle.update(schema.aprilFirstTable).set(data).where(eq(schema.aprilFirstTable.user_id, userId)).execute();
+        } else {
+            await this.drizzle
+                .insert(schema.aprilFirstTable)
+                .values([{ user_id: userId, ...data }])
+                .execute();
+        }
+        return await this.getAprilFirstUser(userId, { exists: true });
+    }
 }
 
 export default Database;

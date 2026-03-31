@@ -37,3 +37,19 @@ export const usersTable = p.pgTable(
     },
     (t) => [p.index('user_idx').on(t.user_id)]
 );
+
+export const aprilFirstTable = p.pgTable(
+    'bgn_april_first',
+    {
+        user_id: p
+            .text()
+            .primaryKey()
+            .unique()
+            .notNull()
+            .references(() => usersTable.user_id, { onDelete: 'cascade' }),
+        message_rights: p.integer().notNull().default(5),
+        mention_rights: p.integer().notNull().default(1),
+        timeout_30: p.integer().notNull().default(0)
+    },
+    (t) => [p.index('april_first_user_idx').on(t.user_id)]
+);
