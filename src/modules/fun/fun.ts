@@ -21,6 +21,7 @@ import {
     VoiceChannel
 } from 'discord.js';
 import { randomUUID } from 'crypto';
+import { fetch } from 'bun';
 
 const IMAGE_API = process.env.IMAGE_API;
 const IMAGE_API_URL = IMAGE_API ? `http://${IMAGE_API}` : '';
@@ -29,7 +30,15 @@ const IMAGE_WS_URL = IMAGE_API ? `ws://${IMAGE_API}` : '';
 const IMAGE_TIMEOUT_MS = 180000;
 const HISTORY_RETRY_DELAY_MS = 1500;
 
-const promptCache = new Map<string, string>();
+type ImageJob = {
+    mode: 'generate' | 'edit';
+    prompt: string;
+    sourceFilename?: string;
+};
+
+const promptCache = new Map<string, ImageJob>();
+const MAX_EDIT_INPUT_BYTES = 8 * 1024 * 1024;
+const SUPPORTED_EDIT_TYPES = ['image/png', 'image/jpeg'];
 
 type PromptResponse = {
     prompt_id: string;
@@ -95,13 +104,37 @@ export default class Fun extends GargoyleModule {
                             )
                     )
             )
-            .addSubcommand((subcommand) =>
-                subcommand
+            .addSubcommandGroup((subcommandGroup) =>
+                subcommandGroup
                     .setName('image')
-                    .setDescription('Generate an image based on a prompt.')
-                    .addStringOption((option) => option.setName('prompt').setDescription('The prompt to generate the image from.').setRequired(true))
-                    .addBooleanOption((option) => option.setName('hidden').setDescription('Whether the image should be hidden.').setRequired(false))
+                    .setDescription('Image related commands.')
+                    .addSubcommand((subcommand) =>
+                        subcommand
+                            .setName('edit')
+                            .setDescription('Edit an image based on a prompt.')
+                            .addAttachmentOption((option) =>
+                                option.setName('image').setDescription('The image to edit. Must be a PNG or JPEG file under 8MB.').setRequired(true)
+                            )
+                            .addStringOption((option) =>
+                                option.setName('prompt').setDescription('The prompt to edit the image with.').setRequired(true)
+                            )
+                            .addBooleanOption((option) =>
+                                option.setName('hidden').setDescription('Whether the edited image should be hidden.').setRequired(false)
+                            )
+                    )
+                    .addSubcommand((subcommand) =>
+                        subcommand
+                            .setName('generate')
+                            .setDescription('Generate an image based on a prompt.')
+                            .addStringOption((option) =>
+                                option.setName('prompt').setDescription('The prompt to generate the image from.').setRequired(true)
+                            )
+                            .addBooleanOption((option) =>
+                                option.setName('hidden').setDescription('Whether the image should be hidden.').setRequired(false)
+                            )
+                    )
             )
+
             .addSubcommand((subcommand) => subcommand.setName('truth-or-dare').setDescription('Truth or dare related commands.'))
             .addSubcommand((subcommand) =>
                 subcommand
@@ -124,14 +157,14 @@ export default class Fun extends GargoyleModule {
     ];
 
     public override async executeSlashCommand(client: GargoyleClient, interaction: ChatInputCommandInteraction) {
-        const subcommandGroup = interaction.options.getSubcommandGroup();
-        const subcommand = interaction.options.getSubcommand();
+        const subcommandGroup = interaction.options.getSubcommandGroup(false);
+        const subcommand = interaction.options.getSubcommand(false);
 
         if (subcommandGroup === 'text') {
             return textReplace(interaction);
         }
 
-        if (subcommand === 'image') {
+        if (subcommandGroup === 'image') {
             return image(client, interaction, this);
         }
 
@@ -174,9 +207,9 @@ export default class Fun extends GargoyleModule {
 
     public override async executeButtonCommand(client: GargoyleClient, interaction: ButtonInteraction, ...args: string[]): Promise<void> {
         if (args[0] === 'regenerate') {
-            const prompt = promptCache.get(args[1]);
+            const job = promptCache.get(args[1]);
 
-            if (!prompt) {
+            if (!job) {
                 await interaction.reply({
                     content: 'This generation has expired. Please use `/fun image` to generate a new one.',
                     flags: [MessageFlags.Ephemeral]
@@ -187,8 +220,11 @@ export default class Fun extends GargoyleModule {
             await interaction.deferUpdate();
 
             try {
-                const imageBuffers = await generateImages(client, prompt);
-                await interaction.editReply(buildImageReply(this, prompt, imageBuffers));
+                const imageBuffers =
+                    job.mode === 'edit' && job.sourceFilename
+                        ? await editImages(client, job.prompt, job.sourceFilename)
+                        : await generateImages(client, job.prompt);
+                await interaction.editReply(buildImageReply(this, job, imageBuffers));
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : 'Unknown error';
                 client.logger.error(`Image regeneration failed: ${errorMessage}`);
@@ -220,12 +256,35 @@ async function image(client: GargoyleClient, interaction: ChatInputCommandIntera
     }
 
     const prompt = interaction.options.getString('prompt', true);
+    const subcommand = interaction.options.getSubcommand(true);
     const hidden = interaction.options.getBoolean('hidden') ? MessageFlags.Ephemeral : undefined;
     await interaction.deferReply({ flags: hidden });
 
     try {
+        if (subcommand === 'edit') {
+            const inputImage = interaction.options.getAttachment('image', true);
+            const validationError = validateEditImageInput(inputImage.contentType ?? null, inputImage.size);
+
+            if (validationError) {
+                await interaction.editReply({ content: validationError });
+                return;
+            }
+
+            const attachmentResponse = await fetch(inputImage.url);
+            if (!attachmentResponse.ok) {
+                throw new Error(`Failed to fetch source image with status ${attachmentResponse.status}`);
+            }
+
+            const sourceImageBuffer = Buffer.from(await attachmentResponse.arrayBuffer());
+            const uploadedFilename = await uploadImage(sourceImageBuffer, inputImage.name ?? 'input.png');
+            const imageBuffers = await editImages(client, prompt, uploadedFilename);
+
+            await interaction.editReply(buildImageReply(module, { mode: 'edit', prompt, sourceFilename: uploadedFilename }, imageBuffers));
+            return;
+        }
+
         const imageBuffers = await generateImages(client, prompt);
-        await interaction.editReply(buildImageReply(module, prompt, imageBuffers));
+        await interaction.editReply(buildImageReply(module, { mode: 'generate', prompt }, imageBuffers));
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         client.logger.error(`Image generation failed: ${errorMessage}`);
@@ -236,9 +295,10 @@ async function image(client: GargoyleClient, interaction: ChatInputCommandIntera
     }
 }
 
-function buildImageReply(module: Fun, prompt: string, buffers: Buffer[]): InteractionEditReplyOptions {
+function buildImageReply(module: Fun, job: ImageJob, buffers: Buffer[]): InteractionEditReplyOptions {
     const cacheKey = randomUUID();
-    promptCache.set(cacheKey, prompt);
+    promptCache.set(cacheKey, job);
+    const prompt = job.prompt;
 
     const gallery = new MediaGalleryBuilder();
     for (let i = 0; i < buffers.length; i++) {
@@ -260,8 +320,20 @@ function buildImageReply(module: Fun, prompt: string, buffers: Buffer[]): Intera
     };
 }
 
+function validateEditImageInput(contentType: string | null, size: number): string | null {
+    if (!contentType || !SUPPORTED_EDIT_TYPES.includes(contentType)) {
+        return 'Please provide a PNG or JPEG image.';
+    }
+
+    if (size > MAX_EDIT_INPUT_BYTES) {
+        return 'The source image is too large. Please upload an image under 8MB.';
+    }
+
+    return null;
+}
+
 async function generateImages(client: GargoyleClient, prompt: string): Promise<Buffer[]> {
-    const promptData = comfyUi(prompt);
+    const promptData = generatePrompt(prompt);
     const clientId = randomUUID();
 
     const request = await fetch(`${IMAGE_API_URL}/prompt`, {
@@ -286,7 +358,48 @@ async function generateImages(client: GargoyleClient, prompt: string): Promise<B
 
     const imageInfos = await getImageInfos(client, response.prompt_id, IMAGE_TIMEOUT_MS);
 
-    return Promise.all(imageInfos.map(downloadImage));
+    if (imageInfos.length === 0) {
+        throw new Error('No generated images were returned');
+    }
+
+    const selectedImages = imageInfos.slice(0, 4);
+
+    return Promise.all(selectedImages.map(downloadImage));
+}
+
+async function editImages(client: GargoyleClient, prompt: string, sourceFilename: string): Promise<Buffer[]> {
+    const promptData = editPrompt(prompt, sourceFilename);
+    const clientId = randomUUID();
+
+    const request = await fetch(`${IMAGE_API_URL}/prompt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: promptData, client_id: clientId })
+    });
+
+    if (!request.ok) {
+        throw new Error(`Image edit queue request failed with status ${request.status}`);
+    }
+
+    const response = (await request.json()) as PromptResponse;
+
+    if (!response.prompt_id) {
+        throw new Error('Image edit queue response did not include a prompt id');
+    }
+
+    client.logger.info(`Queued image edit: ${response.prompt_id}`);
+
+    await waitForCompletion(client, response.prompt_id, clientId, IMAGE_TIMEOUT_MS);
+
+    const imageInfos = await getImageInfos(client, response.prompt_id, IMAGE_TIMEOUT_MS);
+
+    if (imageInfos.length === 0) {
+        throw new Error('No edited images were returned');
+    }
+
+    const selectedImages = imageInfos.slice(0, 4);
+
+    return Promise.all(selectedImages.map(downloadImage));
 }
 
 async function waitForCompletion(client: GargoyleClient, promptId: string, clientId: string, timeoutMs: number): Promise<void> {
@@ -418,7 +531,7 @@ async function downloadImage(image: ImageInfo): Promise<Buffer> {
     return Buffer.from(await res.arrayBuffer());
 }
 
-function comfyUi(prompt: string) {
+function generatePrompt(prompt: string) {
     return {
         '9': {
             inputs: {
@@ -924,4 +1037,181 @@ function eightBall(interaction: ChatInputCommandInteraction): Promise<Interactio
         content: `-# ${interaction.options.getString('question', true)}\n${responses[Math.floor(Math.random() * responses.length)]} `,
         allowedMentions: { parse: [] }
     });
+}
+
+function editPrompt(prompt: string, filename: string) {
+    return {
+        '136': {
+            inputs: {
+                filename_prefix: 'ComfyUI',
+                images: ['192:8', 0]
+            },
+            class_type: 'SaveImage',
+            _meta: {
+                title: 'Save Image'
+            }
+        },
+        '190': {
+            inputs: {
+                image: filename
+            },
+            class_type: 'LoadImage',
+            _meta: {
+                title: 'Load Image'
+            }
+        },
+        '192:39': {
+            inputs: {
+                vae_name: 'ae.safetensors'
+            },
+            class_type: 'VAELoader',
+            _meta: {
+                title: 'Load VAE'
+            }
+        },
+        '192:38': {
+            inputs: {
+                clip_name1: 'clip_l.safetensors',
+                clip_name2: 't5xxl_fp8_e4m3fn_scaled.safetensors',
+                type: 'flux',
+                device: 'default'
+            },
+            class_type: 'DualCLIPLoader',
+            _meta: {
+                title: 'DualCLIPLoader'
+            }
+        },
+        '192:135': {
+            inputs: {
+                conditioning: ['192:6', 0]
+            },
+            class_type: 'ConditioningZeroOut',
+            _meta: {
+                title: 'ConditioningZeroOut'
+            }
+        },
+        '192:8': {
+            inputs: {
+                samples: ['192:31', 0],
+                vae: ['192:39', 0]
+            },
+            class_type: 'VAEDecode',
+            _meta: {
+                title: 'VAE Decode'
+            }
+        },
+        '192:124': {
+            inputs: {
+                pixels: ['192:42', 0],
+                vae: ['192:39', 0]
+            },
+            class_type: 'VAEEncode',
+            _meta: {
+                title: 'VAE Encode'
+            }
+        },
+        '192:35': {
+            inputs: {
+                guidance: 2.5,
+                conditioning: ['192:177', 0]
+            },
+            class_type: 'FluxGuidance',
+            _meta: {
+                title: 'FluxGuidance'
+            }
+        },
+        '192:37': {
+            inputs: {
+                unet_name: 'flux1-dev-kontext_fp8_scaled.safetensors',
+                weight_dtype: 'default'
+            },
+            class_type: 'UNETLoader',
+            _meta: {
+                title: 'Load Diffusion Model'
+            }
+        },
+        '192:177': {
+            inputs: {
+                conditioning: ['192:6', 0],
+                latent: ['192:124', 0]
+            },
+            class_type: 'ReferenceLatent',
+            _meta: {
+                title: 'ReferenceLatent'
+            }
+        },
+        '192:146': {
+            inputs: {
+                direction: 'right',
+                match_image_size: true,
+                spacing_width: 0,
+                spacing_color: 'white',
+                image1: ['190', 0]
+            },
+            class_type: 'ImageStitch',
+            _meta: {
+                title: 'Image Stitch'
+            }
+        },
+        '192:42': {
+            inputs: {
+                image: ['192:146', 0]
+            },
+            class_type: 'FluxKontextImageScale',
+            _meta: {
+                title: 'FluxKontextImageScale'
+            }
+        },
+        '192:31': {
+            inputs: {
+                seed: 21681712044228,
+                steps: 20,
+                cfg: 1,
+                sampler_name: 'euler',
+                scheduler: 'simple',
+                denoise: 1,
+                model: ['192:37', 0],
+                positive: ['192:35', 0],
+                negative: ['192:135', 0],
+                latent_image: ['192:124', 0]
+            },
+            class_type: 'KSampler',
+            _meta: {
+                title: 'KSampler'
+            }
+        },
+        '192:6': {
+            inputs: {
+                text: prompt,
+                clip: ['192:38', 0]
+            },
+            class_type: 'CLIPTextEncode',
+            _meta: {
+                title: 'CLIP Text Encode (Positive Prompt)'
+            }
+        }
+    };
+}
+
+async function uploadImage(file: Buffer, filename: string): Promise<string> {
+    const form = new FormData();
+
+    form.append('image', new Blob([file]), filename);
+
+    const res = await fetch(`${IMAGE_API_URL}/upload/image`, {
+        method: 'POST',
+        body: form
+    });
+
+    if (!res.ok) {
+        throw new Error(`Failed to upload source image with status ${res.status}`);
+    }
+
+    const json = (await res.json()) as { name: string };
+
+    if (!json.name) {
+        throw new Error('Image upload response did not include a filename');
+    }
+
+    return json.name;
 }
