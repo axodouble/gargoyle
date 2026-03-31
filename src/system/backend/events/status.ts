@@ -55,7 +55,7 @@ function getStatusMessage(client: GargoyleClient): string {
         'The voices are getting louder',
         'Nevermind change of plans, tomorrow.',
         'Use /daily!',
-        'Use /disguise to disguise the bot as someone else!',
+        'Use /disguise to disguise the bot as something else!',
         'I cried against an ocean of light'
     ];
 
