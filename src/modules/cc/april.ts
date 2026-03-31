@@ -10,6 +10,7 @@ import {
     ChatInputCommandInteraction,
     ClientEvents,
     ContainerBuilder,
+    DiscordAPIError,
     Events,
     InteractionReplyOptions,
     Message,
@@ -28,7 +29,7 @@ export default class AprilFirst extends GargoyleModule {
 
     public override slashCommands: GargoyleSlashCommandBuilder[] = [
         new GargoyleSlashCommandBuilder()
-            .setName('store')
+            .setName('purchase')
             .setDescription('Purchase things')
             .addGuilds(...this.guilds) as GargoyleSlashCommandBuilder,
         new GargoyleSlashCommandBuilder()
@@ -56,7 +57,18 @@ export default class AprilFirst extends GargoyleModule {
             const target = interaction.options.getUser('user', true);
             const member = interaction.guild?.members.cache.get(target.id);
             if (member) {
-                await member.timeout(30 * 60 * 1000, `Timed out by ${interaction.user.tag} using April First timeout purchase`);
+                try {
+                    await member.timeout(30 * 60 * 1000, `Timed out by ${interaction.user.tag} using April First timeout purchase`);
+                } catch (error) {
+                    if (isIgnorableDiscordApiError(error)) {
+                        await interaction.reply({
+                            content: 'I do not have permission to timeout that user.',
+                            flags: [MessageFlags.Ephemeral]
+                        });
+                        return;
+                    }
+                    throw error;
+                }
                 user.timeout_30 -= 1;
                 await client.db.setAprilFirstUser(interaction.user.id, {
                     timeout_30: user.timeout_30
@@ -266,13 +278,36 @@ class AprilFirstMessage extends GargoyleEvent {
 
         if (message.mentions.members) {
             if (message.mentions.members.size > user.mention_rights) {
-                await message.delete();
-                await message.channel.send({
-                    content:
-                        `<@!${message.member.id}>, you have exceeded your mention rights and your message has been deleted.` +
-                        `\nBuy more mention rights in the store to avoid this in the future.` +
-                        `\n-# \`/purchase\` in the store to buy more mention rights.`
-                });
+                try {
+                    await message.delete();
+                } catch (error) {
+                    if (!isIgnorableDiscordApiError(error)) {
+                        throw error;
+                    }
+                }
+                try {
+                    await message.channel
+                        .send({
+                            content:
+                                `<@!${message.member.id}>, you have exceeded your mention rights and your message has been deleted.` +
+                                `\nBuy more mention rights in the store to avoid this in the future.` +
+                                `\n-# \`/purchase\` in the store to buy more mention rights.`,
+                            allowedMentions: { users: [] }
+                        })
+                        .then((sentMessage) => {
+                            setTimeout(() => {
+                                sentMessage.delete().catch((error) => {
+                                    if (!isIgnorableDiscordApiError(error)) {
+                                        client.logger.error('Failed to delete store warning message:', error);
+                                    }
+                                });
+                            }, 15000);
+                        });
+                } catch (error) {
+                    if (!isIgnorableDiscordApiError(error)) {
+                        throw error;
+                    }
+                }
                 user.mention_rights = Math.max(user.mention_rights - message.mentions.members.size, 0);
                 await client.db.setAprilFirstUser(message.member.user.id, {
                     mention_rights: user.mention_rights
@@ -286,13 +321,25 @@ class AprilFirstMessage extends GargoyleEvent {
         }
 
         if (user.message_rights <= 0) {
-            await message.delete();
-            await message.channel.send({
-                content:
-                    `<@!${message.member.id}>, you have no message rights left and your message has been deleted.` +
-                    `\nBuy more message rights in the store to avoid this in the future.` +
-                    `\n-# \`/purchase\` in the store to buy more message rights.`
-            });
+            try {
+                await message.delete();
+            } catch (error) {
+                if (!isIgnorableDiscordApiError(error)) {
+                    throw error;
+                }
+            }
+            try {
+                await message.channel.send({
+                    content:
+                        `<@!${message.member.id}>, you have no message rights left and your message has been deleted.` +
+                        `\nBuy more message rights in the store to avoid this in the future.` +
+                        `\n-# \`/purchase\` in the store to buy more message rights.`
+                });
+            } catch (error) {
+                if (!isIgnorableDiscordApiError(error)) {
+                    throw error;
+                }
+            }
             return;
         }
 
@@ -311,20 +358,49 @@ class AprilFirstMessage extends GargoyleEvent {
         const member = message.guild?.members.cache.get(message.member.id);
         if (!member) return;
 
-        await member.roles.add(kingRole);
+        try {
+            await member.roles.add(kingRole);
+        } catch (error) {
+            if (isIgnorableDiscordApiError(error)) {
+                return;
+            }
+            throw error;
+        }
+
+        const previousKingRoleHolder = this.kingRoleHolder;
         if (this.kingRoleHolder) {
             const previousHolder = message.guild?.members.cache.get(this.kingRoleHolder);
             if (previousHolder) {
-                await previousHolder.roles.remove(kingRole);
+                try {
+                    await previousHolder.roles.remove(kingRole);
+                } catch (error) {
+                    if (!isIgnorableDiscordApiError(error)) {
+                        throw error;
+                    }
+                }
             }
         }
         this.kingRoleHolder = message.member.id;
 
-        await message.reply({
-            content: `You have stolen the crown from <@!${this.kingRoleHolder}> and are now the new King!`,
-            allowedMentions: { users: [] }
-        });
+        try {
+            await message.reply({
+                content: `You have stolen the crown from <@!${previousKingRoleHolder ?? 'Unknown'}> and are now the new King!`,
+                allowedMentions: { users: [] }
+            });
+        } catch (error) {
+            if (!isIgnorableDiscordApiError(error)) {
+                throw error;
+            }
+        }
     }
+}
+
+function isIgnorableDiscordApiError(error: unknown): boolean {
+    if (!(error instanceof DiscordAPIError)) {
+        return false;
+    }
+
+    return error.code === 50013 || error.code === 10008;
 }
 
 enum StoreEmojis {

@@ -237,7 +237,13 @@ class Database {
 
         const aprilUser = await this.drizzle.select().from(schema.aprilFirstTable).where(eq(schema.aprilFirstTable.user_id, userId)).execute();
         if (options?.exists && aprilUser.length === 0) {
-            await this.drizzle.insert(schema.aprilFirstTable).values({ user_id: userId }).execute();
+            // Ensure FK parent row exists before creating April First data.
+            await this.getUser(userId, { exists: true });
+            await this.drizzle
+                .insert(schema.aprilFirstTable)
+                .values({ user_id: userId })
+                .onConflictDoNothing({ target: schema.aprilFirstTable.user_id })
+                .execute();
             return (await this.getAprilFirstUser(userId, { exists: true })) as typeof schema.aprilFirstTable.$inferSelect;
         }
         return aprilUser[0] || null;
