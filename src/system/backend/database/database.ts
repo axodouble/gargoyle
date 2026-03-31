@@ -51,7 +51,11 @@ class Database {
 
         const guild = await this.drizzle.select().from(schema.guildsTable).where(eq(schema.guildsTable.guild_id, guildId)).execute();
         if (options?.exists && guild.length === 0) {
-            await this.drizzle.insert(schema.guildsTable).values({ guild_id: guildId }).execute();
+            await this.drizzle
+                .insert(schema.guildsTable)
+                .values({ guild_id: guildId })
+                .onConflictDoNothing({ target: schema.guildsTable.guild_id })
+                .execute();
             return (await this.getGuild(guildId, { exists: true })) as typeof schema.guildsTable.$inferSelect;
         }
         return guild[0] || null;
@@ -98,7 +102,11 @@ class Database {
             .where(and(eq(schema.guildUsersTable.user_id, userId), eq(schema.guildUsersTable.guild_id, guildId)))
             .execute();
         if (options?.exists && guildUser.length === 0) {
-            await this.drizzle.insert(schema.guildUsersTable).values({ user_id: userId, guild_id: guildId }).execute();
+            await this.drizzle
+                .insert(schema.guildUsersTable)
+                .values({ user_id: userId, guild_id: guildId })
+                .onConflictDoNothing({ target: [schema.guildUsersTable.user_id, schema.guildUsersTable.guild_id] })
+                .execute();
             return (await this.getGuildUser(userId, guildId, { exists: true })) as typeof schema.guildUsersTable.$inferSelect;
         }
         return guildUser[0] || null;
@@ -138,7 +146,11 @@ class Database {
 
         const user = await this.drizzle.select().from(schema.usersTable).where(eq(schema.usersTable.user_id, userId)).execute();
         if (options?.exists && user.length === 0) {
-            await this.drizzle.insert(schema.usersTable).values({ user_id: userId }).execute();
+            await this.drizzle
+                .insert(schema.usersTable)
+                .values({ user_id: userId })
+                .onConflictDoNothing({ target: schema.usersTable.user_id })
+                .execute();
             return (await this.getUser(userId, { exists: true })) as typeof schema.usersTable.$inferSelect;
         }
         return user[0] || null;
@@ -182,15 +194,15 @@ class Database {
                 if (!user.user_id) {
                     throw new Error('User ID is required');
                 }
-                const existingUser = await tx.select().from(schema.usersTable).where(eq(schema.usersTable.user_id, user.user_id)).execute();
-                if (existingUser.length > 0) {
-                    await tx.update(schema.usersTable).set(user).where(eq(schema.usersTable.user_id, user.user_id)).execute();
-                } else {
-                    await tx
-                        .insert(schema.usersTable)
-                        .values(user as typeof schema.usersTable.$inferInsert)
-                        .execute();
-                }
+                const { user_id, ...userData } = user;
+                await tx
+                    .insert(schema.usersTable)
+                    .values({ user_id, ...userData } as typeof schema.usersTable.$inferInsert)
+                    .onConflictDoUpdate({
+                        target: schema.usersTable.user_id,
+                        set: userData
+                    })
+                    .execute();
             }
         });
 
