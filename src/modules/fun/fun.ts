@@ -13,6 +13,24 @@ import {
     MessageFlags,
     VoiceChannel
 } from 'discord.js';
+import { randomUUID } from 'crypto';
+
+const IMAGE_API = process.env.IMAGE_API;
+const IMAGE_API_URL = IMAGE_API ? `http://${IMAGE_API}` : '';
+const IMAGE_WS_URL = IMAGE_API ? `ws://${IMAGE_API}` : '';
+
+const IMAGE_TIMEOUT_MS = 180000;
+const HISTORY_RETRY_DELAY_MS = 1500;
+
+type PromptResponse = {
+    prompt_id: string;
+};
+
+type ImageInfo = {
+    filename: string;
+    subfolder?: string;
+    type: string;
+};
 
 export default class Fun extends GargoyleModule {
     public override name: string = 'fun';
@@ -68,6 +86,13 @@ export default class Fun extends GargoyleModule {
                             )
                     )
             )
+            .addSubcommand((subcommand) =>
+                subcommand
+                    .setName('image')
+                    .setDescription('Generate an image based on a prompt.')
+                    .addStringOption((option) => option.setName('prompt').setDescription('The prompt to generate the image from.').setRequired(true))
+                    .addBooleanOption((option) => option.setName('hidden').setDescription('Whether the image should be hidden.').setRequired(false))
+            )
             .addSubcommand((subcommand) => subcommand.setName('truth-or-dare').setDescription('Truth or dare related commands.'))
             .addSubcommand((subcommand) =>
                 subcommand
@@ -95,6 +120,10 @@ export default class Fun extends GargoyleModule {
 
         if (subcommandGroup === 'text') {
             return textReplace(interaction);
+        }
+
+        if (subcommand === 'image') {
+            return image(client, interaction);
         }
 
         if (subcommand === 'truth-or-dare') {
@@ -133,6 +162,314 @@ export default class Fun extends GargoyleModule {
 
         return null;
     }
+}
+
+async function image(client: GargoyleClient, interaction: ChatInputCommandInteraction) {
+    if (interaction.user.id !== '244173330431737866') {
+        await interaction.reply({
+            content:
+                'Image generation is currently in early access and is only available to select users. If you are interested in gaining access, please contact an @axodouble.',
+            flags: [MessageFlags.Ephemeral]
+        });
+        return;
+    }
+
+    if (!IMAGE_API) {
+        await interaction.reply({
+            content: 'Image generation is not configured on this bot instance. Please contact an administrator.'
+        });
+        return;
+    }
+
+    const prompt = interaction.options.getString('prompt', true);
+    const hidden = interaction.options.getBoolean('hidden') ? MessageFlags.Ephemeral : undefined;
+    await interaction.deferReply({ flags: hidden });
+
+    try {
+        const imageBuffer = await generateImage(client, prompt);
+
+        await interaction.editReply({
+            content: `Generated image for prompt: \`${prompt.slice(0, 150)}${prompt.length > 150 ? '...' : ''}\``,
+            files: [{ attachment: imageBuffer, name: 'generated.png' }]
+        });
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        client.logger.error(`Image generation failed: ${errorMessage}`);
+
+        await interaction.editReply({
+            content: 'Image generation failed. Please try again in a moment.'
+        });
+    }
+}
+
+async function generateImage(client: GargoyleClient, prompt: string): Promise<Buffer> {
+    const promptData = comfyUi(prompt);
+    const clientId = randomUUID();
+
+    const request = await fetch(`${IMAGE_API_URL}/prompt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: promptData, client_id: clientId })
+    });
+
+    if (!request.ok) {
+        throw new Error(`Image queue request failed with status ${request.status}`);
+    }
+
+    const response = (await request.json()) as PromptResponse;
+
+    if (!response.prompt_id) {
+        throw new Error('Image queue response did not include a prompt id');
+    }
+
+    client.logger.info(`Queued image: ${response.prompt_id}`);
+
+    await waitForCompletion(client, response.prompt_id, clientId, IMAGE_TIMEOUT_MS);
+
+    const imageInfo = await getImageInfo(client, response.prompt_id, IMAGE_TIMEOUT_MS);
+
+    const buffer = await downloadImage(imageInfo);
+
+    return buffer;
+}
+
+async function waitForCompletion(client: GargoyleClient, promptId: string, clientId: string, timeoutMs: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const ws = new WebSocket(`${IMAGE_WS_URL}/ws?clientId=${encodeURIComponent(clientId)}`);
+        const timeout = setTimeout(() => {
+            ws.close();
+            reject(new Error(`Image generation timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
+
+        let settled = false;
+
+        const finish = (fn: () => void) => {
+            if (settled) {
+                return;
+            }
+
+            settled = true;
+            clearTimeout(timeout);
+            fn();
+        };
+
+        ws.onopen = () => {
+            client.logger.trace(`Connected to image websocket for prompt ${promptId}`);
+        };
+
+        ws.onmessage = (event) => {
+            const payload = typeof event.data === 'string' ? event.data : event.data.toString();
+            const msg = JSON.parse(payload) as {
+                type?: string;
+                data?: {
+                    prompt_id?: string;
+                    node?: string | null;
+                    value?: number;
+                    max?: number;
+                };
+            };
+
+            if (msg.data?.prompt_id && msg.data.prompt_id !== promptId) {
+                return;
+            }
+
+            if (msg.type === 'progress') {
+                client.logger.trace(`Image progress ${msg.data?.value ?? 0}/${msg.data?.max ?? 0} for ${promptId}`);
+            }
+
+            if (msg.type === 'execution_success') {
+                ws.close();
+                finish(resolve);
+                return;
+            }
+
+            if (msg.type === 'execution_error') {
+                ws.close();
+                finish(() => reject(new Error('ComfyUI execution failed')));
+            }
+        };
+
+        ws.onerror = () => {
+            finish(() => reject(new Error('Image websocket connection failed')));
+        };
+
+        ws.onclose = () => {
+            client.logger.trace(`Image websocket closed for prompt ${promptId}`);
+        };
+    });
+}
+
+async function getImageInfo(client: GargoyleClient, promptId: string, timeoutMs: number): Promise<ImageInfo> {
+    const start = Date.now();
+    let attempt = 0;
+
+    while (Date.now() - start < timeoutMs) {
+        attempt++;
+        const res = await fetch(`${IMAGE_API_URL}/history/${promptId}`);
+
+        if (!res.ok) {
+            throw new Error(`Failed to fetch image history with status ${res.status}`);
+        }
+
+        const json = (await res.json()) as Record<
+            string,
+            {
+                outputs?: Record<
+                    string,
+                    {
+                        images?: ImageInfo[];
+                    }
+                >;
+            }
+        >;
+
+        const entry = json[promptId];
+
+        if (entry?.outputs) {
+            for (const nodeId of Object.keys(entry.outputs)) {
+                const node = entry.outputs[nodeId];
+
+                if (node.images && node.images.length > 0) {
+                    return node.images[0];
+                }
+            }
+        }
+
+        client.logger.trace(`No image output yet for ${promptId}, retry ${attempt}`);
+        await Bun.sleep(HISTORY_RETRY_DELAY_MS);
+    }
+
+    throw new Error(`No images found in output history within ${timeoutMs}ms`);
+}
+
+async function downloadImage(image: ImageInfo): Promise<Buffer> {
+    const url = new URL(`${IMAGE_API_URL}/view`);
+    url.searchParams.set('filename', image.filename);
+    url.searchParams.set('type', image.type);
+    if (image.subfolder) {
+        url.searchParams.set('subfolder', image.subfolder);
+    }
+
+    const res = await fetch(url.toString());
+
+    if (!res.ok) {
+        throw new Error(`Failed to download image with status ${res.status}`);
+    }
+
+    return Buffer.from(await res.arrayBuffer());
+}
+
+function comfyUi(prompt: string) {
+    return {
+        '9': {
+            inputs: {
+                filename_prefix: 'z-image-turbo',
+                images: ['57:8', 0]
+            },
+            class_type: 'SaveImage',
+            _meta: {
+                title: 'Save Image'
+            }
+        },
+        '57:30': {
+            inputs: {
+                clip_name: 'qwen_3_4b.safetensors',
+                type: 'lumina2',
+                device: 'default'
+            },
+            class_type: 'CLIPLoader',
+            _meta: {
+                title: 'Load CLIP'
+            }
+        },
+        '57:29': {
+            inputs: {
+                vae_name: 'ae.safetensors'
+            },
+            class_type: 'VAELoader',
+            _meta: {
+                title: 'Load VAE'
+            }
+        },
+        '57:33': {
+            inputs: {
+                conditioning: ['57:27', 0]
+            },
+            class_type: 'ConditioningZeroOut',
+            _meta: {
+                title: 'ConditioningZeroOut'
+            }
+        },
+        '57:8': {
+            inputs: {
+                samples: ['57:3', 0],
+                vae: ['57:29', 0]
+            },
+            class_type: 'VAEDecode',
+            _meta: {
+                title: 'VAE Decode'
+            }
+        },
+        '57:28': {
+            inputs: {
+                unet_name: 'z_image_turbo_bf16.safetensors',
+                weight_dtype: 'default'
+            },
+            class_type: 'UNETLoader',
+            _meta: {
+                title: 'Load Diffusion Model'
+            }
+        },
+        '57:27': {
+            inputs: {
+                text: prompt,
+                clip: ['57:30', 0]
+            },
+            class_type: 'CLIPTextEncode',
+            _meta: {
+                title: 'CLIP Text Encode (Prompt)'
+            }
+        },
+        '57:13': {
+            inputs: {
+                width: 1024,
+                height: 1024,
+                batch_size: 1
+            },
+            class_type: 'EmptySD3LatentImage',
+            _meta: {
+                title: 'EmptySD3LatentImage'
+            }
+        },
+        '57:11': {
+            inputs: {
+                shift: 3,
+                model: ['57:28', 0]
+            },
+            class_type: 'ModelSamplingAuraFlow',
+            _meta: {
+                title: 'ModelSamplingAuraFlow'
+            }
+        },
+        '57:3': {
+            inputs: {
+                seed: 475419654095006,
+                steps: 8,
+                cfg: 1,
+                sampler_name: 'res_multistep',
+                scheduler: 'simple',
+                denoise: 1,
+                model: ['57:11', 0],
+                positive: ['57:27', 0],
+                negative: ['57:33', 0],
+                latent_image: ['57:13', 0]
+            },
+            class_type: 'KSampler',
+            _meta: {
+                title: 'KSampler'
+            }
+        }
+    };
 }
 
 function textReplace(interaction: ChatInputCommandInteraction): Promise<InteractionResponse<boolean>> {
