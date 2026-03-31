@@ -94,9 +94,13 @@ export default class AprilFirst extends GargoyleModule {
             const selectedOption = interaction.values[0];
             let cost = 0;
             switch (selectedOption) {
-                case 'message_rights':
+                case 'message_rights_5':
                     aprilUser.message_rights += 5;
                     cost = 5;
+                    break;
+                case 'message_rights_25':
+                    aprilUser.message_rights += 25;
+                    cost = 20;
                     break;
                 case 'mention_rights':
                     aprilUser.mention_rights += 5;
@@ -188,7 +192,11 @@ export default class AprilFirst extends GargoyleModule {
                                 .addOptions([
                                     {
                                         label: 'Message Rights x 5 - $5',
-                                        value: 'message_rights'
+                                        value: 'message_rights_5'
+                                    },
+                                    {
+                                        label: 'Message Rights x 25 - $20',
+                                        value: 'message_rights_25'
                                     },
                                     {
                                         label: 'Mention Rights x 5 - $10',
