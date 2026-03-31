@@ -19,9 +19,12 @@ import {
     MessageCreateOptions,
     MessageFlags,
     PartialGroupDMChannel,
+    Role,
     TextDisplayBuilder,
     VoiceBasedChannel
 } from 'discord.js';
+
+const KING_ROLE_NAME = 'King of April 2026';
 
 export default class AprilFirst extends GargoyleModule {
     public guilds = ['324195889977622530'];
@@ -292,37 +295,37 @@ export default class AprilFirst extends GargoyleModule {
             if (!guild) continue;
 
             await guild.roles.fetch();
-            const kingRole = guild.roles.cache.find((r) => r.name === 'King of April 2026');
+            const kingRole = guild.roles.cache.find((r) => r.name === KING_ROLE_NAME);
             if (!kingRole) {
-                client.logger.error(`Could not find King of April 2026 role in guild ${guildId}. Skipping...`);
+                client.logger.error(`Could not find ${KING_ROLE_NAME} role in guild ${guildId}. Skipping...`);
                 continue;
             }
 
             const fetchedRole = await guild.roles.fetch(kingRole.id);
-            const kingMember = fetchedRole!.members.first();
-
-            // If there are more than 1 members with the role, get rid of all members except the first one
-            if (fetchedRole && fetchedRole.members.size > 1) {
-                const membersToRemove = Array.from(fetchedRole.members.values()).slice(1);
-                for (const member of membersToRemove) {
-                    try {
-                        await member.roles.remove(kingRole);
-                        client.logger.info(`Removed King of April 2026 role from ${member.user.tag} in guild ${guildId} to ensure only one holder.`);
-                    } catch (error) {
-                        if (!isIgnorableDiscordApiError(error)) {
-                            client.logger.error(
-                                `Failed to remove King of April 2026 role from ${member.user.tag} in guild ${guildId}: ${error instanceof Error ? error.message : String(error)}`
-                            );
-                        }
-                    }
-                }
+            if (!fetchedRole) {
+                client.logger.error(`Failed to fetch ${KING_ROLE_NAME} role in guild ${guildId}. Skipping...`);
+                continue;
             }
 
-            if (kingMember) {
-                this.kingRoleHolder = kingMember.user.id;
-                client.logger.info(`Found King of April 2026 role holder: ${this.kingRoleHolder}`);
+            try {
+                await guild.members.fetch();
+            } catch (error) {
+                client.logger.error(
+                    `Failed to fetch guild members for guild ${guildId} before reconciling ${KING_ROLE_NAME}: ${error instanceof Error ? error.message : String(error)}`
+                );
+                continue;
+            }
+
+            const currentKing = fetchedRole.members.first();
+
+            if (currentKing) {
+                const didReconcile = await this.enforceSingleKingRoleHolder(client, fetchedRole, currentKing.id);
+                if (!didReconcile) {
+                    continue;
+                }
+                client.logger.info(`Found ${KING_ROLE_NAME} holder: ${this.kingRoleHolder}`);
                 break;
-            } else if (!kingMember) {
+            } else {
                 const generalChannel = guild.channels.cache.find((c) => c.name.toLowerCase().includes('general'));
 
                 if (!generalChannel || !generalChannel.isTextBased()) {
@@ -335,30 +338,79 @@ export default class AprilFirst extends GargoyleModule {
                 // Assign role to a random member and announce it in the general channel
                 const randomMember = guild.members.cache.filter((m) => !m.user.bot).random();
                 if (randomMember) {
-                    try {
-                        await randomMember.roles.add(kingRole);
-                        this.kingRoleHolder = randomMember.user.id;
-                        client.logger.info(
-                            `Assigned King of April 2026 role to ${randomMember.user.tag} in guild ${guildId} as no current holder was found.`
-                        );
-                        await generalChannel.send({
-                            content: `The King of April 2026 role had no holder, so it has been assigned to <@!${randomMember.user.id}>. Long live the king!`
-                        });
-                    } catch (error) {
-                        if (!isIgnorableDiscordApiError(error)) {
-                            client.logger.error(
-                                `Failed to assign King of April 2026 role to ${randomMember.user.tag} in guild ${guildId}:`,
-                                `${error}`
-                            );
-                        }
+                    const didAssign = await this.enforceSingleKingRoleHolder(client, fetchedRole, randomMember.id);
+                    if (!didAssign) {
+                        continue;
                     }
+
+                    client.logger.info(
+                        `Assigned ${KING_ROLE_NAME} role to ${randomMember.user.tag} in guild ${guildId} as no current holder was found.`
+                    );
+                    await generalChannel.send({
+                        content: `The ${KING_ROLE_NAME} role had no holder, so it has been assigned to <@!${randomMember.user.id}>. Long live the king!`
+                    });
                 } else {
                     client.logger.warning(
-                        `Could not find any non-bot members in guild ${guildId} to assign the King of April 2026 role to. Skipping...`
+                        `Could not find any non-bot members in guild ${guildId} to assign the ${KING_ROLE_NAME} role to. Skipping...`
                     );
                 }
             }
         }
+    }
+
+    public async enforceSingleKingRoleHolder(client: GargoyleClient, kingRole: Role, memberId: string): Promise<boolean> {
+        const guild = kingRole.guild;
+
+        try {
+            await guild.members.fetch();
+        } catch (error) {
+            client.logger.error(
+                `Failed to fetch guild members for guild ${guild.id} while reconciling ${KING_ROLE_NAME}: ${error instanceof Error ? error.message : String(error)}`
+            );
+            return false;
+        }
+
+        const targetMember = guild.members.cache.get(memberId) ?? (await guild.members.fetch(memberId).catch(() => null));
+
+        if (!targetMember) {
+            client.logger.warning(`Could not find target member ${memberId} in guild ${guild.id} while reconciling ${KING_ROLE_NAME}.`);
+            return false;
+        }
+
+        const membersWithRole = Array.from(kingRole.members.values());
+        for (const member of membersWithRole) {
+            if (member.id === targetMember.id) continue;
+
+            try {
+                await member.roles.remove(kingRole);
+                client.logger.info(`Removed ${KING_ROLE_NAME} role from ${member.user.tag} in guild ${guild.id} to enforce a single holder.`);
+            } catch (error) {
+                if (!isIgnorableDiscordApiError(error)) {
+                    client.logger.error(
+                        `Failed to remove ${KING_ROLE_NAME} role from ${member.user.tag} in guild ${guild.id}: ${error instanceof Error ? error.message : String(error)}`
+                    );
+                    return false;
+                }
+            }
+        }
+
+        if (!targetMember.roles.cache.has(kingRole.id)) {
+            try {
+                await targetMember.roles.add(kingRole);
+            } catch (error) {
+                if (isIgnorableDiscordApiError(error)) {
+                    return false;
+                }
+
+                client.logger.error(
+                    `Failed to assign ${KING_ROLE_NAME} role to ${targetMember.user.tag} in guild ${guild.id}: ${error instanceof Error ? error.message : String(error)}`
+                );
+                return false;
+            }
+        }
+
+        this.kingRoleHolder = targetMember.id;
+        return true;
     }
 
     /**
@@ -473,35 +525,17 @@ class AprilFirstMessage extends GargoyleEvent {
 
         if (!message.mentions.users.some((u) => u.id === this.module.kingRoleHolder)) return;
 
-        const kingRole = message.guild?.roles.cache.find((r) => r.name === 'King of April 2026');
+        const kingRole = message.guild?.roles.cache.find((r) => r.name === KING_ROLE_NAME);
         if (!kingRole) return;
 
         const member = message.guild?.members.cache.get(message.member.id);
         if (!member) return;
 
-        try {
-            await member.roles.add(kingRole);
-        } catch (error) {
-            if (isIgnorableDiscordApiError(error)) {
-                return;
-            }
-            throw error;
-        }
-
         const previousKingRoleHolder = this.module.kingRoleHolder;
-        if (this.module.kingRoleHolder) {
-            const previousHolder = message.guild?.members.cache.get(this.module.kingRoleHolder);
-            if (previousHolder) {
-                try {
-                    await previousHolder.roles.remove(kingRole);
-                } catch (error) {
-                    if (!isIgnorableDiscordApiError(error)) {
-                        throw error;
-                    }
-                }
-            }
+        const didTransfer = await this.module.enforceSingleKingRoleHolder(client, kingRole, member.id);
+        if (!didTransfer) {
+            return;
         }
-        this.module.kingRoleHolder = message.member.id;
 
         try {
             await message.reply({
