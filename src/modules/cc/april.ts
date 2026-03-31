@@ -42,7 +42,7 @@ export default class AprilFirst extends GargoyleModule {
     public override async executeSlashCommand(client: GargoyleClient, interaction: ChatInputCommandInteraction): Promise<void> {
         if (!client.db) return;
 
-        if (interaction.commandName === 'store') {
+        if (interaction.commandName === 'purchase') {
             await interaction.reply(this.storeUi(interaction.user.id) as InteractionReplyOptions);
         } else if (interaction.commandName === 'april_timeout') {
             const user = await client.db.getAprilFirstUser(interaction.user.id, { exists: true });
