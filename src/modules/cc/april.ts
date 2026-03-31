@@ -18,6 +18,8 @@ import {
     MessageActionRowComponentBuilder,
     MessageCreateOptions,
     MessageFlags,
+    Guild,
+    GuildMember,
     PartialGroupDMChannel,
     Role,
     TextDisplayBuilder,
@@ -25,6 +27,9 @@ import {
 } from 'discord.js';
 
 const KING_ROLE_NAME = 'King of April 2026';
+const KING_ROLE_FIX_INTERVAL_MS = 20 * 60 * 1000;
+const KING_ROLE_RECONCILE_COOLDOWN_MS = 60 * 1000;
+const KING_ROLE_API_DELAY_MS = 500;
 
 export default class AprilFirst extends GargoyleModule {
     public guilds = ['324195889977622530'];
@@ -32,6 +37,8 @@ export default class AprilFirst extends GargoyleModule {
     public override category: string = 'fun';
 
     public kingRoleHolder: string | null = null;
+    private isFixKingRoleRunning: boolean = false;
+    private nextKingRoleFixAt: number = 0;
 
     public override slashCommands: GargoyleSlashCommandBuilder[] = [
         new GargoyleSlashCommandBuilder()
@@ -248,12 +255,12 @@ export default class AprilFirst extends GargoyleModule {
         );
 
         // Fix king role
-        this.fixKingRole(client);
+        void this.scheduleKingRoleFix(client);
         setInterval(
             () => {
-                this.fixKingRole(client);
+                void this.scheduleKingRoleFix(client);
             },
-            10 * 60 * 1000
+            KING_ROLE_FIX_INTERVAL_MS
         );
 
         // Announce king role holder every hour in the general channel of each guild
@@ -289,6 +296,26 @@ export default class AprilFirst extends GargoyleModule {
         }
     }
 
+    private async scheduleKingRoleFix(client: GargoyleClient): Promise<void> {
+        if (this.isFixKingRoleRunning) {
+            client.logger.debug(`${KING_ROLE_NAME} reconciliation is already running; skipping duplicate invocation.`);
+            return;
+        }
+
+        if (Date.now() < this.nextKingRoleFixAt) {
+            client.logger.debug(`Skipping ${KING_ROLE_NAME} reconciliation due to cooldown.`);
+            return;
+        }
+
+        this.isFixKingRoleRunning = true;
+        try {
+            await this.fixKingRole(client);
+        } finally {
+            this.isFixKingRoleRunning = false;
+            this.nextKingRoleFixAt = Date.now() + KING_ROLE_RECONCILE_COOLDOWN_MS;
+        }
+    }
+
     private async fixKingRole(client: GargoyleClient): Promise<void> {
         for (const guildId of this.guilds) {
             const guild = client.guilds.cache.get(guildId);
@@ -304,15 +331,6 @@ export default class AprilFirst extends GargoyleModule {
             const fetchedRole = await guild.roles.fetch(kingRole.id);
             if (!fetchedRole) {
                 client.logger.error(`Failed to fetch ${KING_ROLE_NAME} role in guild ${guildId}. Skipping...`);
-                continue;
-            }
-
-            try {
-                await guild.members.fetch();
-            } catch (error) {
-                client.logger.error(
-                    `Failed to fetch guild members for guild ${guildId} before reconciling ${KING_ROLE_NAME}: ${error instanceof Error ? error.message : String(error)}`
-                );
                 continue;
             }
 
@@ -336,7 +354,7 @@ export default class AprilFirst extends GargoyleModule {
                 }
 
                 // Assign role to a random member and announce it in the general channel
-                const randomMember = guild.members.cache.filter((m) => !m.user.bot).random();
+                const randomMember = await this.getRandomNonBotMember(guild);
                 if (randomMember) {
                     const didAssign = await this.enforceSingleKingRoleHolder(client, fetchedRole, randomMember.id);
                     if (!didAssign) {
@@ -358,19 +376,37 @@ export default class AprilFirst extends GargoyleModule {
         }
     }
 
+    private async getRandomNonBotMember(guild: Guild): Promise<GuildMember | null> {
+        const cachedMember = guild.members.cache.filter((member) => !member.user.bot).random();
+        if (cachedMember) {
+            return cachedMember;
+        }
+
+        try {
+            const owner = await guild.fetchOwner();
+            if (!owner.user.bot) {
+                return owner;
+            }
+        } catch {
+            // Ignore and allow caller to handle the missing candidate.
+        }
+
+        return null;
+    }
+
     public async enforceSingleKingRoleHolder(client: GargoyleClient, kingRole: Role, memberId: string): Promise<boolean> {
         const guild = kingRole.guild;
 
-        try {
-            await guild.members.fetch();
-        } catch (error) {
-            client.logger.error(
-                `Failed to fetch guild members for guild ${guild.id} while reconciling ${KING_ROLE_NAME}: ${error instanceof Error ? error.message : String(error)}`
-            );
-            return false;
-        }
-
-        const targetMember = guild.members.cache.get(memberId) ?? (await guild.members.fetch(memberId).catch(() => null));
+        const targetMember =
+            guild.members.cache.get(memberId) ??
+            (await guild.members.fetch(memberId).catch((error) => {
+                client.logger.warning(
+                    `Failed to fetch target member ${memberId} in guild ${guild.id} while reconciling ${KING_ROLE_NAME}: ${
+                        error instanceof Error ? error.message : String(error)
+                    }`
+                );
+                return null;
+            }));
 
         if (!targetMember) {
             client.logger.warning(`Could not find target member ${memberId} in guild ${guild.id} while reconciling ${KING_ROLE_NAME}.`);
@@ -392,6 +428,8 @@ export default class AprilFirst extends GargoyleModule {
                     return false;
                 }
             }
+
+            await sleep(KING_ROLE_API_DELAY_MS);
         }
 
         if (!targetMember.roles.cache.has(kingRole.id)) {
@@ -407,6 +445,8 @@ export default class AprilFirst extends GargoyleModule {
                 );
                 return false;
             }
+
+            await sleep(KING_ROLE_API_DELAY_MS);
         }
 
         this.kingRoleHolder = targetMember.id;
@@ -556,6 +596,10 @@ function isIgnorableDiscordApiError(error: unknown): boolean {
     }
 
     return error.code === 50013 || error.code === 10008;
+}
+
+function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 enum StoreEmojis {
