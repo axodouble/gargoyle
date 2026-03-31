@@ -1,15 +1,22 @@
 import GargoyleClient from '@classes/gargoyleClient.js';
 import GargoyleModule from '@src/system/backend/classes/gargoyleModule.js';
+import GargoyleButtonBuilder from '@src/system/backend/builders/gargoyleButtonBuilder.js';
 import GargoyleContainerBuilder from '@src/system/backend/builders/gargoyleContainerBuilder.js';
 import GargoyleSlashCommandBuilder from '@src/system/backend/builders/gargoyleSlashCommandBuilder.js';
 import { playAudio } from '@src/system/backend/tools/voice.js';
 import {
+    ActionRowBuilder,
     ApplicationIntegrationType,
+    ButtonInteraction,
     ChannelType,
     ChatInputCommandInteraction,
     GuildMember,
     InteractionContextType,
+    InteractionEditReplyOptions,
     InteractionResponse,
+    MediaGalleryBuilder,
+    MediaGalleryItemBuilder,
+    MessageActionRowComponentBuilder,
     MessageFlags,
     VoiceChannel
 } from 'discord.js';
@@ -21,6 +28,8 @@ const IMAGE_WS_URL = IMAGE_API ? `ws://${IMAGE_API}` : '';
 
 const IMAGE_TIMEOUT_MS = 180000;
 const HISTORY_RETRY_DELAY_MS = 1500;
+
+const promptCache = new Map<string, string>();
 
 type PromptResponse = {
     prompt_id: string;
@@ -123,7 +132,7 @@ export default class Fun extends GargoyleModule {
         }
 
         if (subcommand === 'image') {
-            return image(client, interaction);
+            return image(client, interaction, this);
         }
 
         if (subcommand === 'truth-or-dare') {
@@ -162,9 +171,38 @@ export default class Fun extends GargoyleModule {
 
         return null;
     }
+
+    public override async executeButtonCommand(client: GargoyleClient, interaction: ButtonInteraction, ...args: string[]): Promise<void> {
+        if (args[0] === 'regenerate') {
+            const prompt = promptCache.get(args[1]);
+
+            if (!prompt) {
+                await interaction.reply({
+                    content: 'This generation has expired. Please use `/fun image` to generate a new one.',
+                    flags: [MessageFlags.Ephemeral]
+                });
+                return;
+            }
+
+            await interaction.deferUpdate();
+
+            try {
+                const imageBuffers = await generateImages(client, prompt);
+                await interaction.editReply(buildImageReply(this, prompt, imageBuffers));
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                client.logger.error(`Image regeneration failed: ${errorMessage}`);
+
+                await interaction.followUp({
+                    content: 'Image regeneration failed. Please try again in a moment.',
+                    flags: [MessageFlags.Ephemeral]
+                });
+            }
+        }
+    }
 }
 
-async function image(client: GargoyleClient, interaction: ChatInputCommandInteraction) {
+async function image(client: GargoyleClient, interaction: ChatInputCommandInteraction, module: Fun) {
     if (interaction.user.id !== '244173330431737866') {
         await interaction.reply({
             content:
@@ -186,12 +224,8 @@ async function image(client: GargoyleClient, interaction: ChatInputCommandIntera
     await interaction.deferReply({ flags: hidden });
 
     try {
-        const imageBuffer = await generateImage(client, prompt);
-
-        await interaction.editReply({
-            content: `Generated image for prompt: \`${prompt.slice(0, 150)}${prompt.length > 150 ? '...' : ''}\``,
-            files: [{ attachment: imageBuffer, name: 'generated.png' }]
-        });
+        const imageBuffers = await generateImages(client, prompt);
+        await interaction.editReply(buildImageReply(module, prompt, imageBuffers));
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         client.logger.error(`Image generation failed: ${errorMessage}`);
@@ -202,7 +236,31 @@ async function image(client: GargoyleClient, interaction: ChatInputCommandIntera
     }
 }
 
-async function generateImage(client: GargoyleClient, prompt: string): Promise<Buffer> {
+function buildImageReply(module: Fun, prompt: string, buffers: Buffer[]): InteractionEditReplyOptions {
+    const cacheKey = randomUUID();
+    promptCache.set(cacheKey, prompt);
+
+    const gallery = new MediaGalleryBuilder();
+    for (let i = 0; i < buffers.length; i++) {
+        gallery.addItems(new MediaGalleryItemBuilder().setURL(`attachment://generated_${i}.png`));
+    }
+
+    const container = new GargoyleContainerBuilder(`-# ${prompt.slice(0, 200)}${prompt.length > 200 ? '...' : ''}`)
+        .addMediaGalleryComponents(gallery)
+        .addActionRowComponents(
+            new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+                new GargoyleButtonBuilder(module, 'regenerate', cacheKey).setLabel('🔄 Regenerate')
+            )
+        );
+
+    return {
+        components: [container],
+        files: buffers.map((buf, i) => ({ attachment: buf, name: `generated_${i}.png` })),
+        flags: [MessageFlags.IsComponentsV2]
+    };
+}
+
+async function generateImages(client: GargoyleClient, prompt: string): Promise<Buffer[]> {
     const promptData = comfyUi(prompt);
     const clientId = randomUUID();
 
@@ -226,11 +284,9 @@ async function generateImage(client: GargoyleClient, prompt: string): Promise<Bu
 
     await waitForCompletion(client, response.prompt_id, clientId, IMAGE_TIMEOUT_MS);
 
-    const imageInfo = await getImageInfo(client, response.prompt_id, IMAGE_TIMEOUT_MS);
+    const imageInfos = await getImageInfos(client, response.prompt_id, IMAGE_TIMEOUT_MS);
 
-    const buffer = await downloadImage(imageInfo);
-
-    return buffer;
+    return Promise.all(imageInfos.map(downloadImage));
 }
 
 async function waitForCompletion(client: GargoyleClient, promptId: string, clientId: string, timeoutMs: number): Promise<void> {
@@ -299,7 +355,7 @@ async function waitForCompletion(client: GargoyleClient, promptId: string, clien
     });
 }
 
-async function getImageInfo(client: GargoyleClient, promptId: string, timeoutMs: number): Promise<ImageInfo> {
+async function getImageInfos(client: GargoyleClient, promptId: string, timeoutMs: number): Promise<ImageInfo[]> {
     const start = Date.now();
     let attempt = 0;
 
@@ -326,12 +382,15 @@ async function getImageInfo(client: GargoyleClient, promptId: string, timeoutMs:
         const entry = json[promptId];
 
         if (entry?.outputs) {
+            const allImages: ImageInfo[] = [];
             for (const nodeId of Object.keys(entry.outputs)) {
                 const node = entry.outputs[nodeId];
-
                 if (node.images && node.images.length > 0) {
-                    return node.images[0];
+                    allImages.push(...node.images);
                 }
+            }
+            if (allImages.length > 0) {
+                return allImages;
             }
         }
 
@@ -434,7 +493,7 @@ function comfyUi(prompt: string) {
             inputs: {
                 width: 1024,
                 height: 1024,
-                batch_size: 1
+                batch_size: 4
             },
             class_type: 'EmptySD3LatentImage',
             _meta: {
