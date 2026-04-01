@@ -38,6 +38,9 @@ const KING_ROLE_FIX_INTERVAL_MS = 20 * 60 * 1000;
 const KING_ROLE_RECONCILE_COOLDOWN_MS = 60 * 1000;
 const KING_ROLE_API_DELAY_MS = 500;
 
+// End time is set to 12AM, April 2nd UTC
+const APRIL_FIRST_END_TIME = new Date(Date.UTC(new Date().getUTCFullYear(), 3, 2, 0, 0, 0));
+
 export default class AprilFirst extends GargoyleModule {
     public guilds = ['324195889977622530'];
     public override name: string = 'aprilfirst';
@@ -99,6 +102,13 @@ export default class AprilFirst extends GargoyleModule {
 
     public override async executeSlashCommand(client: GargoyleClient, interaction: ChatInputCommandInteraction): Promise<void> {
         if (!client.db) return;
+
+        if (Date.now() > APRIL_FIRST_END_TIME.getTime()) {
+            await interaction.reply({
+                content: 'The April First event has ended. Thanks for participating and see you next year!',
+                flags: [MessageFlags.Ephemeral]
+            });
+        }
 
         if (interaction.commandName === 'protest') {
             if (this.protestInProgress) {
@@ -369,7 +379,32 @@ export default class AprilFirst extends GargoyleModule {
 
     public override events: GargoyleEvent[] = [new AprilFirstMessage(this)];
 
+    private endEvent(client: GargoyleClient): void {
+        if (Date.now() < APRIL_FIRST_END_TIME.getTime()) return;
+
+        const bgnGuild = client.guilds.cache.get('324195889977622530');
+
+        if (bgnGuild && bgnGuild.name !== "Brad's Network") {
+            bgnGuild.edit({
+                name: "Brad's Network"
+            });
+        }
+
+        for (const command of client.application?.commands.cache.values() ?? []) {
+            if (this.slashCommands.some((c) => c.name === command.name)) {
+                command.delete().catch((error) => {
+                    client.logger.error(`Failed to delete slash command ${command.name} during April First module cleanup:`, error);
+                });
+            }
+        }
+    }
+
     public override init(client: GargoyleClient): void {
+        // End event
+        setTimeout(() => {
+            this.endEvent(client);
+        }, 15000);
+
         // Execute after 15 seconds to allow the client to load all commands and events
         setTimeout(() => {
             client.logger.info('April First module initialized. Fetching channels for specified guilds...');
@@ -411,6 +446,8 @@ export default class AprilFirst extends GargoyleModule {
     }
 
     private announceKingRoleHolder(client: GargoyleClient): void {
+        if (Date.now() > APRIL_FIRST_END_TIME.getTime()) return;
+
         for (const guildId of this.guilds) {
             const guild = client.guilds.cache.get(guildId);
             if (!guild) continue;
@@ -434,6 +471,7 @@ export default class AprilFirst extends GargoyleModule {
     }
 
     private async scheduleKingRoleFix(client: GargoyleClient): Promise<void> {
+        if (Date.now() > APRIL_FIRST_END_TIME.getTime()) return;
         if (this.isFixKingRoleRunning) {
             client.logger.debug(`${KING_ROLE_NAME} reconciliation is already running; skipping duplicate invocation.`);
             return;
@@ -454,6 +492,7 @@ export default class AprilFirst extends GargoyleModule {
     }
 
     private async fixKingRole(client: GargoyleClient): Promise<void> {
+        if (Date.now() > APRIL_FIRST_END_TIME.getTime()) return;
         for (const guildId of this.guilds) {
             const guild = client.guilds.cache.get(guildId);
             if (!guild) continue;
@@ -591,6 +630,7 @@ export default class AprilFirst extends GargoyleModule {
     }
 
     private async checkProtestStatus(client: GargoyleClient): Promise<void> {
+        if (Date.now() > APRIL_FIRST_END_TIME.getTime()) return;
         if (!this.protestInProgress || !this.protestInitiator || !this.protestEndTime || !this.protestChannel) {
             return;
         }
@@ -673,6 +713,7 @@ export default class AprilFirst extends GargoyleModule {
      * Rewards users at a rate of $5 every minute for being in a voice channel in the specified guilds.
      */
     private async rewardVoiceActivity(client: GargoyleClient): Promise<void> {
+        if (Date.now() > APRIL_FIRST_END_TIME.getTime()) return;
         for (const voiceChannel of client.channels.cache.filter((c) => !c.isDMBased() && this.guilds.includes(c.guildId) && c.isVoiceBased())) {
             for (const [_, member] of (voiceChannel[1] as VoiceBasedChannel).members) {
                 if (member.user.bot) continue;
@@ -698,6 +739,7 @@ class AprilFirstMessage extends GargoyleEvent {
 
     public override event: keyof ClientEvents = Events.MessageCreate as const;
     public override async execute(client: GargoyleClient, message: Message, ..._args: any[]): Promise<void> {
+        if (Date.now() > APRIL_FIRST_END_TIME.getTime()) return;
         if (message.guildId && !this.module.guilds.includes(message.guildId)) return;
         if (!message.member || message.member?.user.bot || !client.db) return;
 
