@@ -50,7 +50,11 @@ export const aprilFirstTable = p.pgTable(
         message_rights: p.integer().notNull().default(5),
         mention_rights: p.integer().notNull().default(1),
         timeout_30: p.integer().notNull().default(0),
-        amount_spent: p.integer().notNull().default(0)
+        amount_spent: p.integer().notNull().default(0),
+        total_protests: p.integer().notNull().default(0),
+        last_protest: p.timestamp().notNull().default(new Date(0)),
+        total_protesters_amassed: p.integer().notNull().default(0),
+        total_protesters_against: p.integer().notNull().default(0)
     },
     (t) => [p.index('april_first_user_idx').on(t.user_id)]
 );

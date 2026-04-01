@@ -1,3 +1,4 @@
+import GargoyleButtonBuilder from '@src/system/backend/builders/gargoyleButtonBuilder';
 import GargoyleContainerBuilder from '@src/system/backend/builders/gargoyleContainerBuilder';
 import { GargoyleStringSelectMenuBuilder } from '@src/system/backend/builders/gargoyleSelectMenuBuilders';
 import GargoyleSlashCommandBuilder from '@src/system/backend/builders/gargoyleSlashCommandBuilder';
@@ -23,7 +24,13 @@ import {
     PartialGroupDMChannel,
     Role,
     TextDisplayBuilder,
-    VoiceBasedChannel
+    VoiceBasedChannel,
+    SectionBuilder,
+    ButtonStyle,
+    InteractionEditReplyOptions,
+    ButtonInteraction,
+    TextChannel,
+    ChannelType
 } from 'discord.js';
 
 const KING_ROLE_NAME = 'King of April 2026';
@@ -40,10 +47,21 @@ export default class AprilFirst extends GargoyleModule {
     private isFixKingRoleRunning: boolean = false;
     private nextKingRoleFixAt: number = 0;
 
+    public protestInProgress: boolean = false;
+    private protestInitiator: string | null = null;
+    private protesters: Set<string> = new Set();
+    private protestEndTime: Date | null = null;
+    private protestChannel: string | null = null;
+    private lastProtest: Date = new Date(0);
+
     public override slashCommands: GargoyleSlashCommandBuilder[] = [
         new GargoyleSlashCommandBuilder()
             .setName('purchase')
             .setDescription('Purchase things')
+            .addGuilds(...this.guilds) as GargoyleSlashCommandBuilder,
+        new GargoyleSlashCommandBuilder()
+            .setName('protest')
+            .setDescription('Protest against the king, make them lose money')
             .addGuilds(...this.guilds) as GargoyleSlashCommandBuilder,
         new GargoyleSlashCommandBuilder()
             .setName('april_timeout')
@@ -54,10 +72,95 @@ export default class AprilFirst extends GargoyleModule {
 
     public override textCommands: GargoyleTextCommandBuilder[] = [];
 
+    private protestMessage(protestInitiator: string): InteractionEditReplyOptions {
+        const protestCount = this.protesters.size;
+        return {
+            components: [
+                new ContainerBuilder().addSectionComponents(
+                    new SectionBuilder()
+                        .setButtonAccessory(
+                            new GargoyleButtonBuilder(this, 'protest')
+                                .setStyle(ButtonStyle.Secondary)
+                                .setLabel('Protest against the king!')
+                                .setEmoji('✊')
+                        )
+                        .addTextDisplayComponents(
+                            new TextDisplayBuilder().setContent(
+                                `# ${protestCount} protester${protestCount !== 1 ? 's' : ''} have amassed against <@!${this.kingRoleHolder}>!\nThe current king is being protested against by <@!${protestInitiator}>!` +
+                                    `\nJoin the protest, for every protester the king loses $25! (${protestCount} protesters so far)` +
+                                    `\nThe protest will last for another <t:${Math.floor(this.protestEndTime!.getTime() / 1000)}:R>!`
+                            )
+                        )
+                )
+            ],
+            flags: [MessageFlags.IsComponentsV2]
+        };
+    }
+
     public override async executeSlashCommand(client: GargoyleClient, interaction: ChatInputCommandInteraction): Promise<void> {
         if (!client.db) return;
 
-        if (interaction.commandName === 'purchase') {
+        if (interaction.commandName === 'protest') {
+            if (this.protestInProgress) {
+                await interaction.reply({
+                    content: 'A protest is already in progress. Please wait for it to finish before starting a new one.',
+                    flags: [MessageFlags.Ephemeral]
+                });
+                return;
+            }
+
+            if (this.lastProtest && new Date().getTime() - this.lastProtest.getTime() < 60 * 60 * 1000) {
+                await interaction.reply({
+                    content: 'A protest has recently occurred. Please wait a while before starting a new one.',
+                    flags: [MessageFlags.Ephemeral]
+                });
+                return;
+            }
+
+            if (interaction.channel?.type !== ChannelType.GuildText) {
+                await interaction.reply({
+                    content: 'This command can only be used in text channels.',
+                    flags: [MessageFlags.Ephemeral]
+                });
+                return;
+            }
+
+            if (interaction.channel.name.toLowerCase().includes('general') === false) {
+                await interaction.reply({
+                    content: 'Protests can only be initiated in the general chat!',
+                    flags: [MessageFlags.Ephemeral]
+                });
+                return;
+            }
+
+            const kingId = this.kingRoleHolder;
+            if (!kingId) {
+                await interaction.reply({
+                    content: 'There is currently no king to protest against.',
+                    flags: [MessageFlags.Ephemeral]
+                });
+                return;
+            }
+
+            const kingUser = await client.db.getUser(kingId, { exists: true });
+
+            if (kingUser.balance < 500) {
+                await interaction.reply({
+                    content: 'The current king is too poor to be affected by your protest.',
+                    flags: [MessageFlags.Ephemeral]
+                });
+                return;
+            }
+
+            this.protestInProgress = true;
+            this.protesters.clear();
+            this.protesters.add(interaction.user.id);
+            this.protestInitiator = interaction.user.id;
+            this.protestEndTime = new Date(Date.now() + 5 * 60 * 1000);
+            this.protestChannel = interaction.channelId;
+
+            await interaction.reply(this.protestMessage(this.protestInitiator) as InteractionReplyOptions);
+        } else if (interaction.commandName === 'purchase') {
             await interaction.reply(this.storeUi(interaction.user.id) as InteractionReplyOptions);
         } else if (interaction.commandName === 'april_timeout') {
             const user = await client.db.getAprilFirstUser(interaction.user.id, { exists: true });
@@ -98,6 +201,36 @@ export default class AprilFirst extends GargoyleModule {
                     flags: [MessageFlags.Ephemeral]
                 });
             }
+        }
+    }
+
+    public override async executeButtonCommand(_client: GargoyleClient, interaction: ButtonInteraction, ...args: string[]): Promise<void> {
+        if (args[0] === 'protest') {
+            if (!this.protestInProgress || !this.protestInitiator) {
+                await interaction.editReply({
+                    components: [new GargoyleContainerBuilder('There is no protest in progress.')],
+                    flags: [MessageFlags.IsComponentsV2]
+                });
+                return;
+            }
+
+            await interaction.editReply({
+                components: [new GargoyleContainerBuilder('The protest grows stronger!')],
+                flags: [MessageFlags.IsComponentsV2]
+            });
+
+            if (this.protesters.has(interaction.user.id)) {
+                await interaction.followUp({
+                    content: 'You have already joined the protest!',
+                    flags: [MessageFlags.Ephemeral]
+                });
+                return;
+            }
+
+            this.protesters.add(interaction.user.id);
+            this.protestEndTime = new Date(Date.now() + 5 * 60 * 1000);
+
+            (interaction.channel as TextChannel).send(this.protestMessage(this.protestInitiator) as MessageCreateOptions);
         }
     }
 
@@ -256,12 +389,9 @@ export default class AprilFirst extends GargoyleModule {
 
         // Fix king role
         void this.scheduleKingRoleFix(client);
-        setInterval(
-            () => {
-                void this.scheduleKingRoleFix(client);
-            },
-            KING_ROLE_FIX_INTERVAL_MS
-        );
+        setInterval(() => {
+            void this.scheduleKingRoleFix(client);
+        }, KING_ROLE_FIX_INTERVAL_MS);
 
         // Announce king role holder every hour in the general channel of each guild
         this.announceKingRoleHolder(client);
@@ -271,6 +401,11 @@ export default class AprilFirst extends GargoyleModule {
             },
             60 * 60 * 1000
         );
+
+        // Check protest status every minute
+        setInterval(async () => {
+            await this.checkProtestStatus(client);
+        }, 60 * 1000);
     }
 
     private announceKingRoleHolder(client: GargoyleClient): void {
@@ -453,6 +588,85 @@ export default class AprilFirst extends GargoyleModule {
         return true;
     }
 
+    private async checkProtestStatus(client: GargoyleClient): Promise<void> {
+        if (!this.protestInProgress || !this.protestInitiator || !this.protestEndTime || !this.protestChannel) {
+            return;
+        }
+
+        if (new Date() < this.protestEndTime) {
+            return;
+        }
+
+        const protestInitiatorId = this.protestInitiator;
+        const protestChannelId = this.protestChannel;
+        const kingRoleHolderId = this.kingRoleHolder;
+        const protesterCount = this.protesters.size;
+
+        try {
+            const channel = client.channels.cache.get(protestChannelId);
+            if (channel && channel.isTextBased() && !(channel instanceof PartialGroupDMChannel)) {
+                await channel.send({
+                    components: [
+                        new ContainerBuilder().addTextDisplayComponents(
+                            new TextDisplayBuilder().setContent(
+                                `The protest against <@!${kingRoleHolderId ?? 'Unknown'}> has ended with ${protesterCount} total protester${protesterCount !== 1 ? 's' : ''}!` +
+                                    `\n<@!${kingRoleHolderId ?? 'Unknown'}> has lost $${protesterCount * 25} as a result of the damages of the protest.`
+                            )
+                        )
+                    ],
+                    flags: [MessageFlags.IsComponentsV2]
+                });
+            } else {
+                client.logger.warning(`Could not find protest channel ${protestChannelId} to send protest conclusion message.`);
+            }
+
+            const protestInitiator = await client.db?.getAprilFirstUser(protestInitiatorId, { exists: true });
+            if (protestInitiator) {
+                protestInitiator.total_protests += 1;
+                protestInitiator.total_protesters_amassed += protesterCount;
+                protestInitiator.last_protest = new Date();
+                await client.db?.setAprilFirstUser(protestInitiatorId, {
+                    total_protests: protestInitiator.total_protests,
+                    total_protesters_amassed: protestInitiator.total_protesters_amassed,
+                    last_protest: protestInitiator.last_protest
+                });
+            }
+
+            if (kingRoleHolderId) {
+                const kingUser = await client.db?.getUser(kingRoleHolderId, { exists: true });
+                const kingAprilUser = await client.db?.getAprilFirstUser(kingRoleHolderId, { exists: true });
+
+                if (kingAprilUser) {
+                    kingAprilUser.total_protesters_against += protesterCount;
+                    await client.db?.setAprilFirstUser(kingRoleHolderId, {
+                        total_protesters_against: kingAprilUser.total_protesters_against
+                    });
+                }
+
+                if (kingUser) {
+                    const lossAmount = protesterCount * 25;
+                    kingUser.balance = Math.max(kingUser.balance - lossAmount, 0);
+                    await client.db?.setUser(kingRoleHolderId, {
+                        balance: kingUser.balance
+                    });
+                }
+            } else {
+                client.logger.warning('No king role holder recorded when concluding protest; skipping king balance and stats updates.');
+            }
+        } catch (error) {
+            client.logger.error(
+                `Failed to process protest conclusion in channel ${protestChannelId}: ${error instanceof Error ? error.message : String(error)}`
+            );
+        } finally {
+            this.lastProtest = new Date();
+            this.protestInProgress = false;
+            this.protestInitiator = null;
+            this.protesters.clear();
+            this.protestEndTime = null;
+            this.protestChannel = null;
+        }
+    }
+
     /**
      * Rewards users at a rate of $5 every minute for being in a voice channel in the specified guilds.
      */
@@ -571,17 +785,30 @@ class AprilFirstMessage extends GargoyleEvent {
         const member = message.guild?.members.cache.get(message.member.id);
         if (!member) return;
 
-        const previousKingRoleHolder = this.module.kingRoleHolder;
-        const didTransfer = await this.module.enforceSingleKingRoleHolder(client, kingRole, member.id);
-        if (!didTransfer) {
-            return;
-        }
-
         try {
-            await message.reply({
-                content: `You have stolen the crown from <@!${previousKingRoleHolder ?? 'Unknown'}> and are now the new King!`,
-                allowedMentions: { users: [] }
-            });
+            if (this.module.protestInProgress) {
+                await message
+                    .reply({
+                        content: `You cannot steal the crown while a protest is in progress!`,
+                        allowedMentions: { users: [] }
+                    })
+                    .then((sentMessage) => {
+                        setTimeout(() => {
+                            sentMessage.delete().catch(() => {});
+                        }, 15000);
+                    });
+                return;
+            } else {
+                const previousKingRoleHolder = this.module.kingRoleHolder;
+                const didTransfer = await this.module.enforceSingleKingRoleHolder(client, kingRole, member.id);
+                if (!didTransfer) {
+                    return;
+                }
+                await message.reply({
+                    content: `You have stolen the crown from <@!${previousKingRoleHolder ?? 'Unknown'}> and are now the new King!`,
+                    allowedMentions: { users: [] }
+                });
+            }
         } catch (error) {
             if (!isIgnorableDiscordApiError(error)) {
                 throw error;
