@@ -207,25 +207,25 @@ export default class AprilFirst extends GargoyleModule {
     public override async executeButtonCommand(_client: GargoyleClient, interaction: ButtonInteraction, ...args: string[]): Promise<void> {
         if (args[0] === 'protest') {
             if (!this.protestInProgress || !this.protestInitiator) {
-                await interaction.editReply({
+                await interaction.update({
                     components: [new GargoyleContainerBuilder('There is no protest in progress.')],
                     flags: [MessageFlags.IsComponentsV2]
                 });
                 return;
             }
 
-            await interaction.editReply({
-                components: [new GargoyleContainerBuilder('The protest grows stronger!')],
-                flags: [MessageFlags.IsComponentsV2]
-            });
-
             if (this.protesters.has(interaction.user.id)) {
-                await interaction.followUp({
-                    content: 'You have already joined the protest!',
-                    flags: [MessageFlags.Ephemeral]
+                await interaction.update({
+                    components: [new GargoyleContainerBuilder('You have already joined the protest.')],
+                    flags: [MessageFlags.IsComponentsV2]
                 });
                 return;
             }
+
+            await interaction.update({
+                components: [new GargoyleContainerBuilder('The protest grows stronger!')],
+                flags: [MessageFlags.IsComponentsV2]
+            });
 
             this.protesters.add(interaction.user.id);
             this.protestEndTime = new Date(Date.now() + 5 * 60 * 1000);
