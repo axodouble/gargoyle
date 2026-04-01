@@ -775,12 +775,25 @@ class AprilFirstMessage extends GargoyleEvent {
             message_rights: user.message_rights
         });
 
-        if (message.mentions.users.size <= 0) return;
-
-        if (!message.mentions.users.some((u) => u.id === this.module.kingRoleHolder)) return;
-
         const kingRole = message.guild?.roles.cache.find((r) => r.name === KING_ROLE_NAME);
         if (!kingRole) return;
+
+        const currentKingFromRole = kingRole.members.first();
+        if (currentKingFromRole && this.module.kingRoleHolder !== currentKingFromRole.id) {
+            this.module.kingRoleHolder = currentKingFromRole.id;
+        }
+
+        const kingIdCandidates = new Set<string>();
+        if (this.module.kingRoleHolder) {
+            kingIdCandidates.add(this.module.kingRoleHolder);
+        }
+        if (currentKingFromRole) {
+            kingIdCandidates.add(currentKingFromRole.id);
+        }
+
+        const didMentionKingUser = Array.from(kingIdCandidates).some((kingId) => message.mentions.users.has(kingId));
+        const didMentionKingRole = message.mentions.roles.has(kingRole.id);
+        if (!didMentionKingUser && !didMentionKingRole) return;
 
         const member = message.guild?.members.cache.get(message.member.id);
         if (!member) return;
@@ -799,7 +812,7 @@ class AprilFirstMessage extends GargoyleEvent {
                     });
                 return;
             } else {
-                const previousKingRoleHolder = this.module.kingRoleHolder;
+                const previousKingRoleHolder = this.module.kingRoleHolder ?? currentKingFromRole?.id;
                 const didTransfer = await this.module.enforceSingleKingRoleHolder(client, kingRole, member.id);
                 if (!didTransfer) {
                     return;
