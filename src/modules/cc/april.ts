@@ -387,14 +387,16 @@ export default class AprilFirst extends GargoyleModule {
             5 * 60 * 1000
         );
 
-        // Fix king role
-        void this.scheduleKingRoleFix(client);
+        // Fix king role before the first announcement so holder state is populated on startup
+        void (async () => {
+            await this.scheduleKingRoleFix(client);
+            this.announceKingRoleHolder(client);
+        })();
         setInterval(() => {
             void this.scheduleKingRoleFix(client);
         }, KING_ROLE_FIX_INTERVAL_MS);
 
         // Announce king role holder every hour in the general channel of each guild
-        this.announceKingRoleHolder(client);
         setInterval(
             async () => {
                 this.announceKingRoleHolder(client);
