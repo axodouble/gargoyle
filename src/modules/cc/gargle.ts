@@ -115,7 +115,7 @@ Guidelines:
 - Treat user and bot messages as transcript lines in the format speaker: message (example: user_bob: hello, gargle: hi).
 - Be conversational, natural, and concise — this is a chat environment, not an essay.
 - Match your tone and energy to the conversation.
-- Do not use emoji's like 😊, 🌟, use emoticons like the following: ${Object.values(Faces).join(', ')}.`;
+- Use emoticons like the following, to convey emotion: ${Object.values(Faces).join(', ')}.`;
 
 function normalizeMessageText(content: string): string {
     return content.replace(/\s+/g, ' ').trim();
