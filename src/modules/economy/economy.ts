@@ -33,14 +33,8 @@ import { desc, eq } from 'drizzle-orm';
 
 export default class Economy extends GargoyleModule {
     public override name: string = 'economy';
-    public override category: string = 'fun';
+    public override category: string = 'economy';
     public override slashCommands: GargoyleSlashCommandBuilder[] = [
-        new GargoyleSlashCommandBuilder()
-            .setName('balance')
-            .setDescription('Check your balance')
-            .addUserOption((option) =>
-                option.setName('user').setDescription('The user to check balance for').setRequired(false)
-            ) as GargoyleSlashCommandBuilder,
         new GargoyleSlashCommandBuilder().setName('daily').setDescription('Claim your daily reward') as GargoyleSlashCommandBuilder,
         new GargoyleSlashCommandBuilder()
             .setName('pay')
@@ -120,15 +114,6 @@ export default class Economy extends GargoyleModule {
             ) as GargoyleSlashCommandBuilder
     ];
 
-    // public override textCommands: GargoyleTextCommandBuilder[] = [
-    //     new GargoyleTextCommandBuilder().setName('test')
-    // ]
-
-    // public override async executeTextCommand(client: GargoyleClient, message: Message, ..._args: string[]): Promise<void> {
-    //     const dbuser = await client.db?.getGuildUser(message.author.id, message.guildId!, {exists: true})
-    //     message.reply(await levelUpMessage(message.member!, 1))
-    // }
-
     public override async executeSlashCommand(client: GargoyleClient, interaction: ChatInputCommandInteraction): Promise<void> {
         if (!client.db) {
             await interaction.reply({
@@ -146,7 +131,6 @@ export default class Economy extends GargoyleModule {
             return;
         }
 
-        const guildUser = await client.db.getGuildUser(interaction.user.id, interaction.guildId!, { exists: true });
         let user = await client.db.getUser(interaction.user.id, { exists: true });
         if (interaction.options.getSubcommandGroup(false) === 'leaderboard') {
             if (interaction.options.getSubcommand(false) === 'experience') {
@@ -253,108 +237,6 @@ export default class Economy extends GargoyleModule {
                     flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
                 });
             }
-        } else if (interaction.options.getSubcommand(false) === 'balance' || interaction.commandName === 'balance') {
-            if (interaction.options.getUser('user', false))
-                user = await client.db.getUser(interaction.options.getUser('user', true).id, { exists: true });
-            await interaction.reply({
-                components: [new GargoyleContainerBuilder(`$${user.balance.toLocaleString()}`)],
-                flags: [MessageFlags.IsComponentsV2]
-            });
-            return;
-        } else if (interaction.options.getSubcommand(false) === 'daily' || interaction.commandName === 'daily') {
-            const now = new Date();
-            const lastDaily = new Date(guildUser.last_daily);
-            if (lastDaily.getTime() > 0) {
-                if (
-                    lastDaily.getDate() === now.getDate() &&
-                    lastDaily.getMonth() === now.getMonth() &&
-                    lastDaily.getFullYear() === now.getFullYear()
-                ) {
-                    await interaction.reply({
-                        components: [
-                            new GargoyleContainerBuilder(
-                                'You have already claimed your daily reward today!\n-# You can claim a daily reward in every guild you are in, so try claiming in another server if you want more rewards!'
-                            )
-                        ],
-                        flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
-                    });
-                    return;
-                } else if (
-                    lastDaily.getDate() + 1 === now.getDate() &&
-                    lastDaily.getMonth() === now.getMonth() &&
-                    lastDaily.getFullYear() === now.getFullYear()
-                ) {
-                    guildUser.daily_streak += 1;
-                } else {
-                    guildUser.daily_streak = 1;
-                }
-            } else {
-                guildUser.daily_streak = 1;
-            }
-            const dailyAmount = 50 + guildUser.daily_streak * 10;
-            user.balance += dailyAmount;
-            client.logger.trace(`User ${interaction.user.id} claimed daily reward of $${dailyAmount} with a streak of ${guildUser.daily_streak}.`);
-            guildUser.last_daily = now;
-
-            await client.db.setUser(interaction.user.id, {
-                balance: user.balance
-            });
-            await client.db.setGuildUser(interaction.user.id, interaction.guildId!, {
-                last_daily: guildUser.last_daily,
-                daily_streak: guildUser.daily_streak
-            });
-
-            await interaction.reply({
-                components: [
-                    new GargoyleContainerBuilder(
-                        `You have claimed your daily reward of $${dailyAmount.toLocaleString()}! Your current streak is ${guildUser.daily_streak} days.` +
-                            `\n-# You can claim a daily reward multiple times in every guild you are in, so try claiming in another server if you want more rewards!`
-                    )
-                ],
-                flags: [MessageFlags.IsComponentsV2]
-            });
-        } else if (interaction.options.getSubcommand(false) === 'pay' || interaction.commandName === 'pay') {
-            const target = interaction.options.getUser('user', true);
-            const amount = interaction.options.getNumber('amount', true);
-            if (target.id === interaction.user.id) {
-                await interaction.reply({
-                    components: [new GargoyleContainerBuilder('You cannot pay yourself!')],
-                    flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
-                });
-                return;
-            }
-            if (amount <= 0) {
-                await interaction.reply({
-                    components: [new GargoyleContainerBuilder('The amount must be greater than 0!')],
-                    flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
-                });
-                return;
-            }
-            if (user.balance < amount) {
-                await interaction.reply({
-                    components: [new GargoyleContainerBuilder('You do not have enough money to pay that amount!')],
-                    flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
-                });
-                return;
-            }
-            const recipientEconomyUser = await client.db.getUser(target.id, { exists: true });
-            user.balance -= amount;
-            recipientEconomyUser.balance += amount;
-
-            await client.db.setUsers([
-                { user_id: interaction.user.id, balance: user.balance },
-                { user_id: target.id, balance: recipientEconomyUser.balance }
-            ]);
-
-            await interaction.reply({
-                components: [
-                    new GargoyleContainerBuilder(
-                        `You have paid $${amount.toLocaleString()} to <@!${target.id}>! Your new balance is $${user.balance.toLocaleString()}.`
-                    )
-                ],
-                flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2],
-                allowedMentions: { users: [] }
-            });
         } else if (interaction.options.getSubcommand(false) === 'blackjack') {
             const bet = interaction.options.getInteger('bet', true);
             await interaction.deferReply();
