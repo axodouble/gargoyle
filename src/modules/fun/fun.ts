@@ -22,6 +22,7 @@ import {
 } from 'discord.js';
 import { randomUUID } from 'crypto';
 import { fetch } from 'bun';
+import { askGargle } from '../cc/gargle';
 
 const IMAGE_API = process.env.IMAGE_API;
 const IMAGE_API_URL = IMAGE_API ? `http://${IMAGE_API}` : '';
@@ -108,8 +109,8 @@ export default class Fun extends GargoyleModule {
             )
             .addSubcommandGroup((subcommandGroup) =>
                 subcommandGroup
-                    .setName('image')
-                    .setDescription('Image related commands.')
+                    .setName('ai')
+                    .setDescription('AI related commands.')
                     .addSubcommand((subcommand) =>
                         subcommand
                             .setName('edit')
@@ -133,6 +134,16 @@ export default class Fun extends GargoyleModule {
                             )
                             .addBooleanOption((option) =>
                                 option.setName('hidden').setDescription('Whether the image should be hidden.').setRequired(false)
+                            )
+                    )
+                    .addSubcommand((subcommand) =>
+                        subcommand
+                            .setName('text')
+                            .setDescription('Generate text using AI.')
+                            .addStringOption((option) =>
+                                option.setName('prompt')
+                                    .setDescription('The prompt to generate text from.')
+                                    .setRequired(true)
                             )
                     )
             )
@@ -166,7 +177,7 @@ export default class Fun extends GargoyleModule {
             return textReplace(interaction);
         }
 
-        if (subcommandGroup === 'image') {
+        if (subcommandGroup === 'ai') {
             return image(client, interaction, this);
         }
 
@@ -257,6 +268,25 @@ async function image(client: GargoyleClient, interaction: ChatInputCommandIntera
         return;
     }
 
+    const prompt = interaction.options.getString('prompt', true);
+    const subcommand = interaction.options.getSubcommand(true);
+    const hidden = interaction.options.getBoolean('hidden') ? MessageFlags.Ephemeral : undefined;
+
+    if(subcommand === 'text') {
+        await interaction.deferReply({ flags: hidden });
+        try {
+            const response = await askGargle(prompt);
+            await interaction.editReply({ content: response });
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            client.logger.error(`Text generation failed: ${errorMessage}`);
+
+            await interaction.editReply({
+                content: 'Text generation failed. Please try again in a moment.'
+            });
+        }
+    }
+
     if (!IMAGE_API) {
         await interaction.reply({
             content: 'Image generation is not configured on this bot instance. Please contact an administrator.'
@@ -264,9 +294,7 @@ async function image(client: GargoyleClient, interaction: ChatInputCommandIntera
         return;
     }
 
-    const prompt = interaction.options.getString('prompt', true);
-    const subcommand = interaction.options.getSubcommand(true);
-    const hidden = interaction.options.getBoolean('hidden') ? MessageFlags.Ephemeral : undefined;
+
     await interaction.deferReply({ flags: hidden });
 
     try {

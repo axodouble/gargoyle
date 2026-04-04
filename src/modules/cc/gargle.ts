@@ -197,6 +197,19 @@ export default class Gargle extends GargoyleModule {
     public override events: GargoyleEvent[] = [new GargleMessageEvent(this)];
 }
 
+export async function askGargle(text: string): Promise<string> {
+    return ollama
+        .chat({
+            model: OLLAMA_MODEL,
+            tools,
+            messages: [
+                { role: 'system', content: SYSTEM_PROMPT },
+                { role: 'user', content: `User: ${text}\nGargle:` }
+            ]
+        })
+        .then((response) => response.message.content ?? '');
+}
+
 class GargleMessageEvent extends GargoyleEvent {
     public override event: keyof ClientEvents = Events.MessageCreate as const;
     private module: Gargle;
