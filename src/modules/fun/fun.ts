@@ -29,6 +29,8 @@ const IMAGE_WS_URL = IMAGE_API ? `ws://${IMAGE_API}` : '';
 
 const IMAGE_TIMEOUT_MS = 180000;
 const HISTORY_RETRY_DELAY_MS = 1500;
+const TRANSIENT_RETRY_ATTEMPTS = 3;
+const TRANSIENT_RETRY_DELAY_MS = 500;
 
 type ImageJob = {
     mode: 'generate' | 'edit';
@@ -207,6 +209,13 @@ export default class Fun extends GargoyleModule {
 
     public override async executeButtonCommand(client: GargoyleClient, interaction: ButtonInteraction, ...args: string[]): Promise<void> {
         if (args[0] === 'regenerate') {
+            if(interaction.user.id !== '244173330431737866') {
+                await interaction.reply({
+                    content: 'Image regeneration is currently in early access and is only available to select users. If you are interested in gaining access, please contact an @axodouble.',
+                    flags: [MessageFlags.Ephemeral]
+                });
+                return;
+            }
             const job = promptCache.get(args[1]);
 
             if (!job) {
@@ -354,7 +363,11 @@ async function generateImages(client: GargoyleClient, prompt: string): Promise<B
 
     client.logger.info(`Queued image: ${response.prompt_id}`);
 
-    await waitForCompletion(client, response.prompt_id, clientId, IMAGE_TIMEOUT_MS);
+    try {
+        await waitForCompletion(client, response.prompt_id, clientId, IMAGE_TIMEOUT_MS);
+    } catch (error) {
+        throw stageError('execution stage failed', error);
+    }
 
     const imageInfos = await getImageInfos(client, response.prompt_id, IMAGE_TIMEOUT_MS);
 
@@ -364,7 +377,11 @@ async function generateImages(client: GargoyleClient, prompt: string): Promise<B
 
     const selectedImages = imageInfos.slice(0, 4);
 
-    return Promise.all(selectedImages.map(downloadImage));
+    try {
+        return await Promise.all(selectedImages.map((image) => downloadImageWithRetry(client, response.prompt_id, image)));
+    } catch (error) {
+        throw stageError('download stage failed', error);
+    }
 }
 
 async function editImages(client: GargoyleClient, prompt: string, sourceFilename: string): Promise<Buffer[]> {
@@ -389,7 +406,11 @@ async function editImages(client: GargoyleClient, prompt: string, sourceFilename
 
     client.logger.info(`Queued image edit: ${response.prompt_id}`);
 
-    await waitForCompletion(client, response.prompt_id, clientId, IMAGE_TIMEOUT_MS);
+    try {
+        await waitForCompletion(client, response.prompt_id, clientId, IMAGE_TIMEOUT_MS);
+    } catch (error) {
+        throw stageError('execution stage failed', error);
+    }
 
     const imageInfos = await getImageInfos(client, response.prompt_id, IMAGE_TIMEOUT_MS);
 
@@ -399,7 +420,11 @@ async function editImages(client: GargoyleClient, prompt: string, sourceFilename
 
     const selectedImages = imageInfos.slice(0, 4);
 
-    return Promise.all(selectedImages.map(downloadImage));
+    try {
+        return await Promise.all(selectedImages.map((image) => downloadImageWithRetry(client, response.prompt_id, image)));
+    } catch (error) {
+        throw stageError('download stage failed', error);
+    }
 }
 
 async function waitForCompletion(client: GargoyleClient, promptId: string, clientId: string, timeoutMs: number): Promise<void> {
@@ -447,6 +472,7 @@ async function waitForCompletion(client: GargoyleClient, promptId: string, clien
             }
 
             if (msg.type === 'execution_success') {
+                client.logger.trace(`Image execution completed for prompt ${promptId}`);
                 ws.close();
                 finish(resolve);
                 return;
@@ -474,13 +500,24 @@ async function getImageInfos(client: GargoyleClient, promptId: string, timeoutMs
 
     while (Date.now() - start < timeoutMs) {
         attempt++;
-        const res = await fetch(`${IMAGE_API_URL}/history/${promptId}`);
+        let res: Response;
+        try {
+            res = await fetch(`${IMAGE_API_URL}/history/${promptId}`);
+        } catch (error) {
+            if (isAbortError(error)) {
+                client.logger.trace(`History fetch aborted for ${promptId}, retry ${attempt}`);
+                await Bun.sleep(HISTORY_RETRY_DELAY_MS);
+                continue;
+            }
 
-        if (!res.ok) {
-            throw new Error(`Failed to fetch image history with status ${res.status}`);
+            throw stageError('history stage failed', error);
         }
 
-        const json = (await res.json()) as Record<
+        if (!res.ok) {
+            throw new Error(`history stage failed: fetch returned status ${res.status}`);
+        }
+
+        let json: Record<
             string,
             {
                 outputs?: Record<
@@ -491,6 +528,21 @@ async function getImageInfos(client: GargoyleClient, promptId: string, timeoutMs
                 >;
             }
         >;
+        try {
+            json = (await res.json()) as Record<
+                string,
+                {
+                    outputs?: Record<
+                        string,
+                        {
+                            images?: ImageInfo[];
+                        }
+                    >;
+                }
+            >;
+        } catch (error) {
+            throw stageError('history stage failed', error);
+        }
 
         const entry = json[promptId];
 
@@ -511,7 +563,7 @@ async function getImageInfos(client: GargoyleClient, promptId: string, timeoutMs
         await Bun.sleep(HISTORY_RETRY_DELAY_MS);
     }
 
-    throw new Error(`No images found in output history within ${timeoutMs}ms`);
+    throw new Error(`history stage failed: no images found in output history within ${timeoutMs}ms`);
 }
 
 async function downloadImage(image: ImageInfo): Promise<Buffer> {
@@ -529,6 +581,60 @@ async function downloadImage(image: ImageInfo): Promise<Buffer> {
     }
 
     return Buffer.from(await res.arrayBuffer());
+}
+
+async function downloadImageWithRetry(client: GargoyleClient, promptId: string, image: ImageInfo): Promise<Buffer> {
+    return withAbortRetry(
+        () => downloadImage(image),
+        TRANSIENT_RETRY_ATTEMPTS,
+        async (attempt) => {
+            client.logger.trace(
+                `Download aborted for ${promptId} (${image.filename}), retry ${attempt}/${TRANSIENT_RETRY_ATTEMPTS}`
+            );
+            await Bun.sleep(TRANSIENT_RETRY_DELAY_MS);
+        }
+    );
+}
+
+async function withAbortRetry<T>(
+    operation: () => Promise<T>,
+    maxAttempts: number,
+    onRetry: (attempt: number) => Promise<void>
+): Promise<T> {
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            return await operation();
+        } catch (error) {
+            lastError = error;
+            if (!isAbortError(error) || attempt === maxAttempts) {
+                throw error;
+            }
+
+            await onRetry(attempt);
+        }
+    }
+
+    throw lastError instanceof Error ? lastError : new Error('Unknown retry error');
+}
+
+function isAbortError(error: unknown): boolean {
+    if (!(error instanceof Error)) {
+        return false;
+    }
+
+    const name = error.name.toLowerCase();
+    const message = error.message.toLowerCase();
+    return name.includes('abort') || message.includes('aborted');
+}
+
+function stageError(stage: string, error: unknown): Error {
+    if (error instanceof Error) {
+        return new Error(`${stage}: ${error.message}`);
+    }
+
+    return new Error(`${stage}: Unknown error`);
 }
 
 function generatePrompt(prompt: string) {
