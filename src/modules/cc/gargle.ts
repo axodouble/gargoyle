@@ -5,7 +5,7 @@ import { ClientEvents, Events, Message, PartialGroupDMChannel } from 'discord.js
 import { Ollama, Tool } from 'ollama';
 
 const ollama = new Ollama({ host: process.env.OLLAMA_HOST ?? 'http://localhost:11434' });
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'granite4:tiny-h';
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'gemma4:e4b';
 const CONTEXT_FETCH_LIMIT = Number(process.env.GARGLE_CONTEXT_FETCH_LIMIT ?? 30);
 const CONTEXT_RECENT_MESSAGES = Number(process.env.GARGLE_CONTEXT_RECENT_MESSAGES ?? 12);
 const CONTEXT_USER_MESSAGES = Number(process.env.GARGLE_CONTEXT_USER_MESSAGES ?? 5);
@@ -272,7 +272,7 @@ class GargleMessageEvent extends GargoyleEvent {
                     if (content && !shouldIgnoreMessage) {
                         const face = emotionFace || resolveFace();
                         const reply = `${face} ${replaceEmojisWithEmoticons(content)}`;
-                        await message.reply(reply.slice(0, 2000));
+                        await message.reply(reply.slice(0, 2000).replaceAll('_', '\\_'));
                     }
                     break;
                 }
