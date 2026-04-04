@@ -271,7 +271,7 @@ class GargleMessageEvent extends GargoyleEvent {
                     const content = response.message.content?.trim();
                     if (content && !shouldIgnoreMessage) {
                         const face = emotionFace || resolveFace();
-                        const reply = `${face} ${replaceEmojisWithEmoticons(content)}`;
+                        const reply = `${replaceEmojisWithEmoticons(content)}`;
                         await message.reply(reply.slice(0, 2000).replaceAll('_', '\\_'));
                     }
                     break;
