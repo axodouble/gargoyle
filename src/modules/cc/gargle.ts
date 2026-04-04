@@ -198,16 +198,51 @@ export default class Gargle extends GargoyleModule {
 }
 
 export async function askGargle(text: string): Promise<string> {
-    return ollama
-        .chat({
-            model: OLLAMA_MODEL,
-            tools,
-            messages: [
-                { role: 'system', content: SYSTEM_PROMPT },
-                { role: 'user', content: `User: ${text}\nGargle:` }
-            ]
-        })
-        .then((response) => response.message.content ?? '');
+    const messages: { role: 'system' | 'user' | 'assistant' | 'tool'; content: string }[] = [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: `User: ${text}\nGargle:` }
+    ];
+
+    let shouldIgnoreMessage = false;
+    const MAX_TOOL_ITERATIONS = 10;
+
+    for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
+        const response = await ollama.chat({ model: OLLAMA_MODEL, tools, messages });
+        messages.push({ role: 'assistant', content: response.message.content ?? '' });
+
+        if (response.message.tool_calls?.length) {
+            for (const toolCall of response.message.tool_calls) {
+                let result: string;
+                try {
+                    const args = toolCall.function.arguments as Record<string, string>;
+                    switch (toolCall.function.name) {
+                        case 'get_face':
+                            result = resolveFace(args.category);
+                            break;
+                        case 'ignore_message':
+                            shouldIgnoreMessage = true;
+                            result = args.reason ? `Ignoring message: ${args.reason}` : 'Ignoring message';
+                            break;
+                        default:
+                            result = `Unknown tool: ${toolCall.function.name}`;
+                    }
+                } catch (err) {
+                    result = `Tool error: ${err instanceof Error ? err.message : String(err)}`;
+                }
+                messages.push({ role: 'tool', content: result });
+            }
+
+            if (shouldIgnoreMessage) return '';
+            continue;
+        }
+
+        const content = response.message.content?.trim();
+        if (content && !shouldIgnoreMessage) {
+            return replaceEmojisWithEmoticons(content);
+        }
+    }
+
+    return "I don't have a response right now.";
 }
 
 class GargleMessageEvent extends GargoyleEvent {
@@ -284,7 +319,7 @@ class GargleMessageEvent extends GargoyleEvent {
                     const content = response.message.content?.trim();
                     if (content && !shouldIgnoreMessage) {
                         const face = emotionFace || resolveFace();
-                        const reply = `${replaceEmojisWithEmoticons(content)}`;
+                        const reply = `${face} ${replaceEmojisWithEmoticons(content)}`;
                         await message.reply(reply.slice(0, 2000).replaceAll('_', '\\_'));
                     }
                     break;
