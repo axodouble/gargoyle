@@ -50,46 +50,87 @@ const tools: Tool[] = [
     }
 ];
 
-enum Faces {
-    Happy1 = '(\\*^_^\\*)',
+export enum GargleFaces {
+    Happy1 = '(\\*^\\_^\\*)',
     Happy2 = '(＾▽＾)',
     Happy3 = '(☆▽☆)',
     Happy4 = '(/≧▽≦)/',
     Sad1 = '＞﹏＜',
-    Sad2 = '(T_T)',
-    Sad3 = '(；一_一)',
-    Sad4 = '(╥_╥)',
-    Sad5 = '<( _ _ )>',
+    Sad2 = '(T\\_T)',
+    Sad3 = '(；一\\_一)',
+    Sad4 = '(╥\\_╥)',
+    Sad5 = '<( \\_ \\_ )>',
     Angry1 = '(╬ಠ益ಠ)',
     Angry2 = '(ノಠ益ಠ)ノ彡┻━┻',
     Angry3 = '(╬ﾟдﾟ)',
     Angry4 = '(╯▔皿▔)╯',
-    Angry5 = 'ᕦ(ò_óˇ)ᕤ',
+    Angry5 = 'ᕦ(ò\\_óˇ)ᕤ',
     ActingCute1 = '(≧◡≦)',
     ActingCute2 = '( ͡° ͜ʖ ͡°)',
     ActingCute3 = '(。・ω・。)',
     ActingCute4 = '(^///^)',
     ActingCute5 = 'ᓚᘏᗢ',
-    Confused1 = '(・_・?)',
+    Confused1 = '(・\\_・?)',
     Confused2 = '(°ロ°) !?',
-    Confused3 = '(・_・;)',
+    Confused3 = '(・\\_・;)',
     Confused4 = '(°ー°〃)',
     Confused5 = '(・・? )',
     Surprised1 = '(ﾟДﾟ)',
     Surprised2 = 'Σ(°ロ°)',
-    Surprised3 = '(⊙_⊙)？',
-    Surprised4 = 'o_o',
+    Surprised3 = '(⊙\\_⊙)？',
+    Surprised4 = 'o\\_o',
     Surprised5 = '(°ロ°) !?'
 }
 
-function getRandomFace(category: string): string {
-    const matches = Object.entries(Faces).filter(([key]) => key.toLowerCase().startsWith(category.toLowerCase()));
+export function getRandomGargleFace(category: 'happy' | 'sad' | 'angry' | 'actingcute' | 'confused' | 'surprised'): string {
+    const matches = Object.entries(GargleFaces).filter(([key]) => key.toLowerCase().startsWith(category.toLowerCase()));
     if (!matches.length) return '';
     return matches[Math.floor(Math.random() * matches.length)][1];
 }
 
+export function getRandomGargleMessage(category: 'working' | 'success'): string {
+    if (category === 'working') {
+        const workingMessages = [
+            'Meandering...',
+            'Gargling...',
+            'Swirling thoughts...',
+            'Stirring the pot...',
+            'Sacrificing a semicolon...',
+            'Blaming the hamster...',
+            'Consulting the magic 8-ball...',
+            'Polishing the crystal ball...',
+            'Feeding the gremlins...',
+            'Asking Krenko...',
+            'Folding space-time...'
+        ];
+        return workingMessages[Math.floor(Math.random() * workingMessages.length)];
+    } else if (category === 'success') {
+        const successMessages = [
+            'Baked!',
+            'Perfectly brewed.',
+            'Mana tapped!',
+            'Ready to serve!',
+            'Eureka!',
+            'Here you go!',
+            'Done and dusted!',
+            'All set!'
+        ];
+        return successMessages[Math.floor(Math.random() * successMessages.length)];
+    }
+    return 'Working...';
+}
+
+export function getGargleSubmessage(
+    face: 'happy' | 'sad' | 'angry' | 'actingcute' | 'confused' | 'surprised',
+    status: 'working' | 'success'
+): string {
+    const faceText = getRandomGargleFace(face);
+    const statusText = getRandomGargleMessage(status);
+    return `${faceText} ${statusText}`;
+}
+
 function resolveFace(category?: string): string {
-    if (!category) return getRandomFace('happy');
+    if (!category) return getRandomGargleFace('happy');
 
     const normalized = category.toLowerCase().replace(/[^a-z]/g, '');
     const aliasMap: Record<string, string> = {
@@ -104,7 +145,7 @@ function resolveFace(category?: string): string {
     };
 
     const mappedCategory = aliasMap[normalized] ?? 'happy';
-    return getRandomFace(mappedCategory);
+    return getRandomGargleFace(mappedCategory as 'happy' | 'sad' | 'angry' | 'actingcute' | 'confused' | 'surprised');
 }
 
 const SYSTEM_PROMPT = `You are Gargle, a borderline stupid, but friendly bot in Discord.
@@ -115,7 +156,7 @@ Guidelines:
 - Treat user and bot messages as transcript lines in the format speaker: message (example: user_bob: hello, gargle: hi).
 - Be conversational, natural, and concise — this is a chat environment, not an essay.
 - Match your tone and energy to the conversation.
-- Use emoticons like the following, to convey emotion: ${Object.values(Faces).join(', ')}.`;
+- Use emoticons like the following, to convey emotion: ${Object.values(GargleFaces).join(', ')}.`;
 
 function normalizeMessageText(content: string): string {
     return content.replace(/\s+/g, ' ').trim();
