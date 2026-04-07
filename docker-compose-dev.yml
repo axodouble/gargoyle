@@ -31,6 +31,8 @@ services:
       PG_DB: ${PG_DB}
       PG_HOST: postgres
       IMAGE_API: ${IMAGE_API}
+      PROXMOX_KEY: ${PROXMOX_KEY}
+      PROXMOX_HOST: ${PROXMOX_HOST}
     ports:
       - 3001:3001
     networks:
