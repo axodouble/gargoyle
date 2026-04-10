@@ -499,6 +499,9 @@ export default class Economy extends GargoyleModule {
             await client.db.setUser(interaction.user.id, {
                 balance: user.balance
             });
+
+            this.cardMap.delete(interaction.user.id);
+
             await interaction.update({
                 components: [
                     new ContainerBuilder()
