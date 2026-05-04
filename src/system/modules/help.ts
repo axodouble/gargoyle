@@ -203,7 +203,9 @@ export default class Help extends GargoyleModule {
                         .addSectionComponents(
                             new SectionBuilder()
                                 .addTextDisplayComponents(
-                                    new TextDisplayBuilder().setContent(`Support request from ${interaction.user.tag} (${interaction.user.id})`)
+                                    new TextDisplayBuilder().setContent(
+                                        `Support request from ${interaction.user.tag} (${interaction.user.id}) @everyone`
+                                    )
                                 )
                                 .setThumbnailAccessory(new ThumbnailBuilder().setURL(interaction.user.displayAvatarURL({ size: 128 })))
                         )

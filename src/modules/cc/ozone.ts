@@ -144,6 +144,8 @@ export default class Ozone extends GargoyleModule {
 
         if (subcommandGroup === 'units') {
             if (interaction.options.getSubcommand(false) === 'power') {
+                const unitObject = this.ozoneUnits.find((u) => u.value === interaction.options.getString('unit', true))!;
+
                 await interaction.deferReply({});
                 try {
                     const unit = interaction.options.getString('unit', true);
@@ -154,7 +156,7 @@ export default class Ozone extends GargoyleModule {
                     await this.turnOthersOff(client, unit);
 
                     await interaction.editReply({
-                        content: `(2/3) Booting unit ${unit}...\n-# ${getGargleSubmessage('happy', 'working')}`
+                        content: `(2/3) Booting unit ${unitObject.name} (${unitObject.value})...\n-# ${getGargleSubmessage('happy', 'working')}`
                     });
                     await fetch(`${process.env.PROXMOX_HOST}/lxc/${unit}/status/start`, {
                         method: 'POST',
@@ -166,7 +168,7 @@ export default class Ozone extends GargoyleModule {
                         }
                     });
                     await interaction.editReply({
-                        content: `(3/3) Unit ${unit} is starting.\n-# ${getGargleSubmessage('happy', 'success')}`
+                        content: `(3/3) Unit ${unitObject.name} (${unitObject.value}) is starting.\n-# ${getGargleSubmessage('happy', 'success')}`
                     });
                 } catch (error) {
                     await interaction.editReply({
