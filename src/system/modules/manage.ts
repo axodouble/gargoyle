@@ -138,8 +138,23 @@ export default class Manage extends GargoyleModule {
                         return;
                     });
 
+                    const guildsWithUser = [];
+                    const guilds = await client.guilds.fetch();
+                    for (const guild of guilds.values()) {
+                        const member = await client.guilds.cache
+                            .get(guild.id)
+                            ?.members.fetch(userId)
+                            .catch(() => null);
+                        if (member) {
+                            guildsWithUser.push(guild.name);
+                        }
+                    }
+
                     if (user) {
-                        await interaction.reply({ content: `User: ${user.tag}\nID: ${user.id}`, flags: [MessageFlags.Ephemeral] });
+                        await interaction.reply({
+                            content: `User: ${user.tag}\nID: ${user.id}\nGuilds: ${guildsWithUser.join(', ') || 'None'}`,
+                            flags: [MessageFlags.Ephemeral]
+                        });
                     }
                 }
             }
