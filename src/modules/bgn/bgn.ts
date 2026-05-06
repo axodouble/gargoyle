@@ -847,7 +847,7 @@ export default class Brads extends GargoyleModule {
 
             const guild = await interaction.guild.fetch();
             const applicationsChannel = guild.channels.cache.find(
-                (c) => c.type === ChannelType.GuildText && c.name.includes('staff-applications')
+                (c) => c.type === ChannelType.GuildText && c.name.toLowerCase().includes('staff-applications')
             ) as TextChannel | undefined;
 
             if (!applicationsChannel) {
