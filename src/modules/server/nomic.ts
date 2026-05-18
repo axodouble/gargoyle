@@ -44,7 +44,7 @@ export default class NoMic extends GargoyleModule {
 
         if (this.guildlock.has(voiceChannel.guild.id)) {
             const guildState = this.guildlock.get(voiceChannel.guild.id)!;
-            if (guildState.speaking) {
+            if (guildState.speaking && this.guildlock.get(voiceChannel.guild.id)!.connection.state.status === VoiceConnectionStatus.Ready) {
                 await interaction.reply({
                     content: 'The bot is already speaking in this server. Please wait until it is finished.',
                     flags: [MessageFlags.Ephemeral]
