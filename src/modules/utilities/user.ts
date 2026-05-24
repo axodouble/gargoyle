@@ -168,7 +168,6 @@ export default class User extends GargoyleModule {
                 const type = interaction.options.getString('type') ?? 'global';
                 const user = await client.users.fetch(interaction.options.getUser('user', true), { force: true });
                 const member = await interaction.guild?.members.fetch({ user: user.id, force: true });
-                console.log(user.banner);
                 if (type === 'guild' && member?.banner) {
                     await interaction.reply({
                         components: [

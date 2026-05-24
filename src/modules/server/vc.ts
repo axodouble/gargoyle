@@ -103,7 +103,6 @@ export default class VoicechatCommand extends GargoyleModule {
                 });
             else
                 await client.channels.fetch(vc.id).then((channel) => {
-                    console.log(channel?.toJSON());
                     if (!channel) return;
                     if (!interaction.guild) return;
                     if (!client.user) return;
