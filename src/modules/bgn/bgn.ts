@@ -8,7 +8,9 @@ import {
     ButtonStyle,
     ChannelType,
     ChatInputCommandInteraction,
+    ClientEvents,
     ContainerBuilder,
+    Events,
     GuildMember,
     InteractionContextType,
     MessageActionRowComponentBuilder,
@@ -35,12 +37,14 @@ import GargoyleButtonBuilder, { GargoyleURLButtonBuilder } from '@src/system/bac
 import { editAsServer } from '@src/system/backend/tools/server.js';
 import { GargoyleStringSelectMenuBuilder } from '@src/system/backend/builders/gargoyleSelectMenuBuilders.js';
 import GargoyleModalBuilder from '@src/system/backend/builders/gargoyleModalBuilder.js';
-import { SQL } from 'bun';
+import { sleep, sleepSync, SQL } from 'bun';
 import Emojis from '@src/system/backend/tools/emojis.js';
+import GargoyleEvent from '@src/system/backend/classes/gargoyleEvent';
 
 export default class Brads extends GargoyleModule {
     public override name: string = 'bgn';
     public override category: string = 'bgn';
+
     public override slashCommands = [
         new GargoyleSlashCommandBuilder()
             .setName('bgn')
@@ -1194,5 +1198,24 @@ export default class Brads extends GargoyleModule {
         }
 
         return Promise.resolve(new Response('Not Found', { status: 404, headers: { 'Content-Type': 'text/plain' } }));
+    }
+
+    public override events: GargoyleEvent[] = [new SuggestionThread()];
+}
+
+class SuggestionThread extends GargoyleEvent {
+    public override event: keyof ClientEvents = Events.ThreadCreate as const;
+    public override async execute(_client: GargoyleClient, thread: ThreadChannel, _newlyCreated: boolean, _args: string[]): Promise<void> {
+        if (
+            thread.parent?.name.toLowerCase().includes('suggestions') &&
+            thread.type === ChannelType.PublicThread &&
+            thread.guildId === '324195889977622530'
+        ) {
+            const starterMessage = await thread.fetchStarterMessage();
+            if (!starterMessage) return;
+            await starterMessage.react('✅');
+            await sleep(2500);
+            await starterMessage.react('❌');
+        }
     }
 }
