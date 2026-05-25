@@ -47,12 +47,6 @@ export default class Economy extends GargoyleModule {
             .setName('economy')
             .setIntegrationTypes(ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall)
             .setDescription('Economy commands')
-            .addSubcommand((subcommand) =>
-                subcommand
-                    .setName('balance')
-                    .setDescription('Check your balance')
-                    .addUserOption((option) => option.setName('user').setDescription('The user to check balance for').setRequired(false))
-            )
             .addSubcommandGroup((group) =>
                 group
                     .setName('leaderboard')
@@ -97,14 +91,6 @@ export default class Economy extends GargoyleModule {
                                     .addChoices({ name: 'Enable', value: 'enable' }, { name: 'Disable', value: 'disable' })
                             )
                     )
-            )
-            .addSubcommand((subcommand) => subcommand.setName('daily').setDescription('Claim your daily reward'))
-            .addSubcommand((subcommand) =>
-                subcommand
-                    .setName('pay')
-                    .setDescription('Pay another user')
-                    .addUserOption((option) => option.setName('user').setDescription('The user to pay').setRequired(true))
-                    .addNumberOption((option) => option.setName('amount').setDescription('The amount to pay').setRequired(true))
             )
             .addSubcommand((subcommand) =>
                 subcommand
