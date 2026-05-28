@@ -35,7 +35,7 @@ export default class Balance extends GargoyleModule {
 
         await interaction.reply({
             components: [new GargoyleContainerBuilder(`$${user.balance}.`)],
-            flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2]
+            flags: [MessageFlags.IsComponentsV2]
         });
     }
 }

@@ -64,6 +64,13 @@
       "when": 1775007871142,
       "tag": "0008_puzzling_human_fly",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1779969372756,
+      "tag": "0009_heavy_namora",
+      "breakpoints": true
     }
   ]
 }

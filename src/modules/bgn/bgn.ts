@@ -37,7 +37,7 @@ import GargoyleButtonBuilder, { GargoyleURLButtonBuilder } from '@src/system/bac
 import { editAsServer } from '@src/system/backend/tools/server.js';
 import { GargoyleStringSelectMenuBuilder } from '@src/system/backend/builders/gargoyleSelectMenuBuilders.js';
 import GargoyleModalBuilder from '@src/system/backend/builders/gargoyleModalBuilder.js';
-import { sleep, sleepSync, SQL } from 'bun';
+import { sleep, SQL } from 'bun';
 import Emojis from '@src/system/backend/tools/emojis.js';
 import GargoyleEvent from '@src/system/backend/classes/gargoyleEvent';
 

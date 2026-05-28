@@ -59,7 +59,7 @@ export default class Pay extends GargoyleModule {
                         `You have paid $${amount.toLocaleString()} to <@!${target.id}>! Your new balance is $${payee.balance.toLocaleString()}.`
                     )
                 ],
-                flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2],
+                flags: [MessageFlags.IsComponentsV2],
                 allowedMentions: { users: [] }
             });
         } catch (error) {
