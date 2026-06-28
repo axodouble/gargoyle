@@ -7,22 +7,35 @@ export default class Salem extends GargoyleModule {
     public override name: string = 'salem';
     public override category: string = 'fun';
 
+    private messageQueue: string[] = [];
+
     public override slashCommands: GargoyleSlashCommandBuilder[] = [
         new GargoyleSlashCommandBuilder()
             .setName('salem')
             .addGuilds('1475065895742214267')
             .setDescription('Simple salem helper')
-            .addStringOption((o) => o.setName('message').setDescription('Send a salem message').setRequired(true)) as GargoyleSlashCommandBuilder
+            .addSubcommand((s=>s.setName('message').setDescription('Queue a message for Sunrise').addStringOption((o) => o.setName('message').setDescription('Send a salem message').setRequired(true)) ))
+            .addSubcommand((s=>s.setName('sunrise').setDescription('Trigger sunrise'))) as GargoyleSlashCommandBuilder
     ];
 
     public override async executeSlashCommand(_client: GargoyleClient, interaction: ChatInputCommandInteraction): Promise<void> {
-        if (interaction.commandName === 'salem') {
+        if (interaction.options.getSubcommand(true) === 'message') {
             await interaction.reply({
-                content: 'Sending message',
+                content: 'Queueing message',
                 flags: MessageFlags.Ephemeral
             });
 
-            (interaction.channel as TextChannel).send({ content: interaction.options.getString('message', true), allowedMentions: { parse: [] } });
+            this.messageQueue.push(interaction.options.getString('message', true));
+        } if (interaction.options.getSubcommand(true) === 'sunrise') {
+            await interaction.reply({
+                content: "Sending messages"
+            })
+
+            for (const message of this.messageQueue){
+                await (interaction.channel as TextChannel).send({ content: message, allowedMentions: { parse: [] } })
+            }
+
+            this.messageQueue = [];
         }
     }
 }
