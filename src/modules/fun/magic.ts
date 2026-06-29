@@ -1,8 +1,9 @@
 import GargoyleSlashCommandBuilder from '@src/system/backend/builders/gargoyleSlashCommandBuilder';
 import GargoyleClient from '@src/system/backend/classes/gargoyleClient';
+import GargoyleEvent from '@src/system/backend/classes/gargoyleEvent';
 import GargoyleModule from '@src/system/backend/classes/gargoyleModule';
 import { $, fetch } from 'bun';
-import { ApplicationIntegrationType, ChatInputCommandInteraction, InteractionContextType } from 'discord.js';
+import { ApplicationIntegrationType, ChatInputCommandInteraction, ClientEvents, Events, InteractionContextType, Message } from 'discord.js';
 import { closest, distance } from 'fastest-levenshtein';
 import { tmpdir } from 'os';
 import path from 'path';
@@ -10,10 +11,10 @@ import { fileExistsSync } from 'tsconfig-paths/lib/filesystem';
 
 export default class Magic extends GargoyleModule {
     public override name: string = 'magic';
-    public override category: string = 'fun';
+    public override category: string = 'utilities';
     private bulkData: BulkData | null = null;
     private cardNames: string[] = [];
-    private cardMap: Map<string, Card> = new Map();
+    public cardMap: Map<string, Card> = new Map();
 
     public override slashCommands: GargoyleSlashCommandBuilder[] = [
         new GargoyleSlashCommandBuilder()
@@ -53,7 +54,7 @@ export default class Magic extends GargoyleModule {
 
         if (interaction.options.getSubcommand(true) === 'random') {
             const card = this.bulkData[Math.floor(Math.random() * this.bulkData.length)];
-            const images = this.getCardImages(card);
+            const images = getCardImages(card);
             await interaction.editReply({
                 content: null,
                 files: images
@@ -65,27 +66,17 @@ export default class Magic extends GargoyleModule {
             if (matches.length === 1) {
                 await interaction.editReply({
                     content: `**${matches[0].name}**`,
-                    files: this.getCardImages(matches[0])
+                    files: getCardImages(matches[0])
                 });
             } else {
                 // Flatten all images from all matched cards, staying within Discord's 10 attachment limit
-                const files = matches.flatMap((c) => this.getCardImages(c)).slice(0, 10);
+                const files = matches.flatMap((c) => getCardImages(c)).slice(0, 10);
                 await interaction.editReply({
                     content: matches.map((c) => `**${c.name}**`).join('\n'),
                     files
                 });
             }
         }
-    }
-
-    private getCardImages(card: Card): string[] {
-        if (card.image_uris?.normal) {
-            return [card.image_uris.normal];
-        }
-        if (card.card_faces) {
-            return card.card_faces.flatMap((face) => face.image_uris?.normal ? [face.image_uris.normal] : []);
-        }
-        return [];
     }
 
     private findCards(query: string): Card[] {
@@ -139,6 +130,45 @@ export default class Magic extends GargoyleModule {
 
         return (await Bun.file(filePath).json()) as BulkData;
     }
+
+    public override events: GargoyleEvent[] = [
+        new CardMessage(this)
+    ]
+}
+
+class CardMessage extends GargoyleEvent {
+    constructor(module: Magic) {
+        super()
+        this.module = module;
+    }
+    private module: Magic;
+    public override event: keyof ClientEvents = Events.MessageCreate;
+
+    public override execute(_client: GargoyleClient, message: Message, ..._args: any[]): void {
+        if (message.author.bot || message.content === '') return;
+
+        const matches = []
+        for (const match of message.content.matchAll(/\[\[(.*?)\]\]/g)) {
+            const card = this.module.cardMap.get(match[1])
+            if ((card)) matches.push(...getCardImages(card))
+        }
+
+        if(matches.length > 0){
+            message.reply({
+                files: matches
+            })
+        }
+    }
+}
+
+function getCardImages(card: Card): string[] {
+    if (card.image_uris?.normal) {
+        return [card.image_uris.normal];
+    }
+    if (card.card_faces) {
+        return card.card_faces.flatMap((face) => face.image_uris?.normal ? [face.image_uris.normal] : []);
+    }
+    return [];
 }
 
 type BulkData = Card[];
