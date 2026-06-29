@@ -3,6 +3,7 @@ import GargoyleClient from '@src/system/backend/classes/gargoyleClient';
 import GargoyleEvent from '@src/system/backend/classes/gargoyleEvent';
 import GargoyleModule from '@src/system/backend/classes/gargoyleModule';
 import { $, fetch } from 'bun';
+import { UUID } from 'crypto';
 import { ApplicationIntegrationType, ChatInputCommandInteraction, ClientEvents, Events, InteractionContextType, Message } from 'discord.js';
 import { closest, distance } from 'fastest-levenshtein';
 import { tmpdir } from 'os';
@@ -28,7 +29,13 @@ export default class Magic extends GargoyleModule {
                     .setDescription('Get a card')
                     .addStringOption((n) => n.setName('name').setDescription('The name of the card').setRequired(true))
             )
-            .addSubcommand((s) => s.setName('random').setDescription('Get a random card')) as GargoyleSlashCommandBuilder
+            .addSubcommand((s) => s.setName('random').setDescription('Get a random card'))
+            .addSubcommand((s) =>
+                s
+                    .setName('booster')
+                    .setDescription('Open a booster pack')
+                    .addStringOption((n) => n.setName('set').setDescription('The set code to open a booster from (random if omitted)').setRequired(false))
+            ) as GargoyleSlashCommandBuilder
     ];
 
     public override async init(client: GargoyleClient): Promise<void> {
@@ -74,6 +81,130 @@ export default class Magic extends GargoyleModule {
                 await interaction.editReply({
                     content: matches.map((c) => `**${c.name}**`).join('\n'),
                     files
+                });
+            }
+        } else if (interaction.options.getSubcommand(true) === 'booster') {
+            const setInput = interaction.options.getString('set', false)?.toLowerCase();
+
+            // If no set was provided, pick one at random from all booster-eligible sets
+            const set = setInput ?? (() => {
+                const availableSets = [...new Set(
+                    [...this.cardMap.values()]
+                        .filter(c => c.booster && !c.digital)
+                        .map(c => c.set)
+                )];
+                return random(availableSets);
+            })();
+
+            const cards = [...this.cardMap.values()].filter(
+                c => c.set === set &&
+                    c.booster &&
+                    !c.digital
+            );
+
+            if (!cards.length) {
+                await interaction.editReply({
+                    content: 'Unknown set.',
+                });
+                return;
+            }
+
+            const commons = cards.filter(c => c.rarity === "common");
+            const uncommons = cards.filter(c => c.rarity === "uncommon");
+            const rares = cards.filter(c => c.rarity === "rare");
+            const mythics = cards.filter(c => c.rarity === "mythic");
+
+            const lands = cards.filter(c =>
+                c.type_line.includes("Basic Land")
+            );
+
+            const chosen = new Set<string>();
+
+            const booster: Card[] = [];
+
+            /* Commons */
+            booster.push(...takeRandomUnique(
+                commons,
+                6,
+                chosen
+            ));
+
+            /* Uncommons */
+            booster.push(...takeRandomUnique(
+                uncommons,
+                3,
+                chosen
+            ));
+
+            /* Rare/Mythic */
+            {
+                const card =
+                    Math.random() < 0.125
+                        ? random(mythics)
+                        : random(rares);
+
+                booster.push(card);
+                chosen.add(card.id);
+            }
+
+            /* Wildcard slot */
+            {
+                const wildcard = weightedRandom([
+                    {
+                        weight: 71,
+                        cards: commons.filter(c => !chosen.has(c.id))
+                    },
+                    {
+                        weight: 18,
+                        cards: uncommons.filter(c => !chosen.has(c.id))
+                    },
+                    {
+                        weight: 10,
+                        cards: rares.filter(c => !chosen.has(c.id))
+                    },
+                    {
+                        weight: 1,
+                        cards: mythics.filter(c => !chosen.has(c.id))
+                    }
+                ]);
+
+                booster.push(wildcard);
+                chosen.add(wildcard.id);
+            }
+
+            /* Land slot */
+            if (lands.length) {
+                const land = random(
+                    lands.filter(c => !chosen.has(c.id))
+                );
+
+                booster.push(land);
+                chosen.add(land.id);
+            }
+
+            /* Foil slot */
+            {
+                const foil = weightedRandom([
+                    {
+                        weight: 70,
+                        cards: commons.filter(c => !chosen.has(c.id))
+                    },
+                    {
+                        weight: 20,
+                        cards: uncommons.filter(c => !chosen.has(c.id))
+                    },
+                    {
+                        weight: 9,
+                        cards: rares.filter(c => !chosen.has(c.id))
+                    },
+                    {
+                        weight: 1,
+                        cards: mythics.filter(c => !chosen.has(c.id))
+                    }
+                ]);
+
+                booster.push({
+                    ...foil,
                 });
             }
         }
@@ -124,7 +255,7 @@ export default class Magic extends GargoyleModule {
             client.logger.trace('Data already downloaded');
         } else {
             client.logger.trace('Data not yet downloaded');
-            await $`rm -rf /tmp/default-cards-* 2&>1`.catch(e=>e)
+            await $`rm -rf /tmp/default-cards-* 2&>1`.catch(e => e)
             await Bun.write(filePath, await (await fetch(dataUrl)).text());
         }
 
@@ -134,6 +265,46 @@ export default class Magic extends GargoyleModule {
     public override events: GargoyleEvent[] = [
         new CardMessage(this)
     ]
+}
+
+function random<T>(array: T[]): T {
+    return array[Math.floor(Math.random() * array.length)];
+}
+
+function takeRandomUnique<T>(
+    source: T[],
+    count: number,
+    alreadyChosen: Set<string>
+): T[] {
+    const pool = source.filter(c => !alreadyChosen.has((c as any).id));
+
+    const chosen: T[] = [];
+
+    while (chosen.length < count && pool.length) {
+        const index = Math.floor(Math.random() * pool.length);
+        const card = pool.splice(index, 1)[0];
+
+        alreadyChosen.add((card as any).id);
+        chosen.push(card);
+    }
+
+    return chosen;
+}
+
+function weightedRandom<T>(entries: { weight: number; cards: T[] }[]): T {
+    const total = entries.reduce((a, b) => a + b.weight, 0);
+
+    let r = Math.random() * total;
+
+    for (const entry of entries) {
+        if (r < entry.weight) {
+            return random(entry.cards);
+        }
+
+        r -= entry.weight;
+    }
+
+    return random(entries[entries.length - 1].cards);
 }
 
 class CardMessage extends GargoyleEvent {
@@ -153,7 +324,7 @@ class CardMessage extends GargoyleEvent {
             if ((card)) matches.push(...getCardImages(card))
         }
 
-        if(matches.length > 0){
+        if (matches.length > 0) {
             message.reply({
                 files: matches
             })
@@ -188,8 +359,14 @@ type Card = {
     color_identity: string[];
     keywords: string[];
     produced_mana: string[];
-    rarity: string;
+    rarity: "common" | "uncommon" | "rare" | "special" | "mythic" | "bonus";
+
+    set: string;
+    set_name: string;
+    set_id: UUID;
+    digital: boolean;
     collector_number: number;
+    booster: boolean;
     prices: { usd: string | null; usd_foil: number | null; usd_etched: string | null };
 };
 type CardFace = {
