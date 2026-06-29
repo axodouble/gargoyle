@@ -1,7 +1,7 @@
 import GargoyleSlashCommandBuilder from '@src/system/backend/builders/gargoyleSlashCommandBuilder';
 import GargoyleClient from '@src/system/backend/classes/gargoyleClient';
 import GargoyleModule from '@src/system/backend/classes/gargoyleModule';
-import { fetch } from 'bun';
+import { $, fetch } from 'bun';
 import { ApplicationIntegrationType, ChatInputCommandInteraction, InteractionContextType } from 'discord.js';
 import { closest, distance } from 'fastest-levenshtein';
 import { tmpdir } from 'os';
@@ -133,6 +133,7 @@ export default class Magic extends GargoyleModule {
             client.logger.trace('Data already downloaded');
         } else {
             client.logger.trace('Data not yet downloaded');
+            await $`rm -rf /tmp/default-cards-*`
             await Bun.write(filePath, await (await fetch(dataUrl)).text());
         }
 
