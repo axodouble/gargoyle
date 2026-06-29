@@ -124,7 +124,7 @@ export default class Magic extends GargoyleModule {
             client.logger.trace('Data already downloaded');
         } else {
             client.logger.trace('Data not yet downloaded');
-            await $`rm -rf /tmp/default-cards-*`
+            await $`rm -rf /tmp/default-cards-* 2&>1`.catch(e=>e)
             await Bun.write(filePath, await (await fetch(dataUrl)).text());
         }
 
@@ -149,7 +149,7 @@ class CardMessage extends GargoyleEvent {
 
         const matches = []
         for (const match of message.content.matchAll(/\[\[(.*?)\]\]/g)) {
-            const card = this.module.cardMap.get(match[1])
+            const card = this.module.cardMap.get(match[1].toLowerCase())
             if ((card)) matches.push(...getCardImages(card))
         }
 
