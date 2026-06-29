@@ -35,7 +35,6 @@ export default class Economy extends GargoyleModule {
     public override name: string = 'economy';
     public override category: string = 'economy';
     public override slashCommands: GargoyleSlashCommandBuilder[] = [
-        new GargoyleSlashCommandBuilder().setName('daily').setDescription('Claim your daily reward') as GargoyleSlashCommandBuilder,
         new GargoyleSlashCommandBuilder()
             .setName('pay')
             .setDescription('Pay another user')
