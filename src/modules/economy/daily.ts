@@ -46,7 +46,7 @@ export default class Daily extends GargoyleModule {
         } else {
             guildUser.daily_streak = 1;
         }
-        const dailyAmount = 50 + guildUser.daily_streak * 10;
+        const dailyAmount = 50 + guildUser.daily_streak * 15;
         user.balance += dailyAmount;
         client.logger.trace(`User ${interaction.user.id} claimed daily reward of $${dailyAmount} with a streak of ${guildUser.daily_streak}.`);
         guildUser.last_daily = now;
