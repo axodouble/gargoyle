@@ -47,7 +47,6 @@ function getStatusMessage(client: GargoyleClient): string {
         `All hail now the panopticon`,
         'Developed with duct tape and dreams.',
         'Running....',
-        `${Math.round(process.uptime())} seconds of uptime.`,
         `Watching ${client.users.cache.random()?.username}...`,
         `{bodies} bodies, 0 found`,
         `just ${daysUntilOct5} more days...`,
