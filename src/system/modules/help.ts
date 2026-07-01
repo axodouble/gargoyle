@@ -57,10 +57,10 @@ export default class Help extends GargoyleModule {
                 .addTextDisplayComponents(
                     new TextDisplayBuilder().setContent(
                         'A bot made by [Axodouble](https://axodouble.com).\n' +
-                            'Distriobuted, hosted & developed by [Ceraia](https://ceraia.com).' +
                             'This bot is built on Gargoyle, a custom bot framework.\n\n' +
                             'This bot is still in very early development and major changes are expected,\n' +
-                            'If you have any suggestions or issues, please contact Axodouble.'
+                            'If you have any suggestions or issues, please contact Axodouble.' + 
+                            'If you have any security concerns, please see the security policy on [axodouble.com](https://axodouble.com/).'
                     )
                 )
                 .addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true))
