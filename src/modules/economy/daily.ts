@@ -35,9 +35,8 @@ export default class Daily extends GargoyleModule {
                 });
                 return;
             } else if (
-                lastDaily.getDate() + 1 === now.getDate() &&
-                lastDaily.getMonth() === now.getMonth() &&
-                lastDaily.getFullYear() === now.getFullYear()
+                // If the last daily was in the last 36 hours, we consider it a streak. This allows for some flexibility in claiming times.
+                now.getTime() - lastDaily.getTime() <= 36 * 60 * 60 * 1000
             ) {
                 guildUser.daily_streak += 1;
             } else {
