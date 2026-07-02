@@ -15,12 +15,15 @@ export default class Eval extends GargoyleModule {
             .setContexts([InteractionContextType.BotDM, InteractionContextType.Guild, InteractionContextType.PrivateChannel])
     ];
 
-    public override executeTextCommand(client: GargoyleClient, message: Message) {
+    public override async executeTextCommand(client: GargoyleClient, message: Message) {
         client.logger.trace(`Eval command executed by ${message.author.tag} (${message.author.id}) in ${message.guild?.name ?? 'DM'} (${message.guild?.id ?? 'DM'})`);
         if (message.author.id !== '244173330431737866') return;
+
         const code = message.content.split(' ').slice(1).join(' ');
         try {
-            const result = eval(code);
+            const AsyncFunction = Object.getPrototypeOf(async function () { }).constructor;
+            const fn = new AsyncFunction('client', 'message', `return (${code})`);
+            const result = await fn(client, message);
             (message.channel as TextChannel).send(`\`\`\`js\n${result}\n\`\`\``);
         } catch (error) {
             (message.channel as TextChannel).send(`\`\`\`js\n${error}\n\`\`\``);
