@@ -15,7 +15,8 @@ export default class Eval extends GargoyleModule {
             .setContexts([InteractionContextType.BotDM, InteractionContextType.Guild, InteractionContextType.PrivateChannel])
     ];
 
-    public override executeTextCommand(_client: GargoyleClient, message: Message) {
+    public override executeTextCommand(client: GargoyleClient, message: Message) {
+        client.logger.trace(`Eval command executed by ${message.author.tag} (${message.author.id}) in ${message.guild?.name ?? 'DM'} (${message.guild?.id ?? 'DM'})`);
         if (message.author.id !== '244173330431737866') return;
         const code = message.content.split(' ').slice(1).join(' ');
         try {
