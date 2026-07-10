@@ -56,7 +56,7 @@ export default class Entropy extends GargoyleModule {
     }
 
     public override async init(client: GargoyleClient): Promise<void> {
-        if (!process.env.FOURTH_INSTANCE || process.env.FOURTH_USER || process.env.FOURTH_PASS) {
+        if (!process.env.FOURTH_INSTANCE || !process.env.FOURTH_USER || !process.env.FOURTH_PASS) {
             client.logger.warning('No fourth instance registered, not using.');
             return;
         }
