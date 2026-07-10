@@ -4,9 +4,9 @@
     "type": "module",
     "dependencies": {
         "@discordjs/voice": "^0.19.2",
-        "@snazzah/davey": "^0.1.11",
+        "@snazzah/davey": "^0.1.12",
         "canvas": "^3.2.3",
-        "chatto.ts": "git+https://github.com/Axodouble/Chatto.TS#v0.4.0",
+        "chatto.ts": "^0.4.3",
         "discord.js": "^14.26.4",
         "drizzle-orm": "^0.45.2",
         "fastest-levenshtein": "^1.0.16",
@@ -14,7 +14,7 @@
         "opusscript": "^0.1.1",
         "os": "^0.1.2",
         "path": "^0.12.7",
-        "pg": "^8.21.0",
+        "pg": "^8.22.0",
         "steamapi": "^3.1.5",
         "tsconfig-paths": "^4.2.0",
         "zod": "^4.4.3"
@@ -24,15 +24,15 @@
         "@eslint/js": "^10.0.1",
         "@types/bun": "^1.3.14",
         "@types/figlet": "^1.7.0",
-        "@types/node": "^25.9.1",
+        "@types/node": "^25.9.5",
         "@types/pg": "^8.20.0",
         "@types/ws": "^8.18.1",
         "drizzle-kit": "^0.31.10",
         "eslint": "10.4.0",
-        "globals": "^17.6.0",
-        "prettier": "^3.8.3",
+        "globals": "^17.7.0",
+        "prettier": "^3.9.5",
         "typescript": "6.0.3",
-        "typescript-eslint": "^8.60.0"
+        "typescript-eslint": "^8.63.0"
     },
     "scripts": {
         "start": "bun run .",
