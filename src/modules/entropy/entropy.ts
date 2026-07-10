@@ -2,14 +2,29 @@ import GargoyleClient from '@classes/gargoyleClient.js';
 import GargoyleModule from '@src/system/backend/classes/gargoyleModule.js';
 import GargoyleEmbedBuilder from '@builders/gargoyleEmbedBuilder.js';
 import GargoyleEvent from '@src/system/backend/classes/gargoyleEvent.js';
-import { ChannelType, ChatInputCommandInteraction, Events, GuildMember, MessageFlags, TextChannel, VoiceChannel } from 'discord.js';
+import {
+    ChannelType,
+    ChatInputCommandInteraction,
+    ClientEvents,
+    Events,
+    GuildMember,
+    Message,
+    MessageCreateOptions,
+    MessageFlags,
+    TextBasedChannel,
+    TextChannel,
+    VoiceChannel
+} from 'discord.js';
 import { playAudio } from '@src/system/backend/tools/voice.js';
 import GargoyleSlashCommandBuilder from '@src/system/backend/builders/gargoyleSlashCommandBuilder.js';
+import { ChattoClient, User as CUser } from 'chatto.ts';
+import { sanitizeNameString } from '@src/system/backend/tools/server';
 
 export default class Entropy extends GargoyleModule {
     public override name: string = 'entropy';
     public override category: string = 'entropy';
-    public override events = [new RolePrefix(), new LeaveLog()];
+    public fourthClient: ChattoClient | null = null;
+
     public override slashCommands: GargoyleSlashCommandBuilder[] = [
         new GargoyleSlashCommandBuilder()
             .setName('bell')
@@ -38,6 +53,50 @@ export default class Entropy extends GargoyleModule {
 
         playAudio(client, channel, 'bell.mp3');
         interaction.reply({ content: `Ringing the bell in ${channel.name}!`, flags: MessageFlags.Ephemeral });
+    }
+
+    public override async init(client: GargoyleClient): Promise<void> {
+        if (!process.env.FOURTH_INSTANCE || process.env.FOURTH_USER || process.env.FOURTH_PASS) {
+            client.logger.warning('No fourth instance registered, not using.');
+            return;
+        }
+        this.fourthClient = await ChattoClient.login({
+            baseUrl: process.env.FOURTH_INSTANCE || '',
+            login: process.env.FOURTH_USER || '',
+            password: process.env.FOURTH_PASS || ''
+        });
+        this.fourthClient.connect();
+
+        this.fourthClient.on('messageCreate', async (message) => {
+            if (message.channel.name.toLowerCase() === 'lounge') {
+                if (!message.content || message.content == '') return;
+                if (message.author.username.toLowerCase() === 'entropy') return;
+                const channel = (await client.channels.fetch('1434726432201773056')) as TextBasedChannel | undefined;
+                if (!channel) return;
+                sendAsUser({ content: message.content }, channel, message.author);
+            }
+        });
+    }
+
+    public override events = [new RolePrefix(), new LeaveLog(), new ChattoSync(this)];
+}
+
+class ChattoSync extends GargoyleEvent {
+    public override event: keyof ClientEvents = Events.MessageCreate;
+    private module: Entropy;
+    constructor(module: Entropy) {
+        super();
+        this.module = module;
+    }
+
+    public override async execute(_client: GargoyleClient, message: Message, ..._args: any[]): Promise<void> {
+        if (message.guildId !== '1009048008857493624') return;
+        if (message.channel.type === ChannelType.GuildText && message.channel.name.toLowerCase() === 'lounge') {
+            if (message.author.bot) return;
+            const room = await this.module.fourthClient?.rooms.fetch('R8EH1nmXXADGngG');
+            if (!room || message.content == '') return;
+            await room.send(`\`${message.author.displayName}\`: ${message.content}`);
+        }
     }
 }
 
@@ -79,5 +138,33 @@ class LeaveLog extends GargoyleEvent {
         if (!channel) return;
 
         channel.send({ embeds: [new GargoyleEmbedBuilder().setDescription(`User ${member.user.tag} (<@!${member.user.id}>) has left the server.`)] });
+    }
+}
+
+export async function sendAsUser(message: MessageCreateOptions, channel: TextBasedChannel, user: CUser): Promise<Message | null> {
+    const target = channel.isThread() ? channel.parent : channel;
+    if (!target || target.isDMBased()) return Promise.resolve(null);
+    const webhooks = await target.fetchWebhooks();
+
+    let webhook;
+
+    webhook = webhooks.find((webhook) => webhook.owner && webhook.owner.id === target.client.user.id);
+
+    if (!webhook) {
+        webhook = await target.createWebhook({
+            name: sanitizeNameString(`${user.username} from 4th.group`),
+            reason: 'Server Message'
+        });
+    }
+
+    try {
+        return await webhook.send({
+            avatarURL: user.avatarUrl,
+            username: sanitizeNameString(`${user.username} from 4th.group`),
+            threadId: channel.isThread() ? channel.id : undefined,
+            ...message
+        });
+    } catch (err) {
+        return null;
     }
 }

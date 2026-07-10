@@ -36,9 +36,5 @@ export const usersTable = p.pgTable(
         balance: p.bigint({ mode: 'number' }).notNull().default(100),
         disable_xp_msg: p.boolean().notNull().default(false)
     },
-    (t) => [
-        p.index('user_idx').on(t.user_id),
-        p.index('user_balance_idx').on(t.balance)
-    ]
+    (t) => [p.index('user_idx').on(t.user_id), p.index('user_balance_idx').on(t.balance)]
 );
-

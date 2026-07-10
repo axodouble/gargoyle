@@ -30,6 +30,9 @@ services:
       PG_PASSWORD: ${PG_PASSWORD}
       PG_DB: ${PG_DB}
       PG_HOST: postgres
+      FOURTH_INSTANCE: ${FOURTH_INSTANCE}
+      FOURTH_USER: ${FOURTH_USER}
+      FOURTH_PASS: ${FOURTH_PASS}
     ports:
       - 3001:3001
     networks:

@@ -59,7 +59,7 @@ export default class Help extends GargoyleModule {
                         'A bot made by [Axodouble](https://axodouble.com).\n' +
                             'This bot is built on Gargoyle, a custom bot framework.\n\n' +
                             'This bot is still in very early development and major changes are expected,\n' +
-                            'If you have any suggestions or issues, please contact Axodouble.' + 
+                            'If you have any suggestions or issues, please contact Axodouble.' +
                             'If you have any security concerns, please see the security policy on [axodouble.com](https://axodouble.com/).'
                     )
                 )
