@@ -68,6 +68,7 @@ export default class Entropy extends GargoyleModule {
         this.fourthClient.connect();
 
         this.fourthClient.on('messageCreate', async (message) => {
+            client.logger.log('Message');
             if (message.channel.name.toLowerCase() === 'lounge') {
                 if (!message.content || message.content == '') return;
                 if (message.author.username.toLowerCase() === 'entropy') return;

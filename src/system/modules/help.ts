@@ -33,6 +33,8 @@ import GargoyleSlashCommandBuilder from '../backend/builders/gargoyleSlashComman
 import GargoyleModalBuilder from '../backend/builders/gargoyleModalBuilder.js';
 import GargoyleButtonBuilder from '../backend/builders/gargoyleButtonBuilder.js';
 import Emojis from '../backend/tools/emojis.js';
+import ChattoCommandBuilder from '../backend/builders/chattoCommandBuilder.js';
+import { Message as CMessage } from 'chatto.ts';
 
 export default class Help extends GargoyleModule {
     override name: string = 'help';
@@ -40,6 +42,9 @@ export default class Help extends GargoyleModule {
     override slashCommands = [
         new GargoyleSlashCommandBuilder().setName('help').setDescription('Replies with bot information'),
         new GargoyleSlashCommandBuilder().setName('suggest').setDescription('Suggest a feature for the bot')
+    ];
+    public override chattoCommands: ChattoCommandBuilder[] = [
+        new ChattoCommandBuilder().setName('help').setDescription('Replies with bot information').addAlias('h')
     ];
     override textCommands = [new GargoyleTextCommandBuilder().setName('help').setDescription('Replies with bot information').addAlias('h')];
     private readonly selectMenu = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
@@ -49,20 +54,19 @@ export default class Help extends GargoyleModule {
             new StringSelectMenuOptionBuilder().setLabel('Text Commands').setValue('text')
         )
     );
+    private plainHelpMessage =
+        'A bot made by [Axodouble](https://axodouble.com).\n' +
+        'This bot is built on [Gargoyle](https://github.com/Ceraia/Gargoyle), a custom bot framework.\n\n' +
+        'This bot is still in very early development and major changes are expected,\n' +
+        'If you have any suggestions or issues, please contact Axodouble.\n' +
+        'If you have any security concerns, please see the security policy on [axodouble.com](https://axodouble.com/).';
+
     private readonly helpMessage: MessageEditOptions = {
         content: undefined,
         embeds: [],
         components: [
             new ContainerBuilder()
-                .addTextDisplayComponents(
-                    new TextDisplayBuilder().setContent(
-                        'A bot made by [Axodouble](https://axodouble.com).\n' +
-                            'This bot is built on Gargoyle, a custom bot framework.\n\n' +
-                            'This bot is still in very early development and major changes are expected,\n' +
-                            'If you have any suggestions or issues, please contact Axodouble.' +
-                            'If you have any security concerns, please see the security policy on [axodouble.com](https://axodouble.com/).'
-                    )
-                )
+                .addTextDisplayComponents(new TextDisplayBuilder().setContent(this.plainHelpMessage))
                 .addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true))
                 .addSectionComponents(
                     new SectionBuilder()
@@ -120,6 +124,39 @@ export default class Help extends GargoyleModule {
             await interaction.editReply(this.helpMessage);
             return;
         }
+    }
+
+    public override executeChattoCommand(client: GargoyleClient, message: CMessage, ...args: string[]): void {
+        if (args.length === 1) {
+            message.reply(
+                this.plainHelpMessage +
+                    `\n` +
+                    client.modules
+                        .filter((m) => m.chattoCommands.length > 0)
+                        .map((m) => m.chattoCommands.map((c) => `- \`/${c.name}\`\n> ${c.description}`).join('\n'))
+                        .join('\n')
+            );
+            return;
+        }
+
+        if (args.length === 2) {
+            const query = args[1].toLowerCase();
+            const chattoCommands = client.modules.flatMap((m) => m.chattoCommands);
+            const command = chattoCommands.find((c) => c.name.toLowerCase() === query || c.aliases.some((a) => a.toLowerCase() === query));
+
+            if (!command) {
+                message.reply(`No command found matching \`${args[1]}\`.`);
+                return;
+            }
+
+            message.reply(
+                `- \`/${command.name}\`\n> ${command.description}\n**Usage:** \`${command.usage}\`` +
+                    (command.aliases.length > 0 ? `\n**Aliases:** ${command.aliases.map((a) => `\`${a}\``).join(', ')}` : '')
+            );
+            return;
+        }
+        message.reply('Unknown usage, please use: `/help <command>` for help on a specific command');
+        return;
     }
 
     override executeTextCommand(_client: GargoyleClient, message: Message) {

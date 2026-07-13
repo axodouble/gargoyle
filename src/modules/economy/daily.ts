@@ -1,14 +1,22 @@
+import ChattoCommandBuilder from '@src/system/backend/builders/chattoCommandBuilder';
 import GargoyleContainerBuilder from '@src/system/backend/builders/gargoyleContainerBuilder';
 import GargoyleSlashCommandBuilder from '@src/system/backend/builders/gargoyleSlashCommandBuilder';
 import GargoyleClient from '@src/system/backend/classes/gargoyleClient';
 import GargoyleModule from '@src/system/backend/classes/gargoyleModule';
+import { Message } from 'chatto.ts';
 import { ChatInputCommandInteraction, MessageFlags } from 'discord.js';
+
+// Chatto has no concept of guilds, so daily streaks there share a single global scope.
+const CHATTO_GUILD_ID = 'chatto';
 
 export default class Daily extends GargoyleModule {
     public override name: string = 'daily';
     public override category: string = 'economy';
     public override slashCommands = [
         new GargoyleSlashCommandBuilder().setName(this.name).setDescription('Claim your daily reward') as GargoyleSlashCommandBuilder
+    ];
+    public override chattoCommands: ChattoCommandBuilder[] = [
+        new ChattoCommandBuilder().setName(this.name).setDescription('Claim your daily reward').setUsage('daily')
     ];
 
     public override async executeSlashCommand(client: GargoyleClient, interaction: ChatInputCommandInteraction): Promise<void> {
@@ -67,6 +75,52 @@ export default class Daily extends GargoyleModule {
                 )
             ],
             flags: [MessageFlags.IsComponentsV2]
+        });
+    }
+
+    public override async executeChattoCommand(client: GargoyleClient, message: Message, ..._args: string[]): Promise<void> {
+        if (!client.db) {
+            await message.reply({ content: 'Database not connected. Please try again later.' });
+            client.logger.error('Database not connected when executing daily command.');
+            return;
+        }
+
+        const guildUser = await client.db.getGuildUser(message.author.id, CHATTO_GUILD_ID, { exists: true });
+        const user = await client.db.getUser(message.author.id, { exists: true });
+
+        const now = new Date();
+        const lastDaily = new Date(guildUser.last_daily);
+        if (lastDaily.getTime() > 0) {
+            if (lastDaily.getDate() === now.getDate() && lastDaily.getMonth() === now.getMonth() && lastDaily.getFullYear() === now.getFullYear()) {
+                await message.reply({ content: 'You have already claimed your daily reward today!' });
+                return;
+            } else if (
+                // If the last daily was in the last 36 hours, we consider it a streak. This allows for some flexibility in claiming times.
+                now.getTime() - lastDaily.getTime() <=
+                36 * 60 * 60 * 1000
+            ) {
+                guildUser.daily_streak += 1;
+            } else {
+                guildUser.daily_streak = 1;
+            }
+        } else {
+            guildUser.daily_streak = 1;
+        }
+        const dailyAmount = 50 + guildUser.daily_streak * 15;
+        user.balance += dailyAmount;
+        client.logger.trace(`User ${message.author.id} claimed daily reward of $${dailyAmount} with a streak of ${guildUser.daily_streak}.`);
+        guildUser.last_daily = now;
+
+        await client.db.setUser(message.author.id, {
+            balance: user.balance
+        });
+        await client.db.setGuildUser(message.author.id, CHATTO_GUILD_ID, {
+            last_daily: guildUser.last_daily,
+            daily_streak: guildUser.daily_streak
+        });
+
+        await message.reply({
+            content: `You have claimed your daily reward of $${dailyAmount.toLocaleString()}! Your current streak is ${guildUser.daily_streak} days.`
         });
     }
 }

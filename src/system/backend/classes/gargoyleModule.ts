@@ -14,6 +14,8 @@ import GargoyleClient from './gargoyleClient.js';
 import GargoyleTextCommandBuilder from '@builders/gargoyleTextCommandBuilder.js';
 import GargoyleEvent from './gargoyleEvent.js';
 import GargoyleSlashCommandBuilder from '../builders/gargoyleSlashCommandBuilder.js';
+import ChattoCommandBuilder from '../builders/chattoCommandBuilder.js';
+import { Message as CMessage } from 'chatto.ts';
 
 abstract class GargoyleModule {
     public abstract name: string;
@@ -30,6 +32,7 @@ abstract class GargoyleModule {
      */
     public textCommands: GargoyleTextCommandBuilder[] = [];
     public contextCommands: ContextMenuCommandBuilder[] | null = null;
+    public chattoCommands: ChattoCommandBuilder[] = [];
     public events: GargoyleEvent[] = [];
 
     /**
@@ -49,6 +52,14 @@ abstract class GargoyleModule {
     public executeTextCommand(client: GargoyleClient, message: Message, ..._args: string[]): void {
         client.logger.error(`${message.content} does not have a text command implementation.`);
         message.reply({ content: 'This command does not have a text command implementation.' }).then((message) => {
+            setTimeout(() => {
+                message.delete();
+            }, 5000);
+        });
+    }
+    public executeChattoCommand(client: GargoyleClient, message: CMessage, ..._args: string[]): void {
+        client.logger.error(`${message.content} does not have a chatto command implementation.`);
+        message.reply({ content: 'This command does not have a chatto command implementation.' }).then((message) => {
             setTimeout(() => {
                 message.delete();
             }, 5000);

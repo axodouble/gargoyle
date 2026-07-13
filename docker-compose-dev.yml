@@ -33,6 +33,9 @@ services:
       FOURTH_INSTANCE: ${FOURTH_INSTANCE}
       FOURTH_USER: ${FOURTH_USER}
       FOURTH_PASS: ${FOURTH_PASS}
+      CHATTO_INSTANCE: ${CHATTO_INSTANCE}
+      CHATTO_USER: ${CHATTO_USER}
+      CHATTO_PASS: ${CHATTO_PASS}
     ports:
       - 3001:3001
     networks:

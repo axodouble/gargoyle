@@ -13,6 +13,8 @@ import {
 } from 'discord.js';
 import SteamAPI from 'steamapi';
 import { GargoyleURLButtonBuilder } from '@src/system/backend/builders/gargoyleButtonBuilder.js';
+import ChattoCommandBuilder from '@src/system/backend/builders/chattoCommandBuilder';
+import { Message } from 'chatto.ts';
 
 export default class Steam extends GargoyleModule {
     public override name: string = 'steam';
@@ -40,6 +42,10 @@ export default class Steam extends GargoyleModule {
                 InteractionContextType.PrivateChannel
             ) as GargoyleSlashCommandBuilder
     ];
+
+    public override chattoCommands: ChattoCommandBuilder[] = [
+        new ChattoCommandBuilder().setName('64id').setDescription('Get a users Steam64ID').setUsage('64id <steam_profile_url>')
+    ];
     public override textCommands = [];
 
     public override async executeSlashCommand(_client: GargoyleClient, interaction: ChatInputCommandInteraction) {
@@ -56,8 +62,7 @@ export default class Steam extends GargoyleModule {
             try {
                 const resolved = await steam.resolve(interaction.options.getString('user', true));
                 await interaction.editReply({
-                    content: `
-                [${resolved}](https://steamcommunity.com/profiles/${resolved})`
+                    content: `[${resolved}](https://steamcommunity.com/profiles/${resolved})`
                 });
             } catch (err) {
                 await interaction.editReply(`Failed to resolve input: ${err as string}`);
@@ -94,6 +99,35 @@ export default class Steam extends GargoyleModule {
             } catch (err) {
                 await interaction.editReply(`Failed to resolve input: ${err as string}`);
             }
+        }
+    }
+
+    public override async executeChattoCommand(_client: GargoyleClient, message: Message, ...args: string[]): Promise<void> {
+        if (!process.env.STEAM_API) {
+            await message.reply({
+                content: 'This command is unavailable as no Steam API key has been set for this bot, contact the owner / developer'
+            });
+            return;
+        }
+
+        if (!args[1]) {
+            await message.reply({
+                content: `Invalid usage! Please try: \`64id <steam_profile_url>\``
+            });
+            return;
+        }
+
+        const steam = new SteamAPI(process.env.STEAM_API);
+        const msg = await message.reply('Working...');
+
+        try {
+            const resolved = await steam.resolve(args[1]);
+            await msg.edit({
+                content: `
+                [${resolved}](https://steamcommunity.com/profiles/${resolved})`
+            });
+        } catch (err) {
+            await msg.edit(`Failed to resolve input: ${err as string}`);
         }
     }
 }

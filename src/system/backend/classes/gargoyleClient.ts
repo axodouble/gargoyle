@@ -7,6 +7,7 @@ import loadModules from '../initializers/loadModules.js';
 import executeWebRequest from '../tools/web.js';
 import { mkdirSync, rmSync } from 'node:fs';
 import { fetch } from 'bun';
+import { ChattoClient } from 'chatto.ts';
 /**
  * Represents a client for the Gargoyle system, extending the base Client class.
  * Handles database connection, command loading, and event registration.
@@ -19,6 +20,12 @@ class GargoyleClient extends Client {
      * @type {number}
      */
     startTime: Date;
+
+    /**
+     * Chatto instance
+     * @type {ChattoClient | null}
+     */
+    chatto: ChattoClient | null;
 
     /**
      * The database instance associated with the client.
@@ -47,6 +54,7 @@ class GargoyleClient extends Client {
         this.startTime = new Date();
         this.prefix = process.env.PREFIX ?? ',';
         this.modules = [];
+        this.chatto = null;
     }
 
     /**
@@ -102,6 +110,16 @@ class GargoyleClient extends Client {
     override async login(token?: string): Promise<string> {
         this.startHealthCheckServer();
         this.startApiServer();
+        try {
+            this.logger.debug('Logging in to Chatto...');
+            this.chatto = await ChattoClient.login({
+                baseUrl: process.env.CHATTO_INSTANCE || '',
+                login: process.env.CHATTO_USER || '',
+                password: process.env.CHATTO_PASS || ''
+            });
+        } catch (err) {
+            this.logger.error(`Failed chatto initialization: ${err}`);
+        }
 
         this.logger.log('Checking external modules...');
 
@@ -144,6 +162,11 @@ class GargoyleClient extends Client {
             this.loadCommands()
         ]);
         this.logger.debug('Promises resolved...');
+
+        if (this.chatto) {
+            this.logger.debug('Connecting to Chatto...');
+            await this.chatto.connect();
+        }
 
         const loginResult = await super.login(token ?? process.env.DISCORD_TOKEN).catch((err) => {
             this.logger.error(err, 'Error logging in');
