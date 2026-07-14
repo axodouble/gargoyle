@@ -2,11 +2,10 @@ import ChattoEvent from '@src/system/backend/classes/chattoEvent';
 import GargoyleClient from '@src/system/backend/classes/gargoyleClient.js';
 import { Message } from 'chatto.ts';
 
-export const chattoPrefixes = [`/c:`, ',']
+export const chattoPrefixes = [`/c:`, ',', `@${process.env.CHATTO_USER?.toLowerCase()}`]
 
 export default class TextCommandHandler extends ChattoEvent {
     public event = 'messageCreate' as const;
-    private mentionPrefix = `@${process.env.CHATTO_USER}`;
     private prefix = chattoPrefixes
 
     public async execute(client: GargoyleClient, message: Message): Promise<void> {
@@ -14,19 +13,9 @@ export default class TextCommandHandler extends ChattoEvent {
         if (!message.content) return;
 
         for (const p of this.prefix) {
-            if (!message.content.toLowerCase().startsWith(p) && !message.content.toLowerCase().startsWith(this.mentionPrefix)) continue;
+            if (!message.content.toLowerCase().startsWith(p)) continue;
 
-            let commandName = '';
-            if (message.content.toLowerCase().startsWith(p)) {
-                commandName = message.content.slice(p.length).split(' ')[0].toLowerCase().trim();
-            }
-            if (message.content.toLowerCase().startsWith(this.mentionPrefix)) {
-                commandName = message.content
-                    .slice(this.mentionPrefix.length + 1)
-                    .split(' ')[0]
-                    .toLowerCase()
-                    .trim();
-            }
+            let commandName = message.content.slice(p.length).split(' ')[0].toLowerCase().trim();
 
             const command = client.modules.find((command) => {
                 return command.chattoCommands.find((chattoCommand) => chattoCommand.name === commandName || chattoCommand.aliases.includes(commandName));
@@ -41,20 +30,6 @@ export default class TextCommandHandler extends ChattoEvent {
             } else {
                 if (message.content.toLowerCase().startsWith(p)) {
                     Promise.resolve(command.executeChattoCommand(client, message, ...message.content.slice(this.prefix.length).trim().split(' '))).catch((error) => {
-                        client.logger.error(`Error executing chatto command ${command.name}: ${error}`);
-                    });
-                }
-                if (message.content.toLowerCase().startsWith(this.mentionPrefix)) {
-                    Promise.resolve(
-                        command.executeChattoCommand(
-                            client,
-                            message,
-                            ...message.content
-                                .slice(this.mentionPrefix.length + 1)
-                                .trim()
-                                .split(' ')
-                        )
-                    ).catch((error) => {
                         client.logger.error(`Error executing chatto command ${command.name}: ${error}`);
                     });
                 }
