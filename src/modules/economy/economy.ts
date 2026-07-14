@@ -572,7 +572,8 @@ export default class Economy extends GargoyleModule {
 
         let gameMessage: ChattoMessage;
         try {
-            gameMessage = await message.reply(await renderChattoGame(game));
+            gameMessage = await message.reply(await renderChattoGame(game))
+            setTimeout(() => { gameMessage.content?.toLowerCase().includes('play again') ? null : gameMessage.delete() }, 90_000)
         } catch {
             user.balance += wager;
             await client.db.setUser(message.author.id, { balance: user.balance });
@@ -591,11 +592,15 @@ export default class Economy extends GargoyleModule {
                     if (calculateHandTotal(game.playerHand) > 21) {
                         game.state = GameState.PlayerBust;
                     }
-                    await gameMessage.edit(await renderChattoGame(game));
+                    await gameMessage.reply(await renderChattoGame(game)).then((m =>
+                        setTimeout(() => { m.content?.toLowerCase().includes('play again') ? null : m.delete() }, 60_000)
+                    ));
                     if (game.state === GameState.PlayerBust) break;
                 } else if (move === 'stand') {
                     game.state = GameState.DealerTurn;
-                    await gameMessage.edit(await renderChattoGame(game));
+                    await gameMessage.reply(await renderChattoGame(game)).then((m =>
+                        setTimeout(() => { m.content?.toLowerCase().includes('play again') ? null : m.delete() }, 60_000)
+                    ));;
 
                     const userTotal = calculateHandTotal(game.playerHand);
                     let dealerTotal = calculateHandTotal(game.dealerHand);
@@ -604,7 +609,9 @@ export default class Economy extends GargoyleModule {
                         const card = game.cards.pop();
                         if (card) game.dealerHand.push(card);
                         dealerTotal = calculateHandTotal(game.dealerHand);
-                        await gameMessage.edit(await renderChattoGame(game));
+                        await gameMessage.reply(await renderChattoGame(game)).then((m =>
+                            setTimeout(() => { m.content?.toLowerCase().includes('play again') ? null : m.delete() }, 60_000)
+                        ));;
                     }
 
                     const freshUser = await client.db.getUser(message.author.id, { exists: true });
@@ -618,14 +625,18 @@ export default class Economy extends GargoyleModule {
                         game.state = GameState.PlayerLose;
                     }
                     await client.db.setUser(message.author.id, { balance: freshUser.balance });
-                    await gameMessage.edit(await renderChattoGame(game));
+                    await gameMessage.reply(await renderChattoGame(game)).then((m =>
+                        setTimeout(() => { m.content?.toLowerCase().includes('play again') ? null : m.delete() }, 60_000)
+                    ));;
                     break;
                 } else {
                     // fold / timeout
                     const freshUser = await client.db.getUser(message.author.id, { exists: true });
                     freshUser.balance += Math.floor(wager / 2);
                     await client.db.setUser(message.author.id, { balance: freshUser.balance });
-                    await gameMessage.edit(await renderChattoGame(game, true));
+                    await gameMessage.reply(await renderChattoGame(game, true)).then((m =>
+                        setTimeout(() => { m.content?.toLowerCase().includes('play again') ? null : m.delete() }, 60_000)
+                    ));;
                     break;
                 }
             }
@@ -700,16 +711,16 @@ export default class Economy extends GargoyleModule {
 
         switch (game.state) {
             case GameState.PlayerBust:
-                container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`-# You lost $${game.wager.toLocaleString()}.`));
+                container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`- You lost $${game.wager.toLocaleString()}.`));
                 break;
             case GameState.PlayerWin:
-                container.addTextDisplayComponents(new TextDisplayBuilder().setContent('-# You won $' + (game.wager * 2).toLocaleString() + '!'));
+                container.addTextDisplayComponents(new TextDisplayBuilder().setContent('- You won $' + (game.wager * 2).toLocaleString() + '!'));
                 break;
             case GameState.PlayerLose:
-                container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`-# You lost $${game.wager.toLocaleString()}.`));
+                container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`- You lost $${game.wager.toLocaleString()}.`));
                 break;
             case GameState.Tie:
-                container.addTextDisplayComponents(new TextDisplayBuilder().setContent("-# It's a tie! Your bet has been returned."));
+                container.addTextDisplayComponents(new TextDisplayBuilder().setContent("- It's a tie! Your bet has been returned."));
                 break;
         }
 

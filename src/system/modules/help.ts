@@ -35,6 +35,7 @@ import GargoyleButtonBuilder from '../backend/builders/gargoyleButtonBuilder.js'
 import Emojis from '../backend/tools/emojis.js';
 import ChattoCommandBuilder from '../backend/builders/chattoCommandBuilder.js';
 import { Message as CMessage } from 'chatto.ts';
+import { chattoPrefixes } from '../backend/events/commands/handlers/chattoCommandHandler.js';
 
 export default class Help extends GargoyleModule {
     override name: string = 'help';
@@ -133,7 +134,7 @@ export default class Help extends GargoyleModule {
                     `\n` +
                     client.modules
                         .filter((m) => m.chattoCommands.length > 0)
-                        .map((m) => m.chattoCommands.map((c) => `- \`/${c.name}\`\n> ${c.description}`).join('\n'))
+                        .map((m) => m.chattoCommands.map((c) => `- ${chattoPrefixes.map(p=>`\`${p}${c.name}\``).join(' or ')}\n> ${c.description}`).join('\n'))
                         .join('\n')
             );
             return;
