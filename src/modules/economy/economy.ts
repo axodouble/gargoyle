@@ -1042,7 +1042,7 @@ export async function renderChattoGame(
     }
 
     const inProgress = !folded && (game.state === GameState.PlayerTurn || game.state === GameState.DealerTurn);
-    if (!inProgress) footer += '\n-# Run `/blackjack <wager>` to play again.';
+    if (!inProgress) footer += '\n- Run `/blackjack <wager>` to play again.';
 
     const buffer = await drawGame({
         dealerTurn: !(game.state === GameState.PlayerTurn) || folded,
