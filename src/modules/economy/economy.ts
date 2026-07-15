@@ -572,8 +572,10 @@ export default class Economy extends GargoyleModule {
 
         let gameMessage: ChattoMessage;
         try {
-            gameMessage = await message.reply(await renderChattoGame(game))
-            setTimeout(() => { gameMessage.content?.toLowerCase().includes('play again') ? null : gameMessage.delete() }, 90_000)
+            gameMessage = await message.reply(await renderChattoGame(game));
+            setTimeout(() => {
+                gameMessage.content?.toLowerCase().includes('play again') ? null : gameMessage.delete();
+            }, 90_000);
         } catch {
             user.balance += wager;
             await client.db.setUser(message.author.id, { balance: user.balance });
@@ -592,15 +594,19 @@ export default class Economy extends GargoyleModule {
                     if (calculateHandTotal(game.playerHand) > 21) {
                         game.state = GameState.PlayerBust;
                     }
-                    await gameMessage.reply(await renderChattoGame(game)).then((m =>
-                        setTimeout(() => { m.content?.toLowerCase().includes('play again') ? null : m.delete() }, 60_000)
-                    ));
+                    await gameMessage.reply(await renderChattoGame(game)).then((m) =>
+                        setTimeout(() => {
+                            m.content?.toLowerCase().includes('play again') ? null : m.delete();
+                        }, 60_000)
+                    );
                     if (game.state === GameState.PlayerBust) break;
                 } else if (move === 'stand') {
                     game.state = GameState.DealerTurn;
-                    await gameMessage.reply(await renderChattoGame(game)).then((m =>
-                        setTimeout(() => { m.content?.toLowerCase().includes('play again') ? null : m.delete() }, 60_000)
-                    ));;
+                    await gameMessage.reply(await renderChattoGame(game)).then((m) =>
+                        setTimeout(() => {
+                            m.content?.toLowerCase().includes('play again') ? null : m.delete();
+                        }, 60_000)
+                    );
 
                     const userTotal = calculateHandTotal(game.playerHand);
                     let dealerTotal = calculateHandTotal(game.dealerHand);
@@ -609,9 +615,11 @@ export default class Economy extends GargoyleModule {
                         const card = game.cards.pop();
                         if (card) game.dealerHand.push(card);
                         dealerTotal = calculateHandTotal(game.dealerHand);
-                        await gameMessage.reply(await renderChattoGame(game)).then((m =>
-                            setTimeout(() => { m.content?.toLowerCase().includes('play again') ? null : m.delete() }, 60_000)
-                        ));;
+                        await gameMessage.reply(await renderChattoGame(game)).then((m) =>
+                            setTimeout(() => {
+                                m.content?.toLowerCase().includes('play again') ? null : m.delete();
+                            }, 60_000)
+                        );
                     }
 
                     const freshUser = await client.db.getUser(message.author.id, { exists: true });
@@ -625,18 +633,22 @@ export default class Economy extends GargoyleModule {
                         game.state = GameState.PlayerLose;
                     }
                     await client.db.setUser(message.author.id, { balance: freshUser.balance });
-                    await gameMessage.reply(await renderChattoGame(game)).then((m =>
-                        setTimeout(() => { m.content?.toLowerCase().includes('play again') ? null : m.delete() }, 60_000)
-                    ));;
+                    await gameMessage.reply(await renderChattoGame(game)).then((m) =>
+                        setTimeout(() => {
+                            m.content?.toLowerCase().includes('play again') ? null : m.delete();
+                        }, 60_000)
+                    );
                     break;
                 } else {
                     // fold / timeout
                     const freshUser = await client.db.getUser(message.author.id, { exists: true });
                     freshUser.balance += Math.floor(wager / 2);
                     await client.db.setUser(message.author.id, { balance: freshUser.balance });
-                    await gameMessage.reply(await renderChattoGame(game, true)).then((m =>
-                        setTimeout(() => { m.content?.toLowerCase().includes('play again') ? null : m.delete() }, 60_000)
-                    ));;
+                    await gameMessage.reply(await renderChattoGame(game, true)).then((m) =>
+                        setTimeout(() => {
+                            m.content?.toLowerCase().includes('play again') ? null : m.delete();
+                        }, 60_000)
+                    );
                     break;
                 }
             }

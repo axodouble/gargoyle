@@ -117,6 +117,11 @@ class GargoyleClient extends Client {
                 login: process.env.CHATTO_USER || '',
                 password: process.env.CHATTO_PASS || ''
             });
+            this.chatto.setStatus('online');
+            this.chatto.setCustomStatus({
+                emoji: '✨',
+                text: ',help — to get started!'
+            })
         } catch (err) {
             this.logger.error(`Failed chatto initialization: ${err}`);
         }

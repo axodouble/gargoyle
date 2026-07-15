@@ -4,7 +4,15 @@ import GargoyleEvent from '@src/system/backend/classes/gargoyleEvent';
 import GargoyleModule from '@src/system/backend/classes/gargoyleModule';
 import { $, fetch } from 'bun';
 import { UUID } from 'crypto';
-import { ApplicationIntegrationType, AttachmentBuilder, ChatInputCommandInteraction, ClientEvents, Events, InteractionContextType, Message } from 'discord.js';
+import {
+    ApplicationIntegrationType,
+    AttachmentBuilder,
+    ChatInputCommandInteraction,
+    ClientEvents,
+    Events,
+    InteractionContextType,
+    Message
+} from 'discord.js';
 import { closest, distance } from 'fastest-levenshtein';
 import { tmpdir } from 'os';
 import path from 'path';
@@ -58,9 +66,7 @@ export default class Magic extends GargoyleModule {
                 s
                     .setName('booster')
                     .setDescription('Open a booster pack')
-                    .addStringOption((n) =>
-                        n.setName('set').setDescription('Set code (random if omitted)').setRequired(false)
-                    )
+                    .addStringOption((n) => n.setName('set').setDescription('Set code (random if omitted)').setRequired(false))
             )
             .addSubcommand((s) =>
                 s
@@ -79,13 +85,16 @@ export default class Magic extends GargoyleModule {
         const raw = await this.getRawBulkData(client);
         if (!raw) return;
 
-        const setRaw = new Map<string, {
-            commons: SlimCard[];
-            uncommons: SlimCard[];
-            rares: SlimCard[];
-            mythics: SlimCard[];
-            lands: SlimCard[];
-        }>();
+        const setRaw = new Map<
+            string,
+            {
+                commons: SlimCard[];
+                uncommons: SlimCard[];
+                rares: SlimCard[];
+                mythics: SlimCard[];
+                lands: SlimCard[];
+            }
+        >();
 
         for (const card of raw) {
             const slim: SlimCard = {
@@ -98,10 +107,10 @@ export default class Magic extends GargoyleModule {
                 booster: card.booster,
                 digital: card.digital,
                 image_uris: card.image_uris ? { normal: card.image_uris.normal } : undefined,
-                card_faces: card.card_faces?.map(f => ({
+                card_faces: card.card_faces?.map((f) => ({
                     name: f.name,
-                    image_uris: f.image_uris ? { normal: f.image_uris.normal } : undefined,
-                })),
+                    image_uris: f.image_uris ? { normal: f.image_uris.normal } : undefined
+                }))
             };
 
             const normalized = slim.name.toLowerCase();
@@ -124,10 +133,18 @@ export default class Magic extends GargoyleModule {
                 bucket.lands.push(slim);
             } else {
                 switch (slim.rarity) {
-                    case 'common':   bucket.commons.push(slim);   break;
-                    case 'uncommon': bucket.uncommons.push(slim); break;
-                    case 'rare':     bucket.rares.push(slim);     break;
-                    case 'mythic':   bucket.mythics.push(slim);   break;
+                    case 'common':
+                        bucket.commons.push(slim);
+                        break;
+                    case 'uncommon':
+                        bucket.uncommons.push(slim);
+                        break;
+                    case 'rare':
+                        bucket.rares.push(slim);
+                        break;
+                    case 'mythic':
+                        bucket.mythics.push(slim);
+                        break;
                 }
             }
         }
@@ -139,9 +156,7 @@ export default class Magic extends GargoyleModule {
             }
         }
 
-        client.logger.trace(
-            `Indexed ${this.cardNames.length} unique cards, ${this.setIndex.size} draftable sets`
-        );
+        client.logger.trace(`Indexed ${this.cardNames.length} unique cards, ${this.setIndex.size} draftable sets`);
     }
 
     public override async executeSlashCommand(_client: GargoyleClient, interaction: ChatInputCommandInteraction): Promise<void> {
@@ -157,7 +172,6 @@ export default class Magic extends GargoyleModule {
         if (sub === 'random') {
             const card = random(this.allCards);
             await interaction.editReply({ files: getCardImages(card) });
-
         } else if (sub === 'card') {
             const query = interaction.options.getString('name', true).toLowerCase();
             const matches = this.findCards(query);
@@ -174,7 +188,6 @@ export default class Magic extends GargoyleModule {
                     files
                 });
             }
-
         } else if (sub === 'booster') {
             const setInput = interaction.options.getString('set', false)?.toLowerCase();
             const set = setInput ?? random(this.boosterSets);
@@ -190,10 +203,9 @@ export default class Magic extends GargoyleModule {
             const setName = booster[0]?.set_name ?? set.toUpperCase();
 
             await interaction.editReply({
-                content: `**Booster pack — ${setName}**\n${booster.map(a=>a.name).join('\n')}`,
+                content: `**Booster pack — ${setName}**\n${booster.map((a) => a.name).join('\n')}`,
                 files
             });
-
         } else if (sub === 'chaosdraft') {
             const players = interaction.options.getInteger('players', false) ?? 8;
             const packsPerPlayer = interaction.options.getInteger('packs', false) ?? 3;
@@ -201,7 +213,7 @@ export default class Magic extends GargoyleModule {
             const lines: string[] = [
                 `# Chaos Draft — ${players} players, ${packsPerPlayer} packs each`,
                 `# Generated ${new Date().toUTCString()}`,
-                '',
+                ''
             ];
 
             for (let p = 1; p <= players; p++) {
@@ -295,9 +307,7 @@ function openBooster(pool: BoosterPool): SlimCard[] {
 
     booster.push(...takeRandomUnique(pool.uncommons, 3, chosen));
 
-    const rareSlot = Math.random() < 0.125 && pool.mythics.length > 0
-        ? random(pool.mythics)
-        : random(pool.rares);
+    const rareSlot = Math.random() < 0.125 && pool.mythics.length > 0 ? random(pool.mythics) : random(pool.rares);
     booster.push(rareSlot);
     chosen.add(rareSlot.id);
 
@@ -305,7 +315,7 @@ function openBooster(pool: BoosterPool): SlimCard[] {
         { weight: 71, cards: pool.commons.filter((c) => !chosen.has(c.id)) },
         { weight: 18, cards: pool.uncommons.filter((c) => !chosen.has(c.id)) },
         { weight: 10, cards: pool.rares.filter((c) => !chosen.has(c.id)) },
-        { weight:  1, cards: pool.mythics.filter((c) => !chosen.has(c.id)) },
+        { weight: 1, cards: pool.mythics.filter((c) => !chosen.has(c.id)) }
     ]);
     booster.push(wildcard);
     chosen.add(wildcard.id);
@@ -321,8 +331,8 @@ function openBooster(pool: BoosterPool): SlimCard[] {
     const foil = weightedRandom([
         { weight: 70, cards: pool.commons.filter((c) => !chosen.has(c.id)) },
         { weight: 20, cards: pool.uncommons.filter((c) => !chosen.has(c.id)) },
-        { weight:  9, cards: pool.rares.filter((c) => !chosen.has(c.id)) },
-        { weight:  1, cards: pool.mythics.filter((c) => !chosen.has(c.id)) },
+        { weight: 9, cards: pool.rares.filter((c) => !chosen.has(c.id)) },
+        { weight: 1, cards: pool.mythics.filter((c) => !chosen.has(c.id)) }
     ]);
     booster.push(foil);
 
@@ -333,11 +343,7 @@ function random<T>(array: T[]): T {
     return array[Math.floor(Math.random() * array.length)];
 }
 
-function takeRandomUnique<T extends { id: string }>(
-    source: T[],
-    count: number,
-    alreadyChosen: Set<string>
-): T[] {
+function takeRandomUnique<T extends { id: string }>(source: T[], count: number, alreadyChosen: Set<string>): T[] {
     const pool = source.filter((c) => !alreadyChosen.has(c.id));
     const chosen: T[] = [];
 
@@ -367,7 +373,7 @@ function weightedRandom<T>(entries: { weight: number; cards: T[] }[]): T {
 function getCardImages(card: SlimCard): string[] {
     if (card.image_uris?.normal) return [card.image_uris.normal];
     if (card.card_faces) {
-        return card.card_faces.flatMap((f) => f.image_uris?.normal ? [f.image_uris.normal] : []);
+        return card.card_faces.flatMap((f) => (f.image_uris?.normal ? [f.image_uris.normal] : []));
     }
     return [];
 }
@@ -414,14 +420,22 @@ type RawCard = {
     produced_mana: string[];
     collector_number: number;
     image_uris?: {
-        small: string; normal: string; large: string;
-        png: string; art_crop: string; border_crop: string;
+        small: string;
+        normal: string;
+        large: string;
+        png: string;
+        art_crop: string;
+        border_crop: string;
     };
     card_faces?: {
         name: string;
         image_uris?: {
-            small: string; normal: string; large: string;
-            png: string; art_crop: string; border_crop: string;
+            small: string;
+            normal: string;
+            large: string;
+            png: string;
+            art_crop: string;
+            border_crop: string;
         };
     }[];
     prices: { usd: string | null; usd_foil: number | null; usd_etched: string | null };
