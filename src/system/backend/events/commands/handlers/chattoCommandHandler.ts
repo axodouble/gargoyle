@@ -2,7 +2,7 @@ import ChattoEvent from '@src/system/backend/classes/chattoEvent';
 import GargoyleClient from '@src/system/backend/classes/gargoyleClient.js';
 import { Message } from 'chatto.ts';
 
-export const chattoPrefixes = [`/c:`, ',', `@${process.env.CHATTO_USER?.toLowerCase()}`]
+export const chattoPrefixes = [`/c:`, ',', `@${process.env.CHATTO_USER?.toLowerCase()} `]
 
 export default class TextCommandHandler extends ChattoEvent {
     public event = 'messageCreate' as const;
