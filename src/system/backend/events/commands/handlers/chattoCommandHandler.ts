@@ -9,7 +9,16 @@ export default class TextCommandHandler extends ChattoEvent {
     private prefix = chattoPrefixes;
 
     public async execute(client: GargoyleClient, message: Message): Promise<void> {
-        if (message.author.displayName.toLowerCase().includes('bot') || message.author.username.toLowerCase().includes('bot')) return;
+        const authorDisplayName = message.author.displayName.toLowerCase();
+        const authorUsername = message.author.username.toLowerCase();
+        if (
+            authorDisplayName.includes('bot') ||
+            authorDisplayName.includes(process.env.CHATTO_USER!) ||
+            authorUsername.includes('bot') ||
+            authorUsername.includes(process.env.CHATTO_USER!)
+        )
+            return;
+
         if (!message.content) return;
 
         for (const p of this.prefix) {
@@ -33,11 +42,11 @@ export default class TextCommandHandler extends ChattoEvent {
                     });
             } else {
                 if (message.content.toLowerCase().startsWith(p)) {
-                    Promise.resolve(
-                        command.executeChattoCommand(client, message, ...message.content.slice(this.prefix.length).trim().split(' '))
-                    ).catch((error) => {
-                        client.logger.error(`Error executing chatto command ${command.name}: ${error}`);
-                    });
+                    Promise.resolve(command.executeChattoCommand(client, message, ...message.content.slice(p.length).trim().split(' '))).catch(
+                        (error) => {
+                            client.logger.error(`Error executing chatto command ${command.name}: ${error}`);
+                        }
+                    );
                 }
 
                 client.logger.trace(`${message.author.username} used the ${command.name} chatto command.`);

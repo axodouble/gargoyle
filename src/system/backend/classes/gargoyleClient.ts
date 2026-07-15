@@ -121,7 +121,7 @@ class GargoyleClient extends Client {
             this.chatto.setCustomStatus({
                 emoji: '✨',
                 text: ',help — to get started!'
-            })
+            });
         } catch (err) {
             this.logger.error(`Failed chatto initialization: ${err}`);
         }

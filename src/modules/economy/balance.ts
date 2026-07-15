@@ -53,7 +53,7 @@ export default class Balance extends GargoyleModule {
 
         const target = args[1] || message.author.username;
 
-        const user: User | undefined = (await client.chatto?.users.list({ search: target }))?.[0];
+        const user: User | undefined = (await client.chatto?.users.list({ search: target }).catch(() => []))?.[0];
         if (!user) {
             await message.reply({
                 content: `User ${target} wasn't found!`

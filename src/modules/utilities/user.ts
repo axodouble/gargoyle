@@ -1,7 +1,9 @@
+import ChattoCommandBuilder from '@src/system/backend/builders/chattoCommandBuilder';
 import GargoyleSlashCommandBuilder from '@src/system/backend/builders/gargoyleSlashCommandBuilder.js';
 import GargoyleClient from '@src/system/backend/classes/gargoyleClient.js';
 import GargoyleModule from '@src/system/backend/classes/gargoyleModule.js';
 import { Canvas, CanvasGradient, CanvasPattern, loadImage } from 'canvas';
+import { Message, User as ChattoUser } from 'chatto.ts';
 import {
     ApplicationIntegrationType,
     ChatInputCommandInteraction,
@@ -95,6 +97,10 @@ export default class User extends GargoyleModule {
                             .addBooleanOption((option) => option.setName('hide').setDescription('Whether to hide the response').setRequired(false))
                     )
             ) as GargoyleSlashCommandBuilder
+    ];
+
+    public override chattoCommands: ChattoCommandBuilder[] = [
+        new ChattoCommandBuilder().setName('user').setDescription('User related commands').setUsage('user <info|avatar> [user]')
     ];
 
     public override async executeSlashCommand(client: GargoyleClient, interaction: ChatInputCommandInteraction): Promise<void> {
@@ -298,6 +304,46 @@ export default class User extends GargoyleModule {
                     flags: [MessageFlags.IsComponentsV2]
                 });
             }
+        }
+    }
+
+    public override async executeChattoCommand(client: GargoyleClient, message: Message, ...args: string[]): Promise<void> {
+        const subcommand = args[1]?.toLowerCase();
+
+        if (!subcommand || !['info', 'avatar'].includes(subcommand)) {
+            await message.reply({
+                content: 'Invalid usage! Please try: `user <info|avatar|watermark> [user]`'
+            });
+            return;
+        }
+
+        // Resolve the target user, defaulting to the author when none is given.
+        // Note: users.list throws a ChattoParseError when the search matches nobody
+        // (the API omits the `users` array), so treat any failure as "not found".
+        let target: ChattoUser | undefined = message.author;
+        if (args[2]) {
+            target = (await client.chatto?.users.list({ search: args[2] }).catch(() => []))?.[0];
+            if (!target) {
+                await message.reply({ content: `User ${args[2]} wasn't found!` });
+                return;
+            }
+        }
+
+        if (subcommand === 'info') {
+            await message.reply({
+                content:
+                    `# ${target.displayName} (${target.username})` +
+                    `\n> **ID**: ${target.id}` +
+                    `\n> [Avatar](${target.avatarUrl})` +
+                    (target.createdAt ? `\n> **Created**: ${new Date(target.createdAt)}` : '') +
+                    (target.roles.length ? `\n> **Roles**: ${target.roles.map((role) => `\`${role}\``).join(', ')}` : '')
+            });
+        } else if (subcommand === 'avatar') {
+            if (!target.avatarUrl) {
+                await message.reply({ content: `${target.displayName} has no avatar set.` });
+                return;
+            }
+            await message.reply({ content: target.avatarUrl });
         }
     }
 }

@@ -136,7 +136,7 @@ export default class Help extends GargoyleModule {
                         .filter((m) => m.chattoCommands.length > 0)
                         .map((m) =>
                             m.chattoCommands
-                                .map((c) => `- ${chattoPrefixes.map((p) => `\`${p}${c.name}\``).join(' or ')}\n> ${c.description}`)
+                                .map((c) => `- ${chattoPrefixes.map((p) => `\`${p}${c.name}\``).join(' or ')}\n> \`${c.usage}\`\n> ${c.description}`)
                                 .join('\n')
                         )
                         .join('\n')

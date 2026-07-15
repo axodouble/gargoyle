@@ -215,7 +215,7 @@ export default class Pay extends GargoyleModule {
 
         let recipient = await this.resolveRecipient(client, targetQuery.trim());
         if (!recipient) {
-            const searched: User | undefined = (await client.chatto.users.list({ search: targetQuery }))?.[0];
+            const searched: User | undefined = (await client.chatto.users.list({ search: targetQuery }).catch(() => []))?.[0];
             if (searched) {
                 recipient = { id: searched.id, displayName: searched.username, platform: 'chatto' };
             }

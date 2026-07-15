@@ -1,8 +1,10 @@
 import GargoyleClient from '@classes/gargoyleClient.js';
 import GargoyleModule from '@src/system/backend/classes/gargoyleModule.js';
+import ChattoCommandBuilder from '@src/system/backend/builders/chattoCommandBuilder';
 import GargoyleContainerBuilder from '@src/system/backend/builders/gargoyleContainerBuilder.js';
 import GargoyleSlashCommandBuilder from '@src/system/backend/builders/gargoyleSlashCommandBuilder.js';
 import { playAudio } from '@src/system/backend/tools/voice.js';
+import { Message } from 'chatto.ts';
 import {
     ApplicationIntegrationType,
     ChannelType,
@@ -89,6 +91,10 @@ export default class Fun extends GargoyleModule {
             ) as GargoyleSlashCommandBuilder
     ];
 
+    public override chattoCommands: ChattoCommandBuilder[] = [
+        new ChattoCommandBuilder().setName('fun').setDescription('Fun related commands!').setUsage('fun <text|truth-or-dare|8ball>')
+    ];
+
     public override async executeSlashCommand(client: GargoyleClient, interaction: ChatInputCommandInteraction) {
         const subcommandGroup = interaction.options.getSubcommandGroup(false);
         const subcommand = interaction.options.getSubcommand(false);
@@ -133,6 +139,44 @@ export default class Fun extends GargoyleModule {
 
         return null;
     }
+
+    public override async executeChattoCommand(_client: GargoyleClient, message: Message, ...args: string[]): Promise<void> {
+        const subcommand = args[1]?.toLowerCase();
+
+        if (subcommand === 'text') {
+            const type = args[2]?.toLowerCase();
+            const text = args.slice(3).join(' ');
+
+            if (!type || !['aesthetic', 'upside-down', 'uwu', 'mock', 'clap'].includes(type)) {
+                await message.reply({ content: 'Invalid usage! Please try: `fun text <aesthetic|upside-down|uwu|mock|clap> <text>`' });
+                return;
+            }
+            if (!text) {
+                await message.reply({ content: 'Please provide some text to transform!' });
+                return;
+            }
+
+            await message.reply({ content: transformText(type, text) });
+            return;
+        }
+
+        if (subcommand === 'truth-or-dare') {
+            await message.reply({ content: truthDareText() });
+            return;
+        }
+
+        if (subcommand === '8ball') {
+            const question = args.slice(2).join(' ');
+            if (!question) {
+                await message.reply({ content: 'Please provide a question to ask the magic 8ball!' });
+                return;
+            }
+            await message.reply({ content: eightBallText(question) });
+            return;
+        }
+
+        await message.reply({ content: 'Invalid usage! Please try: `fun <text|truth-or-dare|8ball>`' });
+    }
 }
 
 function textReplace(interaction: ChatInputCommandInteraction): Promise<InteractionResponse<boolean>> {
@@ -141,143 +185,146 @@ function textReplace(interaction: ChatInputCommandInteraction): Promise<Interact
 
     if (!text) return Promise.reject(new Error('Text is required'));
 
+    return interaction.reply({ content: transformText(subcommand, text) });
+}
+
+function transformText(subcommand: string, text: string): string {
     if (subcommand === 'aesthetic') {
-        return interaction.reply({
-            content: text
-                .replace(/ /g, '　')
-                .replace(/a/g, 'ａ')
-                .replace(/b/g, 'ｂ')
-                .replace(/c/g, 'ｃ')
-                .replace(/d/g, 'ｄ')
-                .replace(/e/g, 'ｅ')
-                .replace(/f/g, 'ｆ')
-                .replace(/g/g, 'ｇ')
-                .replace(/h/g, 'ｈ')
-                .replace(/i/g, 'ｉ')
-                .replace(/j/g, 'ｊ')
-                .replace(/k/g, 'ｋ')
-                .replace(/l/g, 'ｌ')
-                .replace(/m/g, 'ｍ')
-                .replace(/n/g, 'ｎ')
-                .replace(/o/g, 'ｏ')
-                .replace(/p/g, 'ｐ')
-                .replace(/q/g, 'ｑ')
-                .replace(/r/g, 'ｒ')
-                .replace(/s/g, 'ｓ')
-                .replace(/t/g, 'ｔ')
-                .replace(/u/g, 'ｕ')
-                .replace(/v/g, 'ｖ')
-                .replace(/w/g, 'ｗ')
-                .replace(/x/g, 'ｘ')
-                .replace(/y/g, 'ｙ')
-                .replace(/z/g, 'ｚ')
-                .replace(/A/g, 'Ａ')
-                .replace(/B/g, 'Ｂ')
-                .replace(/C/g, 'Ｃ')
-                .replace(/D/g, 'Ｄ')
-                .replace(/E/g, 'Ｅ')
-                .replace(/F/g, 'Ｆ')
-                .replace(/G/g, 'Ｇ')
-                .replace(/H/g, 'Ｈ')
-                .replace(/I/g, 'Ｉ')
-                .replace(/J/g, 'Ｊ')
-                .replace(/K/g, 'Ｋ')
-                .replace(/L/g, 'Ｌ')
-                .replace(/M/g, 'Ｍ')
-                .replace(/N/g, 'Ｎ')
-                .replace(/O/g, 'Ｏ')
-                .replace(/P/g, 'Ｐ')
-                .replace(/Q/g, 'Ｑ')
-                .replace(/R/g, 'Ｒ')
-                .replace(/S/g, 'Ｓ')
-                .replace(/T/g, 'Ｔ')
-                .replace(/U/g, 'Ｕ')
-                .replace(/V/g, 'Ｖ')
-                .replace(/W/g, 'Ｗ')
-                .replace(/X/g, 'Ｘ')
-                .replace(/Y/g, 'Ｙ')
-                .replace(/Z/g, 'Ｚ')
-        });
+        return text
+            .replace(/ /g, '　')
+            .replace(/a/g, 'ａ')
+            .replace(/b/g, 'ｂ')
+            .replace(/c/g, 'ｃ')
+            .replace(/d/g, 'ｄ')
+            .replace(/e/g, 'ｅ')
+            .replace(/f/g, 'ｆ')
+            .replace(/g/g, 'ｇ')
+            .replace(/h/g, 'ｈ')
+            .replace(/i/g, 'ｉ')
+            .replace(/j/g, 'ｊ')
+            .replace(/k/g, 'ｋ')
+            .replace(/l/g, 'ｌ')
+            .replace(/m/g, 'ｍ')
+            .replace(/n/g, 'ｎ')
+            .replace(/o/g, 'ｏ')
+            .replace(/p/g, 'ｐ')
+            .replace(/q/g, 'ｑ')
+            .replace(/r/g, 'ｒ')
+            .replace(/s/g, 'ｓ')
+            .replace(/t/g, 'ｔ')
+            .replace(/u/g, 'ｕ')
+            .replace(/v/g, 'ｖ')
+            .replace(/w/g, 'ｗ')
+            .replace(/x/g, 'ｘ')
+            .replace(/y/g, 'ｙ')
+            .replace(/z/g, 'ｚ')
+            .replace(/A/g, 'Ａ')
+            .replace(/B/g, 'Ｂ')
+            .replace(/C/g, 'Ｃ')
+            .replace(/D/g, 'Ｄ')
+            .replace(/E/g, 'Ｅ')
+            .replace(/F/g, 'Ｆ')
+            .replace(/G/g, 'Ｇ')
+            .replace(/H/g, 'Ｈ')
+            .replace(/I/g, 'Ｉ')
+            .replace(/J/g, 'Ｊ')
+            .replace(/K/g, 'Ｋ')
+            .replace(/L/g, 'Ｌ')
+            .replace(/M/g, 'Ｍ')
+            .replace(/N/g, 'Ｎ')
+            .replace(/O/g, 'Ｏ')
+            .replace(/P/g, 'Ｐ')
+            .replace(/Q/g, 'Ｑ')
+            .replace(/R/g, 'Ｒ')
+            .replace(/S/g, 'Ｓ')
+            .replace(/T/g, 'Ｔ')
+            .replace(/U/g, 'Ｕ')
+            .replace(/V/g, 'Ｖ')
+            .replace(/W/g, 'Ｗ')
+            .replace(/X/g, 'Ｘ')
+            .replace(/Y/g, 'Ｙ')
+            .replace(/Z/g, 'Ｚ');
     }
     if (subcommand === 'upside-down') {
-        return interaction.reply({
-            content: text
-                .split('')
-                .reverse()
-                .join('')
-                .replace(/a/g, 'ɐ')
-                .replace(/b/g, 'q')
-                .replace(/c/g, 'ɔ')
-                .replace(/e/g, 'ǝ')
-                .replace(/f/g, 'ɟ')
-                .replace(/g/g, 'ƃ')
-                .replace(/h/g, 'ɥ')
-                .replace(/i/g, 'ᴉ')
-                .replace(/j/g, 'ɾ')
-                .replace(/k/g, 'ʞ')
-                .replace(/m/g, 'ɯ')
-                .replace(/p/g, 'd')
-                .replace(/q/g, 'b')
-                .replace(/r/g, 'ɹ')
-                .replace(/t/g, 'ʇ')
-                .replace(/u/g, '⋳')
-                .replace(/n/g, 'u')
-                .replace(/⋳/g, 'n')
-                .replace(/v/g, 'ʌ')
-                .replace(/w/g, 'ʍ')
-                .replace(/y/g, 'ʎ')
-                .replace(/A/g, '∀')
-                .replace(/B/g, 'q')
-                .replace(/C/g, 'Ɔ')
-                .replace(/D/g, 'p')
-                .replace(/d/g, 'p')
-                .replace(/E/g, 'Ǝ')
-                .replace(/F/g, 'Ⅎ')
-                .replace(/G/g, 'פ')
-                .replace(/J/g, 'ſ')
-                .replace(/K/g, 'ʞ')
-                .replace(/L/g, '˥')
-                .replace(/M/g, 'W')
-                .replace(/P/g, 'Ԁ')
-                .replace(/R/g, 'ɹ')
-                .replace(/T/g, '┴')
-                .replace(/U/g, '∩')
-                .replace(/V/g, 'Λ')
-                .replace(/W/g, 'M')
-                .replace(/Y/g, '⅄')
-        });
+        return text
+            .split('')
+            .reverse()
+            .join('')
+            .replace(/a/g, 'ɐ')
+            .replace(/b/g, 'q')
+            .replace(/c/g, 'ɔ')
+            .replace(/e/g, 'ǝ')
+            .replace(/f/g, 'ɟ')
+            .replace(/g/g, 'ƃ')
+            .replace(/h/g, 'ɥ')
+            .replace(/i/g, 'ᴉ')
+            .replace(/j/g, 'ɾ')
+            .replace(/k/g, 'ʞ')
+            .replace(/m/g, 'ɯ')
+            .replace(/p/g, 'd')
+            .replace(/q/g, 'b')
+            .replace(/r/g, 'ɹ')
+            .replace(/t/g, 'ʇ')
+            .replace(/u/g, '⋳')
+            .replace(/n/g, 'u')
+            .replace(/⋳/g, 'n')
+            .replace(/v/g, 'ʌ')
+            .replace(/w/g, 'ʍ')
+            .replace(/y/g, 'ʎ')
+            .replace(/A/g, '∀')
+            .replace(/B/g, 'q')
+            .replace(/C/g, 'Ɔ')
+            .replace(/D/g, 'p')
+            .replace(/d/g, 'p')
+            .replace(/E/g, 'Ǝ')
+            .replace(/F/g, 'Ⅎ')
+            .replace(/G/g, 'פ')
+            .replace(/J/g, 'ſ')
+            .replace(/K/g, 'ʞ')
+            .replace(/L/g, '˥')
+            .replace(/M/g, 'W')
+            .replace(/P/g, 'Ԁ')
+            .replace(/R/g, 'ɹ')
+            .replace(/T/g, '┴')
+            .replace(/U/g, '∩')
+            .replace(/V/g, 'Λ')
+            .replace(/W/g, 'M')
+            .replace(/Y/g, '⅄');
     }
     if (subcommand === 'uwu') {
-        return interaction.reply({
-            content: text
-                .replace(/(?:r|l)/g, 'w')
-                .replace(/(?:R|L)/g, 'W')
-                .replace(/n([aeiou])/g, 'ny$1')
-                .replace(/N([aeiou])/g, 'Ny$1')
-                .replace(/N([AEIOU])/g, 'Ny$1')
-                .replace(/ove/g, 'uv')
-                .replace(/th/g, 'd')
-                .replace(/Th/g, 'D')
-                .replace(/TH/g, 'D')
-                .replace(/ove/g, 'uv')
-        });
+        return text
+            .replace(/(?:r|l)/g, 'w')
+            .replace(/(?:R|L)/g, 'W')
+            .replace(/n([aeiou])/g, 'ny$1')
+            .replace(/N([aeiou])/g, 'Ny$1')
+            .replace(/N([AEIOU])/g, 'Ny$1')
+            .replace(/ove/g, 'uv')
+            .replace(/th/g, 'd')
+            .replace(/Th/g, 'D')
+            .replace(/TH/g, 'D')
+            .replace(/ove/g, 'uv');
     }
     if (subcommand === 'mock') {
-        return interaction.reply({
-            content: text
-                .split('')
-                .map((c, i) => (i % 2 === 0 ? c.toUpperCase() : c.toLowerCase()))
-                .join('')
-        });
+        return text
+            .split('')
+            .map((c, i) => (i % 2 === 0 ? c.toUpperCase() : c.toLowerCase()))
+            .join('');
     }
     if (subcommand === 'clap') {
-        return interaction.reply({ content: text.replace(/ /g, '👏') });
+        return text.replace(/ /g, '👏');
     }
 
-    return interaction.reply({ content: text });
+    return text;
 }
 
 function truthDare(interaction: ChatInputCommandInteraction): Promise<InteractionResponse<boolean>> {
+    return interaction.reply({
+        components: [new GargoyleContainerBuilder(truthDareText())],
+        flags: [MessageFlags.IsComponentsV2]
+    });
+}
+
+function truthDareText(): string {
     const truths: string[] = [
         "What's the most embarrassing thing that's ever happened to you?",
         'Have you ever lied to get out of trouble?',
@@ -488,19 +535,19 @@ function truthDare(interaction: ChatInputCommandInteraction): Promise<Interactio
         'Do 20 situps'
     ];
 
-    return interaction.reply({
-        components: [
-            new GargoyleContainerBuilder(
-                `Truth or dare?\n**Truth :** ${truths[Math.floor(Math.random() * truths.length)]}\n**Dare :** ${
-                    dares[Math.floor(Math.random() * dares.length)]
-                }`
-            )
-        ],
-        flags: [MessageFlags.IsComponentsV2]
-    });
+    return `Truth or dare?\n**Truth :** ${truths[Math.floor(Math.random() * truths.length)]}\n**Dare :** ${
+        dares[Math.floor(Math.random() * dares.length)]
+    }`;
 }
 
 function eightBall(interaction: ChatInputCommandInteraction): Promise<InteractionResponse<boolean>> {
+    return interaction.reply({
+        content: eightBallText(interaction.options.getString('question', true)),
+        allowedMentions: { parse: [] }
+    });
+}
+
+function eightBallText(question: string): string {
     const responses: string[] = [
         'It is certain.',
         'It is decidedly so.',
@@ -524,8 +571,5 @@ function eightBall(interaction: ChatInputCommandInteraction): Promise<Interactio
         'Very doubtful.'
     ];
 
-    return interaction.reply({
-        content: `-# ${interaction.options.getString('question', true)}\n${responses[Math.floor(Math.random() * responses.length)]} `,
-        allowedMentions: { parse: [] }
-    });
+    return `-# ${question}\n${responses[Math.floor(Math.random() * responses.length)]} `;
 }
