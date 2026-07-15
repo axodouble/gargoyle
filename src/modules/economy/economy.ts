@@ -998,7 +998,7 @@ export async function renderChattoGame(
 
     if (folded) {
         title = '# Blackjack — You Folded!';
-        footer = `\n-# You folded and got back $${Math.floor(game.wager / 2).toLocaleString()}.`;
+        footer = `\n- You folded and got back $${Math.floor(game.wager / 2).toLocaleString()}.`;
     } else {
         switch (game.state) {
             case GameState.PlayerTurn:
@@ -1010,19 +1010,19 @@ export async function renderChattoGame(
                 break;
             case GameState.PlayerBust:
                 title = '# Blackjack — You Busted!';
-                footer = `\n-# You lost $${game.wager.toLocaleString()}.`;
+                footer = `\n- You lost $${game.wager.toLocaleString()}.`;
                 break;
             case GameState.PlayerWin:
                 title = '# Blackjack — You Won!';
-                footer = `\n-# You won $${(game.wager * 2).toLocaleString()}!`;
+                footer = `\n- You won $${(game.wager * 2).toLocaleString()}!`;
                 break;
             case GameState.PlayerLose:
                 title = '# Blackjack — You Lost!';
-                footer = `\n-# You lost $${game.wager.toLocaleString()}.`;
+                footer = `\n- You lost $${game.wager.toLocaleString()}.`;
                 break;
             case GameState.Tie:
                 title = "# Blackjack — It's a Tie!";
-                footer = "\n-# It's a tie! Your bet has been returned.";
+                footer = "\n- It's a tie! Your bet has been returned.";
                 break;
             default:
                 title = '# Blackjack';
