@@ -571,5 +571,5 @@ function eightBallText(question: string): string {
         'Very doubtful.'
     ];
 
-    return `-# ${question}\n${responses[Math.floor(Math.random() * responses.length)]} `;
+    return `> ${question}\n${responses[Math.floor(Math.random() * responses.length)]} `;
 }
