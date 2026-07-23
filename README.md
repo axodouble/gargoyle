@@ -1,4 +1,4 @@
-# Gargoyle
+# Gargoyle (Reforged)
 
 A powerful and feature-rich Discord bot built with **Discord.js v14**, **TypeScript**, and **Bun** runtime.
 
