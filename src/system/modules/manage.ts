@@ -16,7 +16,8 @@ import {
     TextDisplayBuilder,
     TextInputBuilder,
     TextInputStyle,
-    ThumbnailBuilder
+    ThumbnailBuilder,
+    User
 } from 'discord.js';
 import GargoyleSlashCommandBuilder from '../backend/builders/gargoyleSlashCommandBuilder.js';
 import GargoyleEvent from '../backend/classes/gargoyleEvent.js';
@@ -26,6 +27,11 @@ export default class Manage extends GargoyleModule {
     public override name: string = 'manage';
     override category: string = 'base';
     public override slashCommands: GargoyleSlashCommandBuilder[] = [
+        new GargoyleSlashCommandBuilder().setName('migration').setDescription('migration helper')
+            .addGuild('750209335841390642')
+            .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+            .setPrivate(true)
+        ,
         new GargoyleSlashCommandBuilder()
             .setName('manage')
             .setDescription('Manage the bot and support')
@@ -68,99 +74,147 @@ export default class Manage extends GargoyleModule {
     ];
 
     public override async executeSlashCommand(client: GargoyleClient, interaction: ChatInputCommandInteraction): Promise<void> {
-        if (interaction.commandName === 'manage') {
-            if (interaction.options.getSubcommandGroup() === 'support') {
-                if (interaction.options.getSubcommand() === 'guilds') {
-                    const guilds = await client.guilds.fetch();
-                    const filter = interaction.options.getString('filter');
+        if (interaction.commandName === 'migration') {
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-                    let guildList = '';
-                    for (const guild of guilds) {
-                        if (filter && !guild[1].name.toLowerCase().includes(filter.toLowerCase())) continue;
-                        guildList += guild[1].name + ' (ID: ' + guild[1].id + ')\n';
-                    }
+            const guilds = await client.guilds.fetch();
 
-                    if (guildList.length > 2000) {
-                        const buffer = Buffer.from(guildList, 'utf-8');
-                        await interaction.reply({
-                            content: 'Guild list is too long, sending as a file.',
-                            files: [{ attachment: buffer, name: 'guilds.txt' }],
-                            flags: [MessageFlags.Ephemeral]
-                        });
-                    } else await interaction.reply({ content: guildList || 'No guilds found.', flags: [MessageFlags.Ephemeral] });
-                } else if (interaction.options.getSubcommand() === 'guild') {
-                    const filter = interaction.options.getString('filter', true);
-                    const guilds = await client.guilds.fetch();
-                    const guild = Array.from(guilds.values()).find((g) => g.name.toLowerCase().includes(filter.toLowerCase()) || g.id === filter);
+            const guildOwners = new Map<string, { u: User, c: number }>()
 
-                    if (!guild) {
-                        await interaction.reply({ content: 'No guild found with that name or ID.', flags: [MessageFlags.Ephemeral] });
-                        return;
-                    }
+            for (const ownerId of await Promise.all(guilds.map(async g => (await g.fetch()).ownerId))) {
 
-                    const cachedGuild = client.guilds.cache.get(guild.id);
+                if (!guildOwners.has(ownerId)) {
+                    const user = await client.users.fetch(ownerId);
+                    guildOwners.set(ownerId, { u: user, c: 1 });
+                    continue
+                }
+                const entry = (guildOwners.get(ownerId)!)
+                guildOwners.set(ownerId, { u: entry.u, c: entry.c + 1 })
+            }
 
-                    if (!cachedGuild) {
-                        await interaction.reply({ content: 'Guild not found in cache.', flags: [MessageFlags.Ephemeral] });
-                        return;
-                    }
+            const data = Array.from(guildOwners.entries())
+                .sort((a, b) => b[1].c - a[1].c)
+                .map((e) => `${e[1].u.username}: ${e[1].c}`)
+                .join('\n');
 
-                    const invites = (
-                        await cachedGuild.invites.fetch().catch(() => {
-                            return null;
-                        })
-                    )
-                        ?.map((invite) => invite.code)
-                        .join(', ');
+            const username = client.user!.username
 
-                    const guildOwner = await cachedGuild.fetchOwner().catch(() => null);
-
-                    await interaction.reply({
+            for (const e of Array.from(guildOwners.entries())) {
+                const owner = e[1].u;
+                if (owner.id === '244173330431737866')
+                    owner.send({
                         components: [
-                            new ContainerBuilder().addSectionComponents(
-                                new SectionBuilder()
-                                    .setThumbnailAccessory(
-                                        new ThumbnailBuilder().setURL(guild.iconURL() || 'https://cdn.discordapp.com/embed/avatars/0.png')
-                                    )
-                                    .addTextDisplayComponents(
-                                        new TextDisplayBuilder().setContent(
-                                            `Guild Name: ${cachedGuild.name}\nGuild ID: ${cachedGuild.id}\nGuild Owner: ${cachedGuild.ownerId} (${guildOwner?.user.username || 'Unknown'})\nMember Count: ${cachedGuild.memberCount}\nGuild Features: ${cachedGuild.features}\n${invites ? `Invites: ${invites}` : ''}`
-                                        )
-                                    )
+                            new ContainerBuilder().addTextDisplayComponents(
+                                new TextDisplayBuilder()
+                                    .setContent('# Upcoming Changes to ' + username +
+                                        `\n${username} will soon be renamed to Gargoyle.`+
+                                    `\n\nThis is due to a change in our development model.`+
+                                `\nAll features will remain the same, and most importantly ***free***.`+
+                            `\nWe apologize for reaching out to you this way, but we thought this would be the most appropriate method to do so. If you have any questions feel free to ask \`@axodouble\``)
                             )
                         ],
-                        flags: [MessageFlags.IsComponentsV2, MessageFlags.Ephemeral]
-                    });
-                } else if (interaction.options.getSubcommand() === 'whois') {
-                    const userId = interaction.options.getString('id', true);
-                    const user = await client.users.fetch(userId).catch((err) => {
-                        interaction.reply({ content: `Error trying to find user: \`${err.message}\``, flags: [MessageFlags.Ephemeral] });
-                        return;
-                    });
+                        flags: [MessageFlags.IsComponentsV2]
+                    })
+            }
 
-                    const guildsWithUser = [];
-                    const guilds = await client.guilds.fetch();
-                    for (const guild of guilds.values()) {
-                        const member = await client.guilds.cache
-                            .get(guild.id)
-                            ?.members.fetch(userId)
-                            .catch(() => null);
-                        if (member) {
-                            guildsWithUser.push(guild.name);
+            await interaction.editReply({
+                content: data || 'No guilds found.'
+            });
+
+        } else
+            if (interaction.commandName === 'manage') {
+                if (interaction.options.getSubcommandGroup() === 'support') {
+                    if (interaction.options.getSubcommand() === 'guilds') {
+                        const guilds = await client.guilds.fetch();
+                        const filter = interaction.options.getString('filter');
+
+                        let guildList = '';
+                        for (const guild of guilds) {
+                            if (filter && !guild[1].name.toLowerCase().includes(filter.toLowerCase())) continue;
+                            guildList += guild[1].name + ' (ID: ' + guild[1].id + ')\n';
+                        }
+
+                        if (guildList.length > 2000) {
+                            const buffer = Buffer.from(guildList, 'utf-8');
+                            await interaction.reply({
+                                content: 'Guild list is too long, sending as a file.',
+                                files: [{ attachment: buffer, name: 'guilds.txt' }],
+                                flags: [MessageFlags.Ephemeral]
+                            });
+                        } else await interaction.reply({ content: guildList || 'No guilds found.', flags: [MessageFlags.Ephemeral] });
+                    } else if (interaction.options.getSubcommand() === 'guild') {
+                        const filter = interaction.options.getString('filter', true);
+                        const guilds = await client.guilds.fetch();
+                        const guild = Array.from(guilds.values()).find((g) => g.name.toLowerCase().includes(filter.toLowerCase()) || g.id === filter);
+
+                        if (!guild) {
+                            await interaction.reply({ content: 'No guild found with that name or ID.', flags: [MessageFlags.Ephemeral] });
+                            return;
+                        }
+
+                        const cachedGuild = client.guilds.cache.get(guild.id);
+
+                        if (!cachedGuild) {
+                            await interaction.reply({ content: 'Guild not found in cache.', flags: [MessageFlags.Ephemeral] });
+                            return;
+                        }
+
+                        const invites = (
+                            await cachedGuild.invites.fetch().catch(() => {
+                                return null;
+                            })
+                        )
+                            ?.map((invite) => invite.code)
+                            .join(', ');
+
+                        const guildOwner = await cachedGuild.fetchOwner().catch(() => null);
+
+                        await interaction.reply({
+                            components: [
+                                new ContainerBuilder().addSectionComponents(
+                                    new SectionBuilder()
+                                        .setThumbnailAccessory(
+                                            new ThumbnailBuilder().setURL(guild.iconURL() || 'https://cdn.discordapp.com/embed/avatars/0.png')
+                                        )
+                                        .addTextDisplayComponents(
+                                            new TextDisplayBuilder().setContent(
+                                                `Guild Name: ${cachedGuild.name}\nGuild ID: ${cachedGuild.id}\nGuild Owner: ${cachedGuild.ownerId} (${guildOwner?.user.username || 'Unknown'})\nMember Count: ${cachedGuild.memberCount}\nGuild Features: ${cachedGuild.features}\n${invites ? `Invites: ${invites}` : ''}`
+                                            )
+                                        )
+                                )
+                            ],
+                            flags: [MessageFlags.IsComponentsV2, MessageFlags.Ephemeral]
+                        });
+                    } else if (interaction.options.getSubcommand() === 'whois') {
+                        const userId = interaction.options.getString('id', true);
+                        const user = await client.users.fetch(userId).catch((err) => {
+                            interaction.reply({ content: `Error trying to find user: \`${err.message}\``, flags: [MessageFlags.Ephemeral] });
+                            return;
+                        });
+
+                        const guildsWithUser = [];
+                        const guilds = await client.guilds.fetch();
+                        for (const guild of guilds.values()) {
+                            const member = await client.guilds.cache
+                                .get(guild.id)
+                                ?.members.fetch(userId)
+                                .catch(() => null);
+                            if (member) {
+                                guildsWithUser.push(guild.name);
+                            }
+                        }
+
+                        if (user) {
+                            await interaction.reply({
+                                content: `User: ${user.tag}\nID: ${user.id}\nGuilds: ${guildsWithUser.join(', ') || 'None'}`,
+                                flags: [MessageFlags.Ephemeral]
+                            });
                         }
                     }
-
-                    if (user) {
-                        await interaction.reply({
-                            content: `User: ${user.tag}\nID: ${user.id}\nGuilds: ${guildsWithUser.join(', ') || 'None'}`,
-                            flags: [MessageFlags.Ephemeral]
-                        });
-                    }
                 }
+            } else {
+                await interaction.reply({ content: 'Unknown command.', flags: [MessageFlags.Ephemeral] });
             }
-        } else {
-            await interaction.reply({ content: 'Unknown command.', flags: [MessageFlags.Ephemeral] });
-        }
     }
 
     public override async executeButtonCommand(client: GargoyleClient, interaction: ButtonInteraction, ...args: string[]): Promise<void> {
