@@ -99,10 +99,11 @@ export default class Manage extends GargoyleModule {
 
             const username = client.user!.username
 
+            const failed: User[] = [];
             for (const e of Array.from(guildOwners.entries())) {
                 const owner = e[1].u;
                 if (owner.id === '244173330431737866')
-                    owner.send({
+                    await owner.send({
                         components: [
                             new ContainerBuilder().addTextDisplayComponents(
                                 new TextDisplayBuilder()
@@ -114,13 +115,12 @@ export default class Manage extends GargoyleModule {
                             )
                         ],
                         flags: [MessageFlags.IsComponentsV2]
-                    })
+                    }).catch((e=>failed.push(owner)))
             }
 
             await interaction.editReply({
-                content: data || 'No guilds found.'
+                content: failed.map((f=>f.username)).join('\n')
             });
-
         } else
             if (interaction.commandName === 'manage') {
                 if (interaction.options.getSubcommandGroup() === 'support') {
