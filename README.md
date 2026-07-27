@@ -19,7 +19,7 @@ Feel free to invite it using [this link!](https://discordapp.com/oauth2/authoriz
 ## Security & Contact
 
 - Security policy: [SECURITY.md](SECURITY.md)
-- Maintained by [@ceraia](https://github.com/ceraia)
+- Maintained by [@vrepsaj](https://github.com/vrepsaj)
 
 ---
 

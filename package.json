@@ -6,7 +6,7 @@
         "@discordjs/voice": "^0.19.2",
         "@snazzah/davey": "^0.1.12",
         "canvas": "^3.2.3",
-        "chatto.ts": "^0.4.11",
+        "chatto.ts": "^0.4.12",
         "discord.js": "^14.27.0",
         "drizzle-orm": "^0.45.2",
         "fastest-levenshtein": "^1.0.16",
@@ -29,10 +29,10 @@
         "@types/ws": "^8.18.1",
         "drizzle-kit": "^0.31.10",
         "eslint": "10.4.0",
-        "globals": "^17.7.0",
-        "prettier": "^3.9.5",
+        "globals": "^17.8.0",
+        "prettier": "^3.9.6",
         "typescript": "6.0.3",
-        "typescript-eslint": "^8.64.0"
+        "typescript-eslint": "^8.65.0"
     },
     "scripts": {
         "start": "bun run .",

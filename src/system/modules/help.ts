@@ -57,7 +57,7 @@ export default class Help extends GargoyleModule {
     );
     private plainHelpMessage =
         'A bot made by [Axodouble](https://jas.pe).\n' +
-        'This bot is built on [Gargoyle](https://github.com/Ceraia/Gargoyle), a custom bot framework.\n\n' +
+        'This bot is built on [Gargoyle](https://github.com/vrepsaj/gargoyle), a custom bot framework.\n\n' +
         'This bot is still in very early development and major changes are expected,\n' +
         'If you have any suggestions or issues, please contact Axodouble.\n' +
         'If you have any security concerns, please see the security policy on [jas.pe](https://jas.pe/).';
