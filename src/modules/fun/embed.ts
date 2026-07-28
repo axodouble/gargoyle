@@ -66,7 +66,7 @@ export default class Embed extends GargoyleModule {
         if (author) params.set('author', author);
 
         await interaction.reply({
-            content: `https://gargoyle.ceraia.com/api/embed/?${params.toString()}`
+            content: `https://gargoyle.jas.pe/api/embed/?${params.toString()}`
         });
     }
 
@@ -101,12 +101,12 @@ export default class Embed extends GargoyleModule {
         if (image) params.set('image', image);
 
         interaction.reply({
-            content: `https://gargoyle.ceraia.com/api/embed/?${params.toString()}`
+            content: `https://gargoyle.jas.pe/api/embed/?${params.toString()}`
         });
     }
 
     public override executeApiRequest(_client: GargoyleClient, request: Request): Promise<Response> {
-        // https://gargoyle.ceraia.com/api/embed/?title=&description=&color=&url=&footer=&image=&thumbnail=&author=
+        // https://gargoyle.jas.pe/api/embed/?title=&description=&color=&url=&footer=&image=&thumbnail=&author=
         const url = new URL(request.url);
         const params = url.searchParams;
 
@@ -145,7 +145,7 @@ export default class Embed extends GargoyleModule {
         <title>${title || 'Embed'}</title>
         <script>
             setTimeout(function() {
-            window.location.href = "https://ceraia.com";
+            window.location.href = "https://jas.pe";
             }, 2000);
         </script>
         </head>
