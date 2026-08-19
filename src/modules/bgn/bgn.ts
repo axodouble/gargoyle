@@ -526,6 +526,15 @@ export default class Brads extends GargoyleModule {
                 return;
             }
 
+            const cooldownEnds = this.getApplicationCooldownEnd(interaction.user.id);
+            if (cooldownEnds) {
+                await interaction.reply({
+                    content: `You are on a 3 day cooldown from applying for staff. You can apply again <t:${Math.floor(cooldownEnds / 1000)}:R>.`,
+                    flags: MessageFlags.Ephemeral
+                });
+                return;
+            }
+
             if (args.length === 1) {
                 await interaction.deferReply({ flags: MessageFlags.Ephemeral });
                 await interaction.editReply({
@@ -849,6 +858,24 @@ export default class Brads extends GargoyleModule {
                 return;
             }
 
+            const cooldownEnds = this.getApplicationCooldownEnd(interaction.user.id);
+            if (cooldownEnds) {
+                await interaction.editReply({
+                    components: [
+                        new ContainerBuilder()
+                            .setAccentColor(0xff0000)
+                            .addTextDisplayComponents(
+                                new TextDisplayBuilder().setContent(
+                                    '### Application Rejected\n> You are on a 3 day cooldown from applying for staff. You can apply again <t:' +
+                                        Math.floor(cooldownEnds / 1000) +
+                                        ':R>.'
+                                )
+                            )
+                    ]
+                });
+                return;
+            }
+
             const guild = await interaction.guild.fetch();
             const applicationsChannel = guild.channels.cache.find(
                 (c) => c.type === ChannelType.GuildText && c.name.toLowerCase().includes('staff-applications')
@@ -863,8 +890,8 @@ export default class Brads extends GargoyleModule {
                 (role) => role.name.toLowerCase().includes('staff supervisor') || role.name.toLowerCase().includes('head of staff')
             );
 
-            applicationsChannel
-                .send({
+            try {
+                await applicationsChannel.send({
                     components: [
                         new ContainerBuilder().addTextDisplayComponents(
                             new TextDisplayBuilder().setContent(
@@ -893,21 +920,22 @@ export default class Brads extends GargoyleModule {
                         )
                     ],
                     flags: [MessageFlags.IsComponentsV2]
-                })
-                .catch((err) => {
-                    client.logger.error(`Failed to send application message: ${err.stack}`);
-                    interaction.editReply({
-                        content: 'There was an error submitting your application. Please try again later.'
-                    });
                 });
+                this.lastStaffApplication.set(interaction.user.id, Date.now());
 
-            await interaction.editReply({
-                components: [
-                    new ContainerBuilder()
-                        .setAccentColor(0x00ff00)
-                        .addTextDisplayComponents(new TextDisplayBuilder().setContent('### Application Submitted!'))
-                ]
-            });
+                await interaction.editReply({
+                    components: [
+                        new ContainerBuilder()
+                            .setAccentColor(0x00ff00)
+                            .addTextDisplayComponents(new TextDisplayBuilder().setContent('### Application Submitted!'))
+                    ]
+                });
+            } catch (err) {
+                client.logger.error(`Failed to send application message: ${(err as Error).stack}`);
+                await interaction.editReply({
+                    content: 'There was an error submitting your application. Please try again later.'
+                });
+            }
             return;
         } else if (args[0] === 'accept' || args[0] === 'deny') {
             // Args[1] is the user ID of the person who applied, so we can use it to send a message to them later
@@ -1150,6 +1178,19 @@ export default class Brads extends GargoyleModule {
     }
 
     private linkingCodes: Map<string, { discordId: string | null; steamId: string | null }> = new Map();
+
+    private lastStaffApplication = new Map<string, number>();
+
+    private getApplicationCooldownEnd(userId: string): number | null {
+        const lastApplication = this.lastStaffApplication.get(userId);
+        if (!lastApplication) return null;
+        const cooldownEnds = lastApplication + 3 * 24 * 60 * 60 * 1000;
+        if (Date.now() >= cooldownEnds) {
+            this.lastStaffApplication.delete(userId);
+            return null;
+        }
+        return cooldownEnds;
+    }
 
     public override async executeApiRequest(_client: GargoyleClient, request: Request): Promise<Response> {
         const url = new URL(request.url);
