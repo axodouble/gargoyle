@@ -14,9 +14,9 @@ import {
     Message
 } from 'discord.js';
 import { closest, distance } from 'fastest-levenshtein';
-import { tmpdir } from 'os';
-import path from 'path';
-import { fileExistsSync } from 'tsconfig-paths/lib/filesystem';
+import { existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
 type SlimCard = {
     id: string;
@@ -284,7 +284,7 @@ export default class Magic extends GargoyleModule {
         const fileName = dataUrl.split('/').at(-1)!;
         const filePath = path.join(tmpdir(), fileName);
 
-        if (fileExistsSync(filePath)) {
+        if (existsSync(filePath)) {
             client.logger.trace('Bulk data already cached');
         } else {
             client.logger.trace('Downloading bulk data');
