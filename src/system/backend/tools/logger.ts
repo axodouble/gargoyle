@@ -1,6 +1,6 @@
 import { WebhookClient } from 'discord.js';
-import fs from 'fs';
-import path from 'path';
+import fs from 'node:fs';
+import path from 'node:path';
 
 // Log levels mapping
 const LOG_LEVELS = {
@@ -22,12 +22,15 @@ if (process.env.WATCHDOG_WEBHOOK) {
     webhookClient = new WebhookClient({ url: process.env.WATCHDOG_WEBHOOK });
 }
 
-function getLogFilePath(): string {
-    if (!fs.existsSync('./log')) {
-        fs.mkdirSync('./log');
-    }
+let logFilePath: string | null = null;
+
+async function getLogFilePath(): Promise<string> {
     const date = new Date().toISOString().split('T')[0];
-    return path.resolve('./log', `${date}.log`);
+    if (!logFilePath || !logFilePath.endsWith(`${date}.log`)) {
+        await fs.promises.mkdir(path.resolve('./log'), { recursive: true });
+        logFilePath = path.resolve('./log', `${date}.log`);
+    }
+    return logFilePath;
 }
 
 function formatLogMessage(level: string, message: string | Error): string {
@@ -37,8 +40,11 @@ function formatLogMessage(level: string, message: string | Error): string {
 
 function writeToLogFile(logMessage: string): void {
     if (!logToFile) return;
-    const logFilePath = getLogFilePath();
-    fs.appendFileSync(logFilePath, `${logMessage}\n`, 'utf8');
+    getLogFilePath()
+        .then((filePath) => fs.promises.appendFile(filePath, `${logMessage}\n`, 'utf8'))
+        .catch((err) => {
+            console.error(`Failed to write log entry to file: ${err}`);
+        });
 }
 
 function log(...messages: string[] | Error[]): void {
@@ -105,7 +111,7 @@ function watchdog(logLevel: number, ...messages: string[] | Error[]): void {
     if (logLevel > watchDogLevel) return;
     messages.forEach((message) => {
         if (!webhookClient || webhookClient === null) return;
-        webhookClient.send(message.toString()).catch((err) => {
+        webhookClient.send({ content: message.toString() }).catch((err) => {
             webhookClient = null;
             error(`Encountered an unexpected error attempting to use watchdog, disabling watchdog monitoring.`, err.stack);
         });
