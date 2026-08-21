@@ -6,11 +6,12 @@ import {
     MessageCreateOptions,
     MessageFlags,
     SectionBuilder,
-    TextDisplayBuilder
+    TextDisplayBuilder,
+    User
 } from 'discord.js';
 import GargoyleModule from '@classes/gargoyleModule.js';
 import GargoyleButtonBuilder from '@src/system/backend/builders/gargoyleButtonBuilder.js';
-import { FactionRow } from './_db.js';
+import { ApplicationRow, BlacklistRow, FactionRow } from './_db.js';
 import { ApplicationAnswer } from '@src/system/backend/database/schema.js';
 import { MAX_QUESTIONS } from './_types.js';
 
@@ -173,4 +174,60 @@ export function applicationThreadMessage(
     }
 
     return { components, flags: [MessageFlags.IsComponentsV2] };
+}
+
+export function historyPanel(user: User, applications: ApplicationRow[], factions: FactionRow[]): MessageCreateOptions {
+    if (applications.length === 0) {
+        return {
+            components: [
+                new ContainerBuilder().addTextDisplayComponents(
+                    new TextDisplayBuilder().setContent(`# Application History — ${user.username}\n> No applications found.`)
+                )
+            ],
+            flags: [MessageFlags.IsComponentsV2]
+        };
+    }
+    const lines = applications.map((application) => {
+        const factionName = factions.find((faction) => faction.id === application.faction_id)?.name ?? `Faction #${application.faction_id}`;
+        const decided = application.decided_at
+            ? ` — decided <t:${Math.floor(new Date(application.decided_at).getTime() / 1000)}:F> by <@${application.decided_by ?? 'unknown'}>${
+                  application.reason ? ` — "${application.reason}"` : ''
+              }`
+            : '';
+        return `- **${factionName}** — submitted <t:${Math.floor(new Date(application.submitted_at).getTime() / 1000)}:F> — ${application.status.toUpperCase()}${decided}`;
+    });
+    return {
+        components: [
+            new ContainerBuilder().addTextDisplayComponents(
+                new TextDisplayBuilder().setContent(`# Application History — ${user.username}\n${lines.join('\n')}`)
+            )
+        ],
+        flags: [MessageFlags.IsComponentsV2]
+    };
+}
+
+export function blacklistListPanel(scopeName: string, entries: BlacklistRow[], factions: FactionRow[]): MessageCreateOptions {
+    if (entries.length === 0) {
+        return {
+            components: [
+                new ContainerBuilder().addTextDisplayComponents(
+                    new TextDisplayBuilder().setContent(`# Blacklist — ${scopeName}\n> No active blacklists.`)
+                )
+            ],
+            flags: [MessageFlags.IsComponentsV2]
+        };
+    }
+    const nameFor = (id: number | null) => (id === null ? 'All factions' : (factions.find((faction) => faction.id === id)?.name ?? `Faction #${id}`));
+    const lines = entries.map(
+        (entry) =>
+            `- <@${entry.user_id}> — ${nameFor(entry.faction_id)}${entry.reason ? ` — ${entry.reason}` : ''} — expires ${
+                entry.expires_at ? `<t:${Math.floor(new Date(entry.expires_at).getTime() / 1000)}:F>` : 'never (permanent)'
+            }`
+    );
+    return {
+        components: [
+            new ContainerBuilder().addTextDisplayComponents(new TextDisplayBuilder().setContent(`# Blacklist — ${scopeName}\n${lines.join('\n')}`))
+        ],
+        flags: [MessageFlags.IsComponentsV2]
+    };
 }

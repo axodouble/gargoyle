@@ -12,11 +12,20 @@ import {
     ModalSubmitInteraction,
     TextChannel
 } from 'discord.js';
-import { GUILD_ID } from './_types.js';
-import { createFaction, getFaction, getFactionByName, listFactions, updateFaction } from './_db.js';
+import { GUILD_ID, parseDuration } from './_types.js';
+import {
+    createFaction,
+    getFaction,
+    getFactionByName,
+    listActiveBlacklists,
+    listApplicationsByUser,
+    listFactions,
+    setCooldownDuration,
+    updateFaction
+} from './_db.js';
 import { isFactionLeaderOrAdmin, isLeaderOfFactionOrAdmin } from './_permissions.js';
 import { handleQuestionButton, handleQuestionModal, handleQuestionsCommand } from './_questions.js';
-import { applyPanel, blacklistPanel, leaderPanel } from './_panels.js';
+import { applyPanel, blacklistListPanel, blacklistPanel, historyPanel, leaderPanel } from './_panels.js';
 import {
     handleApplyButton,
     handleApplyModal,
@@ -25,6 +34,7 @@ import {
     handleDecisionModal,
     handleThreadMemberButton
 } from './_application.js';
+import { handleBlacklistButton, handleBlacklistModal } from './_blacklist.js';
 
 export default class Factions extends GargoyleModule {
     public override name: string = 'factions';
@@ -63,6 +73,34 @@ export default class Factions extends GargoyleModule {
             .addSubcommand((subcommand) => subcommand.setName('panel').setDescription('Send the apply-here panel to this channel'))
             .addSubcommand((subcommand) => subcommand.setName('leader-panel').setDescription('Send the leader management panel to this channel'))
             .addSubcommand((subcommand) => subcommand.setName('blacklist-panel').setDescription('Send the blacklist panel to this channel'))
+            .addSubcommand((subcommand) =>
+                subcommand
+                    .setName('history')
+                    .setDescription('View the application history of a user')
+                    .addUserOption((option) => option.setName('user').setDescription('The user to look up').setRequired(true))
+            )
+            .addSubcommandGroup((group) =>
+                group
+                    .setName('blacklist')
+                    .setDescription('Faction blacklist management')
+                    .addSubcommand((subcommand) =>
+                        subcommand
+                            .setName('list')
+                            .setDescription('List active blacklists')
+                            .addStringOption((option) => option.setName('faction').setDescription('Faction name, or "all"').setRequired(true))
+                    )
+            )
+            .addSubcommandGroup((group) =>
+                group
+                    .setName('cooldown')
+                    .setDescription('Application cooldown management')
+                    .addSubcommand((subcommand) =>
+                        subcommand
+                            .setName('set')
+                            .setDescription('Set the application cooldown duration')
+                            .addStringOption((option) => option.setName('duration').setDescription('e.g. 12h, 3d, or 0 to disable').setRequired(true))
+                    )
+            )
     ] as GargoyleSlashCommandBuilder[];
 
     public override async executeSlashCommand(client: GargoyleClient, interaction: ChatInputCommandInteraction): Promise<void> {
@@ -82,6 +120,41 @@ export default class Factions extends GargoyleModule {
         if (!(await isFactionLeaderOrAdmin(client, interaction.guild, member))) {
             await interaction.reply({
                 content: 'You need to be a faction leader or an administrator to use this command.',
+                flags: [MessageFlags.Ephemeral]
+            });
+            return;
+        }
+
+        if (interaction.options.getSubcommandGroup() === 'blacklist') {
+            const factionName = interaction.options.getString('faction', true);
+            const isAll = factionName.toLowerCase() === 'all';
+            const faction = isAll ? null : await getFactionByName(client, GUILD_ID, factionName);
+            if (!isAll && !faction) {
+                await interaction.reply({ content: 'Faction not found.', flags: [MessageFlags.Ephemeral] });
+                return;
+            }
+            const entries = await listActiveBlacklists(client, GUILD_ID, isAll ? null : faction!.id);
+            const factions = await listFactions(client, GUILD_ID);
+            await interaction.reply({
+                ...blacklistListPanel(isAll ? 'All Factions' : faction!.name, entries, factions),
+                flags: [MessageFlags.IsComponentsV2]
+            });
+            return;
+        }
+
+        if (interaction.options.getSubcommandGroup() === 'cooldown') {
+            const durationInput = interaction.options.getString('duration', true);
+            const ms = parseDuration(durationInput);
+            if (ms === null) {
+                await interaction.reply({
+                    content: 'Invalid duration. Use a number followed by h or d (e.g. 12h, 3d), or 0 to disable.',
+                    flags: [MessageFlags.Ephemeral]
+                });
+                return;
+            }
+            await setCooldownDuration(client, GUILD_ID, ms);
+            await interaction.reply({
+                content: ms === 0 ? 'Application cooldown disabled.' : `Application cooldown set to ${durationInput}.`,
                 flags: [MessageFlags.Ephemeral]
             });
             return;
@@ -146,6 +219,13 @@ export default class Factions extends GargoyleModule {
                 await interaction.reply({ content: 'Failed to send the panel.', flags: [MessageFlags.Ephemeral] });
             }
         }
+
+        if (subcommand === 'history') {
+            const user = interaction.options.getUser('user', true);
+            const applications = await listApplicationsByUser(client, GUILD_ID, user.id);
+            const factions = await listFactions(client, GUILD_ID);
+            await interaction.reply({ ...historyPanel(user, applications, factions), flags: [MessageFlags.IsComponentsV2] });
+        }
     }
 
     public override async executeButtonCommand(client: GargoyleClient, interaction: ButtonInteraction, ...args: string[]): Promise<void> {
@@ -161,6 +241,9 @@ export default class Factions extends GargoyleModule {
         }
         if (args[0] === 'apply') {
             await handleApplyButton(client, this, interaction, args[1]);
+        }
+        if (args[0] === 'blacklist') {
+            await handleBlacklistButton(client, this, interaction, args[1]);
         }
         if (args[0] === 'applynext') {
             await handleApplyNextButton(client, this, interaction, args[1], args[2]);
@@ -183,6 +266,9 @@ export default class Factions extends GargoyleModule {
         }
         if (args[0] === 'apply') {
             await handleApplyModal(client, this, interaction, args[1], args[2]);
+        }
+        if (args[0] === 'blacklist') {
+            await handleBlacklistModal(client, this, interaction, args[1]);
         }
         if (args[0] === 'accept' || args[0] === 'deny') {
             await handleDecisionModal(client, this, interaction, args[0] as 'accept' | 'deny', args[1]);
