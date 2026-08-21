@@ -52,7 +52,6 @@ export default class Factions extends GargoyleModule {
                     .setName('setup')
                     .setDescription('Create a new faction')
                     .addStringOption((option) => option.setName('name').setDescription('Faction name').setRequired(true))
-                    .addStringOption((option) => option.setName('description').setDescription('Shown on the apply button').setRequired(false))
                     .addRoleOption((option) => option.setName('leader-role').setDescription('Role of the faction leaders').setRequired(true))
                     .addChannelOption((option) =>
                         option
@@ -61,6 +60,7 @@ export default class Factions extends GargoyleModule {
                             .addChannelTypes(ChannelType.GuildText)
                             .setRequired(true)
                     )
+                    .addStringOption((option) => option.setName('description').setDescription('Shown on the apply button').setRequired(false))
                     .addRoleOption((option) => option.setName('accept-role').setDescription('Role given on acceptance').setRequired(false))
                     .addRoleOption((option) => option.setName('deny-role').setDescription('Role given on denial').setRequired(false))
             )

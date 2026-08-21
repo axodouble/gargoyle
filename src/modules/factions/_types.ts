@@ -1,4 +1,4 @@
-export const GUILD_ID = '622843951329574942';
+export const GUILD_ID = '1442961061207736672';
 export const DEFAULT_COOLDOWN_MS = 3 * 24 * 60 * 60 * 1000;
 export const MAX_QUESTIONS = 20;
 export const QUESTIONS_PER_PAGE = 5;
