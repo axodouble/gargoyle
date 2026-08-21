@@ -250,7 +250,8 @@ export async function handleApplyModal(
         thread_id: thread.id
     });
 
-    await thread.send(applicationThreadMessage(module, faction, application.id, member.id, answers));
+    const panelMessage = await thread.send(applicationThreadMessage(module, faction, application.id, member.id, answers));
+    await updateApplication(client, application.id, { message_id: panelMessage.id });
 
     const duration = await getCooldownDuration(client, GUILD_ID);
     if (duration > 0) {
@@ -366,16 +367,22 @@ export async function handleDecisionModal(
     if (application.thread_id) {
         const thread = (await client.channels.fetch(application.thread_id).catch(() => null)) as ThreadChannel | null;
         if (thread) {
-            const starterMessage = await thread.fetchStarterMessage().catch(() => null);
-            if (starterMessage) {
+            const decisionPayload = applicationThreadMessage(module, faction, application.id, application.user_id, application.answers, {
+                status,
+                decidedBy: interaction.user.id,
+                reason
+            }) as MessageEditOptions;
+            if (application.message_id) {
+                const panelMessage = await thread.messages.fetch(application.message_id).catch(() => null);
+                if (panelMessage) {
+                    await panelMessage
+                        .edit(decisionPayload)
+                        .catch((err) => client.logger.error(`Failed to update application thread message: ${err}`));
+                }
+            } else {
+                const starterMessage = await thread.fetchStarterMessage().catch(() => null);
                 await starterMessage
-                    .edit(
-                        applicationThreadMessage(module, faction, application.id, application.user_id, application.answers, {
-                            status,
-                            decidedBy: interaction.user.id,
-                            reason
-                        }) as MessageEditOptions
-                    )
+                    ?.edit(decisionPayload)
                     .catch((err) => client.logger.error(`Failed to update application thread message: ${err}`));
             }
         }

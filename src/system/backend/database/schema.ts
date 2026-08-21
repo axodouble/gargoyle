@@ -80,6 +80,7 @@ export const applicationsTable = p.pgTable(
         status: p.text().notNull().default('pending'),
         answers: p.jsonb('answers').$type<ApplicationAnswer[]>().notNull().default([]),
         thread_id: p.text(),
+        message_id: p.text(),
         submitted_at: p.timestamp().notNull().defaultNow(),
         decided_at: p.timestamp(),
         decided_by: p.text(),
