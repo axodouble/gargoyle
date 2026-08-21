@@ -214,6 +214,12 @@ export async function handleApplyModal(
     const answers = drafts.get(key)!.answers;
     drafts.delete(key);
 
+    const error = await validateApplication(client, member, faction);
+    if (error) {
+        await interaction.editReply({ content: error });
+        return;
+    }
+
     const channel = await client.channels.fetch(faction.application_channel_id).catch(() => null);
     if (!channel || channel.type !== ChannelType.GuildText) {
         client.logger.error(`Application channel ${faction.application_channel_id} for faction ${faction.id} could not be found.`);
@@ -313,6 +319,14 @@ export async function handleDecisionModal(
     const faction = await getFaction(client, application.faction_id);
     if (!faction) {
         await interaction.followUp({ content: 'Faction not found.', flags: [MessageFlags.Ephemeral] });
+        return;
+    }
+    const member = await interaction.guild!.members.fetch(interaction.user.id);
+    if (!(await isLeaderOfFactionOrAdmin(client, interaction.guild!, member, faction.id))) {
+        await interaction.followUp({
+            content: 'You need to be a leader of this faction or an administrator.',
+            flags: [MessageFlags.Ephemeral]
+        });
         return;
     }
 

@@ -28,7 +28,7 @@ export async function handleQuestionsCommand(
         await interaction.reply({ content: 'Faction not found.', flags: [MessageFlags.Ephemeral] });
         return;
     }
-    await interaction.reply({ ...questionsPanel(module, faction), flags: [MessageFlags.IsComponentsV2] });
+    await interaction.reply({ ...questionsPanel(module, faction), flags: [MessageFlags.IsComponentsV2, MessageFlags.Ephemeral] });
 }
 
 export async function handleQuestionButton(
@@ -121,6 +121,14 @@ export async function handleQuestionModal(
     const faction = await getFaction(client, parseInt(factionIdArg, 10));
     if (!faction) {
         await interaction.editReply({ content: 'Faction not found.' });
+        return;
+    }
+    const member = await interaction.guild!.members.fetch(interaction.user.id);
+    if (!(await isLeaderOfFactionOrAdmin(client, interaction.guild!, member, faction.id))) {
+        await interaction.followUp({
+            content: 'You need to be a leader of this faction or an administrator.',
+            flags: [MessageFlags.Ephemeral]
+        });
         return;
     }
     const label = interaction.fields.getTextInputValue('label').trim();

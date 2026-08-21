@@ -70,6 +70,12 @@ export async function handleBlacklistModal(
 ): Promise<void> {
     await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
 
+    const member = await interaction.guild!.members.fetch(interaction.user.id);
+    if (!(await isFactionLeaderOrAdmin(client, interaction.guild!, member))) {
+        await interaction.editReply({ content: 'You need to be a faction leader or an administrator.' });
+        return;
+    }
+
     const rawUser = interaction.fields.getTextInputValue('user').trim();
     const mentionPattern = /<@!?(\d+)>/;
     const idPattern = /^\d{17,20}$/;
