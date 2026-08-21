@@ -74,22 +74,22 @@ export function applyPanel(module: GargoyleModule, factions: FactionRow[]): Mess
     const enabled = factions.filter((faction) => faction.enabled);
     const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
-            '# Faction Applications\n> Click a faction below to apply. Make sure you have read the faction rules before applying.'
+            '# Faction Applications\n> Interested in joining a faction? Click one of the buttons below to apply.\n> Please make sure you have read the faction rules before applying.'
         )
     );
 
     for (const faction of enabled) {
         container.addSectionComponents(
             new SectionBuilder()
-                .addTextDisplayComponents(new TextDisplayBuilder().setContent(`# ${faction.name}\n> ${faction.description || 'No description.'}`))
+                .addTextDisplayComponents(new TextDisplayBuilder().setContent(`**${faction.name}**\n> ${faction.description || 'No description.'}`))
                 .setButtonAccessory(
-                    new GargoyleButtonBuilder(module, 'apply', String(faction.id)).setLabel(faction.name).setStyle(ButtonStyle.Primary)
+                    new GargoyleButtonBuilder(module, 'apply', String(faction.id)).setLabel(`Apply — ${faction.name}`).setStyle(ButtonStyle.Primary)
                 )
         );
     }
 
     if (enabled.length === 0) {
-        container.addTextDisplayComponents(new TextDisplayBuilder().setContent('-# No applications are currently open.'));
+        container.addTextDisplayComponents(new TextDisplayBuilder().setContent('-# No applications are currently open. Check back later!'));
     }
 
     return { components: [container], flags: [MessageFlags.IsComponentsV2] };
@@ -97,7 +97,9 @@ export function applyPanel(module: GargoyleModule, factions: FactionRow[]): Mess
 
 export function leaderPanel(module: GargoyleModule, factions: FactionRow[]): MessageCreateOptions {
     const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent('# Faction Application Management\n> Enable or disable individual applications.')
+        new TextDisplayBuilder().setContent(
+            '# Application Management\n> Toggle applications per faction. Disabled factions cannot be applied to, but keep their questions and history.'
+        )
     );
 
     for (const faction of factions) {
@@ -105,7 +107,9 @@ export function leaderPanel(module: GargoyleModule, factions: FactionRow[]): Mes
             new SectionBuilder()
                 .addTextDisplayComponents(
                     new TextDisplayBuilder().setContent(
-                        `# ${faction.name}\n> ${faction.enabled ? '✅ Applications enabled' : '⛔ Applications disabled'}`
+                        `**${faction.name}** — ${faction.enabled ? '✅ Open' : '⛔ Closed'}\n> ${faction.questions.length} question${
+                            faction.questions.length === 1 ? '' : 's'
+                        } configured`
                     )
                 )
                 .setButtonAccessory(
@@ -121,16 +125,18 @@ export function leaderPanel(module: GargoyleModule, factions: FactionRow[]): Mes
 
 export function blacklistPanel(module: GargoyleModule, factions: FactionRow[]): MessageCreateOptions {
     const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent('# Faction Blacklists\n> Blacklist users from applying to a specific faction or all factions.')
+        new TextDisplayBuilder().setContent(
+            '# Blacklist Management\n> Blacklist a user from applying to one faction or all factions. Preset durations: 1d, 7d, 30d or permanent.'
+        )
     );
 
     for (const faction of factions) {
         container.addSectionComponents(
             new SectionBuilder()
-                .addTextDisplayComponents(new TextDisplayBuilder().setContent(`# ${faction.name}`))
+                .addTextDisplayComponents(new TextDisplayBuilder().setContent(`**${faction.name}**`))
                 .setButtonAccessory(
                     new GargoyleButtonBuilder(module, 'blacklist', String(faction.id))
-                        .setLabel(`Blacklist from ${faction.name}`)
+                        .setLabel(`Blacklist from ${faction.name}`.slice(0, 80))
                         .setStyle(ButtonStyle.Danger)
                 )
         );
@@ -155,14 +161,15 @@ export function applicationThreadMessage(
 ): MessageCreateOptions {
     const answerText = answers
         .map((answer) => `**${answer.label}**\n> ${answer.value ? answer.value.replaceAll('\n', '\n> ') : '(no answer)'}`)
-        .join('\n');
+        .join('\n\n');
 
     const components: ContainerBuilder[] = [
         new ContainerBuilder().addTextDisplayComponents(
             new TextDisplayBuilder().setContent(
-                `### Application to ${faction.name} from <@!${applicantId}>\n-# <@&${faction.leader_role_id}>\n${answerText}`
+                `### 📋 Application — ${faction.name}\n**Applicant:** <@!${applicantId}>\n-# Notifying <@&${faction.leader_role_id}>`
             )
         ),
+        new ContainerBuilder().addTextDisplayComponents(new TextDisplayBuilder().setContent(`### Answers\n\n${answerText}`)),
         new ContainerBuilder().addActionRowComponents(
             new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
                 new GargoyleButtonBuilder(module, 'accept', String(applicationId))
@@ -182,10 +189,10 @@ export function applicationThreadMessage(
     if (decision) {
         components.push(
             new ContainerBuilder()
-                .setAccentColor(decision.status === 'accepted' ? 0x00ff00 : 0xff0000)
+                .setAccentColor(decision.status === 'accepted' ? 0x57f287 : 0xed4245)
                 .addTextDisplayComponents(
                     new TextDisplayBuilder().setContent(
-                        `### ${decision.status === 'accepted' ? 'Accepted' : 'Denied'} by <@!${decision.decidedBy}>${
+                        `### ${decision.status === 'accepted' ? '✅ Accepted' : '❌ Denied'} by <@!${decision.decidedBy}>${
                             decision.reason ? `\n> ${decision.reason}` : ''
                         }`
                     )
@@ -195,6 +202,8 @@ export function applicationThreadMessage(
 
     return { components, flags: [MessageFlags.IsComponentsV2] };
 }
+
+const STATUS_EMOJI: Record<string, string> = { pending: '⏳', accepted: '✅', denied: '❌' };
 
 export function historyPanel(user: User, applications: ApplicationRow[], factions: FactionRow[]): MessageCreateOptions {
     if (applications.length === 0) {
@@ -207,19 +216,29 @@ export function historyPanel(user: User, applications: ApplicationRow[], faction
             flags: [MessageFlags.IsComponentsV2]
         };
     }
-    const lines = applications.map((application) => {
+    const entries = applications.map((application) => {
         const factionName = factions.find((faction) => faction.id === application.faction_id)?.name ?? `Faction #${application.faction_id}`;
-        const decided = application.decided_at
-            ? ` — decided <t:${Math.floor(new Date(application.decided_at).getTime() / 1000)}:F> by <@${application.decided_by ?? 'unknown'}>${
-                  application.reason ? ` — "${application.reason}"` : ''
-              }`
-            : '';
-        return `- **${factionName}** — submitted <t:${Math.floor(new Date(application.submitted_at).getTime() / 1000)}:F> — ${application.status.toUpperCase()}${decided}`;
+        const emoji = STATUS_EMOJI[application.status] ?? '📄';
+        const submitted = `<t:${Math.floor(new Date(application.submitted_at).getTime() / 1000)}:F>`;
+        const lines = [`**${emoji} ${factionName}** — ${application.status.toUpperCase()}`, `-# Submitted ${submitted}`];
+        if (application.decided_at) {
+            const decided = `-# Decided <t:${Math.floor(new Date(application.decided_at).getTime() / 1000)}:F> by <@${
+                application.decided_by ?? 'unknown'
+            }>`;
+            lines.push(decided);
+        }
+        if (application.reason) {
+            lines.push(`> **Reason:** ${application.reason}`);
+        }
+        if (application.thread_id) {
+            lines.push(`> **Discussion:** <#${application.thread_id}>`);
+        }
+        return lines.join('\n');
     });
     return {
         components: [
             new ContainerBuilder().addTextDisplayComponents(
-                new TextDisplayBuilder().setContent(`# Application History — ${user.username}\n${lines.join('\n')}`)
+                new TextDisplayBuilder().setContent(`# Application History — ${user.username}\n\n${entries.join('\n\n')}`)
             )
         ],
         flags: [MessageFlags.IsComponentsV2]
@@ -238,12 +257,12 @@ export function blacklistListPanel(scopeName: string, entries: BlacklistRow[], f
         };
     }
     const nameFor = (id: number | null) => (id === null ? 'All factions' : (factions.find((faction) => faction.id === id)?.name ?? `Faction #${id}`));
-    const lines = entries.map(
-        (entry) =>
-            `- <@${entry.user_id}> — ${nameFor(entry.faction_id)}${entry.reason ? ` — ${entry.reason}` : ''} — expires ${
-                entry.expires_at ? `<t:${Math.floor(new Date(entry.expires_at).getTime() / 1000)}:F>` : 'never (permanent)'
-            }`
-    );
+    const lines = entries.map((entry) => {
+        const expiry = entry.expires_at
+            ? `expires <t:${Math.floor(new Date(entry.expires_at).getTime() / 1000)}:F> (<t:${Math.floor(new Date(entry.expires_at).getTime() / 1000)}:R>)`
+            : 'permanent';
+        return `- **<@${entry.user_id}>** — ${nameFor(entry.faction_id)} — ${expiry}${entry.reason ? `\n  > Reason: ${entry.reason}` : ''}`;
+    });
     return {
         components: [
             new ContainerBuilder().addTextDisplayComponents(new TextDisplayBuilder().setContent(`# Blacklist — ${scopeName}\n${lines.join('\n')}`))

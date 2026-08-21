@@ -256,7 +256,7 @@ export async function handleApplyModal(
         await setCooldown(client, GUILD_ID, member.id, new Date(Date.now() + duration), duration);
     }
 
-    await interaction.editReply({ content: `Application submitted! A faction leader has been notified in <#${thread.id}>.` });
+    await interaction.editReply({ content: `✅ Application submitted! Faction leaders have been notified — you can follow it in <#${thread.id}>.` });
 }
 
 export async function handleDecisionButton(
