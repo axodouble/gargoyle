@@ -71,6 +71,13 @@
       "when": 1779969372756,
       "tag": "0009_heavy_namora",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787289070854,
+      "tag": "0010_fine_kulan_gath",
+      "breakpoints": true
     }
   ]
 }
