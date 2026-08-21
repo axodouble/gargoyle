@@ -103,7 +103,7 @@ export async function createApplication(
 export async function updateApplication(
     client: GargoyleClient,
     applicationId: number,
-    data: Partial<Pick<ApplicationRow, 'status' | 'thread_id' | 'decided_at' | 'decided_by' | 'reason'>>
+    data: Partial<Pick<ApplicationRow, 'status' | 'thread_id' | 'message_id' | 'decided_at' | 'decided_by' | 'reason'>>
 ): Promise<void> {
     await requireDb(client).update(schema.applicationsTable).set(data).where(eq(schema.applicationsTable.id, applicationId)).execute();
 }
