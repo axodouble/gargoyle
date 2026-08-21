@@ -164,10 +164,11 @@ function questionModal(module: GargoyleModule, title: string, factionId: string,
             ),
             new ActionRowBuilder<ModalActionRowComponentBuilder>().setComponents(
                 new TextInputBuilder()
-                    .setLabel('Placeholder')
+                    .setLabel('Placeholder (optional)')
                     .setCustomId('placeholder')
                     .setStyle(TextInputStyle.Short)
-                    .setPlaceholder('Please explain in a sentence or two.')
+                    .setPlaceholder('Shown as a hint in the answer box.')
+                    .setRequired(false)
             )
         );
 }

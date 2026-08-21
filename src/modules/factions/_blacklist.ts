@@ -56,6 +56,7 @@ export async function handleBlacklistButton(
                             .setCustomId('reason')
                             .setStyle(TextInputStyle.Short)
                             .setPlaceholder('Why are they being blacklisted?')
+                            .setRequired(false)
                     )
                 )
         )

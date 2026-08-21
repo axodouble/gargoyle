@@ -79,6 +79,7 @@ function applyModal(module: GargoyleModule, faction: FactionRow, page: number) {
                             .setCustomId(`q${index}`)
                             .setStyle(TextInputStyle.Paragraph)
                             .setPlaceholder(question.placeholder)
+                            .setRequired(false)
                     )
                 )
         );
@@ -296,6 +297,7 @@ export async function handleDecisionButton(
                             .setCustomId('reason')
                             .setLabel(decision === 'accept' ? 'Reason for Accepting' : 'Reason for Denying')
                             .setPlaceholder('Optional, but recommended.')
+                            .setRequired(false)
                     )
                 )
         )
