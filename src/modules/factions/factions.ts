@@ -17,6 +17,7 @@ import { createFaction, getFaction, getFactionByName, listFactions, updateFactio
 import { isFactionLeaderOrAdmin, isLeaderOfFactionOrAdmin } from './_permissions.js';
 import { handleQuestionButton, handleQuestionModal, handleQuestionsCommand } from './_questions.js';
 import { applyPanel, blacklistPanel, leaderPanel } from './_panels.js';
+import { handleApplyButton, handleApplyModal, handleApplyNextButton } from './_application.js';
 
 export default class Factions extends GargoyleModule {
     public override name: string = 'factions';
@@ -151,6 +152,12 @@ export default class Factions extends GargoyleModule {
         if (args[0] === 'toggle') {
             await this.handleToggle(client, interaction, args[1]);
         }
+        if (args[0] === 'apply') {
+            await handleApplyButton(client, this, interaction, args[1]);
+        }
+        if (args[0] === 'applynext') {
+            await handleApplyNextButton(client, this, interaction, args[1], args[2]);
+        }
     }
 
     public override async executeModalCommand(client: GargoyleClient, interaction: ModalSubmitInteraction, ...args: string[]): Promise<void> {
@@ -160,6 +167,9 @@ export default class Factions extends GargoyleModule {
         }
         if (args[0] === 'qadd' || args[0] === 'qedit') {
             await handleQuestionModal(client, this, interaction, args[0], args[1], args[2]);
+        }
+        if (args[0] === 'apply') {
+            await handleApplyModal(client, this, interaction, args[1], args[2]);
         }
     }
 
