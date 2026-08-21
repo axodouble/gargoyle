@@ -1,5 +1,6 @@
 import {
     ActionRowBuilder,
+    AnySelectMenuInteraction,
     ButtonInteraction,
     ChatInputCommandInteraction,
     MessageEditOptions,
@@ -35,9 +36,7 @@ export async function handleQuestionButton(
     module: GargoyleModule,
     interaction: ButtonInteraction,
     action: string,
-    factionIdArg: string,
-    indexArg?: string,
-    direction?: string
+    factionIdArg: string
 ): Promise<void> {
     const faction = await getFaction(client, parseInt(factionIdArg, 10));
     if (!faction) {
@@ -56,36 +55,53 @@ export async function handleQuestionButton(
             return;
         }
         await interaction.showModal(questionModal(module, 'Add Question', String(faction.id)));
+    }
+}
+
+export async function handleQuestionSelect(
+    client: GargoyleClient,
+    module: GargoyleModule,
+    interaction: AnySelectMenuInteraction,
+    action: string,
+    factionIdArg: string
+): Promise<void> {
+    const faction = await getFaction(client, parseInt(factionIdArg, 10));
+    if (!faction) {
+        await interaction.reply({ content: 'Faction not found.', flags: [MessageFlags.Ephemeral] });
+        return;
+    }
+    const member = await interaction.guild!.members.fetch(interaction.user.id);
+    if (!(await isLeaderOfFactionOrAdmin(client, interaction.guild!, member, faction.id))) {
+        await interaction.reply({ content: 'You need to be a leader of this faction or an administrator.', flags: [MessageFlags.Ephemeral] });
+        return;
+    }
+
+    const index = parseInt(interaction.values[0], 10);
+    if (!faction.questions[index]) {
+        await interaction.reply({ content: 'Question not found.', flags: [MessageFlags.Ephemeral] });
         return;
     }
 
     if (action === 'qedit') {
-        const index = parseInt(indexArg!, 10);
-        if (!faction.questions[index]) {
-            await interaction.reply({ content: 'Question not found.', flags: [MessageFlags.Ephemeral] });
-            return;
-        }
         await interaction.showModal(questionModal(module, 'Edit Question', String(faction.id), String(index)));
         return;
     }
 
-    if (action === 'qmove') {
-        const index = parseInt(indexArg!, 10);
-        const target = direction === 'up' ? index - 1 : index + 1;
-        if (target < 0 || target >= faction.questions.length) {
-            await interaction.reply({ content: 'Cannot move that question further.', flags: [MessageFlags.Ephemeral] });
-            return;
-        }
+    if (action !== 'qdel' && action !== 'qmoveup' && action !== 'qmovedown') {
+        return;
     }
 
     await interaction.deferUpdate();
     const questions = [...faction.questions];
 
     if (action === 'qdel') {
-        questions.splice(parseInt(indexArg!, 10), 1);
-    } else if (action === 'qmove') {
-        const index = parseInt(indexArg!, 10);
-        const target = direction === 'up' ? index - 1 : index + 1;
+        questions.splice(index, 1);
+    } else {
+        const target = action === 'qmoveup' ? index - 1 : index + 1;
+        if (target < 0 || target >= questions.length) {
+            await interaction.editReply({ ...questionsPanel(module, faction), flags: [MessageFlags.IsComponentsV2] });
+            return;
+        }
         [questions[index], questions[target]] = [questions[target], questions[index]];
     }
 

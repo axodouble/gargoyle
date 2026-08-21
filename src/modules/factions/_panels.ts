@@ -11,41 +11,61 @@ import {
 } from 'discord.js';
 import GargoyleModule from '@classes/gargoyleModule.js';
 import GargoyleButtonBuilder from '@src/system/backend/builders/gargoyleButtonBuilder.js';
+import { GargoyleStringSelectMenuBuilder } from '@src/system/backend/builders/gargoyleSelectMenuBuilders.js';
 import { ApplicationRow, BlacklistRow, FactionRow } from './_db.js';
 import { ApplicationAnswer } from '@src/system/backend/database/schema.js';
 import { MAX_QUESTIONS } from './_types.js';
 
 export function questionsPanel(module: GargoyleModule, faction: FactionRow): MessageCreateOptions {
-    const container = new ContainerBuilder().addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(`# Application Questions — ${faction.name}\n> ${faction.questions.length}/${MAX_QUESTIONS} questions`)
-    );
+    const list = faction.questions.length
+        ? faction.questions.map((question, index) => `**${index + 1}. ${question.label}**\n> ${question.placeholder}`).join('\n')
+        : '> No questions yet. Add the first one below.';
 
-    faction.questions.forEach((question, index) => {
-        container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**${index + 1}. ${question.label}**\n> ${question.placeholder}`));
-        container.addActionRowComponents(
+    const questionOptions = faction.questions.map((question, index) => ({
+        label: `${index + 1}. ${question.label}`.slice(0, 100),
+        value: String(index),
+        ...(question.placeholder ? { description: question.placeholder.slice(0, 100) } : {})
+    }));
+
+    const container = new ContainerBuilder()
+        .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(
+                `# Application Questions — ${faction.name}\n> ${faction.questions.length}/${MAX_QUESTIONS} questions`
+            ),
+            new TextDisplayBuilder().setContent(list)
+        )
+        .addActionRowComponents(
             new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
-                new GargoyleButtonBuilder(module, 'qedit', String(faction.id), String(index)).setLabel('Edit').setStyle(ButtonStyle.Secondary),
-                new GargoyleButtonBuilder(module, 'qdel', String(faction.id), String(index)).setLabel('Delete').setStyle(ButtonStyle.Danger),
-                new GargoyleButtonBuilder(module, 'qmove', String(faction.id), String(index), 'up')
-                    .setLabel('Up')
-                    .setStyle(ButtonStyle.Secondary)
-                    .setDisabled(index === 0),
-                new GargoyleButtonBuilder(module, 'qmove', String(faction.id), String(index), 'down')
-                    .setLabel('Down')
-                    .setStyle(ButtonStyle.Secondary)
-                    .setDisabled(index === faction.questions.length - 1)
+                new GargoyleButtonBuilder(module, 'qadd', String(faction.id))
+                    .setLabel('Add Question')
+                    .setStyle(ButtonStyle.Primary)
+                    .setDisabled(faction.questions.length >= MAX_QUESTIONS)
+            ),
+            new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+                new GargoyleStringSelectMenuBuilder(module, 'qedit', String(faction.id))
+                    .setPlaceholder('Select a question to edit')
+                    .setDisabled(faction.questions.length === 0)
+                    .setOptions(questionOptions)
+            ),
+            new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+                new GargoyleStringSelectMenuBuilder(module, 'qdel', String(faction.id))
+                    .setPlaceholder('Select a question to delete')
+                    .setDisabled(faction.questions.length === 0)
+                    .setOptions(questionOptions)
+            ),
+            new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+                new GargoyleStringSelectMenuBuilder(module, 'qmoveup', String(faction.id))
+                    .setPlaceholder('Select a question to move up')
+                    .setDisabled(faction.questions.length < 2)
+                    .setOptions(questionOptions)
+            ),
+            new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+                new GargoyleStringSelectMenuBuilder(module, 'qmovedown', String(faction.id))
+                    .setPlaceholder('Select a question to move down')
+                    .setDisabled(faction.questions.length < 2)
+                    .setOptions(questionOptions)
             )
         );
-    });
-
-    container.addActionRowComponents(
-        new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
-            new GargoyleButtonBuilder(module, 'qadd', String(faction.id))
-                .setLabel('Add Question')
-                .setStyle(ButtonStyle.Primary)
-                .setDisabled(faction.questions.length >= MAX_QUESTIONS)
-        )
-    );
 
     return { components: [container], flags: [MessageFlags.IsComponentsV2] };
 }

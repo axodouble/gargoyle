@@ -9,6 +9,7 @@ import {
     InteractionContextType,
     MessageEditOptions,
     MessageFlags,
+    AnySelectMenuInteraction,
     ModalSubmitInteraction,
     TextChannel
 } from 'discord.js';
@@ -24,7 +25,7 @@ import {
     updateFaction
 } from './_db.js';
 import { isFactionLeaderOrAdmin, isLeaderOfFactionOrAdmin } from './_permissions.js';
-import { handleQuestionButton, handleQuestionModal, handleQuestionsCommand } from './_questions.js';
+import { handleQuestionButton, handleQuestionModal, handleQuestionSelect, handleQuestionsCommand } from './_questions.js';
 import { applyPanel, blacklistListPanel, blacklistPanel, historyPanel, leaderPanel } from './_panels.js';
 import {
     handleApplyButton,
@@ -233,8 +234,8 @@ export default class Factions extends GargoyleModule {
             await interaction.reply({ content: 'Database not connected. Please try again later.', flags: [MessageFlags.Ephemeral] });
             return;
         }
-        if (args[0] === 'qadd' || args[0] === 'qedit' || args[0] === 'qdel' || args[0] === 'qmove') {
-            await handleQuestionButton(client, this, interaction, args[0], args[1], args[2], args[3]);
+        if (args[0] === 'qadd') {
+            await handleQuestionButton(client, this, interaction, args[0], args[1]);
         }
         if (args[0] === 'toggle') {
             await this.handleToggle(client, interaction, args[1]);
@@ -253,6 +254,16 @@ export default class Factions extends GargoyleModule {
         }
         if (args[0] === 'add' || args[0] === 'remove') {
             await handleThreadMemberButton(client, this, interaction, args[0] === 'add', args[1]);
+        }
+    }
+
+    public override async executeSelectMenuCommand(client: GargoyleClient, interaction: AnySelectMenuInteraction, ...args: string[]): Promise<void> {
+        if (!client.db) {
+            await interaction.reply({ content: 'Database not connected. Please try again later.', flags: [MessageFlags.Ephemeral] });
+            return;
+        }
+        if (args[0] === 'qedit' || args[0] === 'qdel' || args[0] === 'qmoveup' || args[0] === 'qmovedown') {
+            await handleQuestionSelect(client, this, interaction, args[0], args[1]);
         }
     }
 
