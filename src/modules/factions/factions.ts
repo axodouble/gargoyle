@@ -7,13 +7,16 @@ import {
     ChannelType,
     ChatInputCommandInteraction,
     InteractionContextType,
+    MessageEditOptions,
     MessageFlags,
-    ModalSubmitInteraction
+    ModalSubmitInteraction,
+    TextChannel
 } from 'discord.js';
 import { GUILD_ID } from './_types.js';
-import { createFaction, getFactionByName } from './_db.js';
-import { isFactionLeaderOrAdmin } from './_permissions.js';
+import { createFaction, getFaction, getFactionByName, listFactions, updateFaction } from './_db.js';
+import { isFactionLeaderOrAdmin, isLeaderOfFactionOrAdmin } from './_permissions.js';
 import { handleQuestionButton, handleQuestionModal, handleQuestionsCommand } from './_questions.js';
+import { applyPanel, blacklistPanel, leaderPanel } from './_panels.js';
 
 export default class Factions extends GargoyleModule {
     public override name: string = 'factions';
@@ -49,6 +52,9 @@ export default class Factions extends GargoyleModule {
                     .setDescription('View and edit faction application questions')
                     .addStringOption((option) => option.setName('faction').setDescription('Faction name').setRequired(true))
             )
+            .addSubcommand((subcommand) => subcommand.setName('panel').setDescription('Send the apply-here panel to this channel'))
+            .addSubcommand((subcommand) => subcommand.setName('leader-panel').setDescription('Send the leader management panel to this channel'))
+            .addSubcommand((subcommand) => subcommand.setName('blacklist-panel').setDescription('Send the blacklist panel to this channel'))
     ] as GargoyleSlashCommandBuilder[];
 
     public override async executeSlashCommand(client: GargoyleClient, interaction: ChatInputCommandInteraction): Promise<void> {
@@ -107,6 +113,31 @@ export default class Factions extends GargoyleModule {
         if (subcommand === 'questions') {
             await handleQuestionsCommand(client, this, interaction);
         }
+
+        if (subcommand === 'panel' || subcommand === 'leader-panel' || subcommand === 'blacklist-panel') {
+            if (!interaction.channel || interaction.channel.type !== ChannelType.GuildText) {
+                await interaction.reply({ content: 'This can only be used in a text channel.', flags: [MessageFlags.Ephemeral] });
+                return;
+            }
+            const factions = await listFactions(client, GUILD_ID);
+            if (factions.length === 0) {
+                await interaction.reply({ content: 'No factions exist yet. Create one with /faction setup.', flags: [MessageFlags.Ephemeral] });
+                return;
+            }
+            const panel =
+                subcommand === 'panel'
+                    ? applyPanel(this, factions)
+                    : subcommand === 'leader-panel'
+                      ? leaderPanel(this, factions)
+                      : blacklistPanel(this, factions);
+            try {
+                await (interaction.channel as TextChannel).send(panel);
+                await interaction.reply({ content: 'Panel sent to this channel.', flags: [MessageFlags.Ephemeral] });
+            } catch (err) {
+                client.logger.error(`Failed to send faction panel: ${err}`);
+                await interaction.reply({ content: 'Failed to send the panel.', flags: [MessageFlags.Ephemeral] });
+            }
+        }
     }
 
     public override async executeButtonCommand(client: GargoyleClient, interaction: ButtonInteraction, ...args: string[]): Promise<void> {
@@ -116,6 +147,9 @@ export default class Factions extends GargoyleModule {
         }
         if (args[0] === 'qadd' || args[0] === 'qedit' || args[0] === 'qdel' || args[0] === 'qmove') {
             await handleQuestionButton(client, this, interaction, args[0], args[1], args[2], args[3]);
+        }
+        if (args[0] === 'toggle') {
+            await this.handleToggle(client, interaction, args[1]);
         }
     }
 
@@ -127,5 +161,25 @@ export default class Factions extends GargoyleModule {
         if (args[0] === 'qadd' || args[0] === 'qedit') {
             await handleQuestionModal(client, this, interaction, args[0], args[1], args[2]);
         }
+    }
+
+    private async handleToggle(client: GargoyleClient, interaction: ButtonInteraction, factionIdArg: string): Promise<void> {
+        const faction = await getFaction(client, parseInt(factionIdArg, 10));
+        if (!faction || faction.guild_id !== GUILD_ID) {
+            await interaction.reply({ content: 'Faction not found.', flags: [MessageFlags.Ephemeral] });
+            return;
+        }
+        const member = await interaction.guild!.members.fetch(interaction.user.id);
+        if (!(await isLeaderOfFactionOrAdmin(client, interaction.guild!, member, faction.id))) {
+            await interaction.reply({ content: 'You need to be a leader of this faction or an administrator.', flags: [MessageFlags.Ephemeral] });
+            return;
+        }
+        await updateFaction(client, faction.id, { enabled: !faction.enabled });
+        const factions = await listFactions(client, GUILD_ID);
+        await interaction.message.edit(leaderPanel(this, factions) as MessageEditOptions);
+        await interaction.reply({
+            content: `Applications for **${faction.name}** are now ${faction.enabled ? 'disabled' : 'enabled'}.`,
+            flags: [MessageFlags.Ephemeral]
+        });
     }
 }
