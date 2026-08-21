@@ -5,6 +5,7 @@ import {
     ChannelType,
     GuildMember,
     MessageActionRowComponentBuilder,
+    MessageEditOptions,
     MessageFlags,
     ModalActionRowComponentBuilder,
     ModalSubmitInteraction,
@@ -12,7 +13,8 @@ import {
     PublicThreadChannel,
     TextInputBuilder,
     TextInputStyle,
-    TextChannel
+    TextChannel,
+    ThreadChannel
 } from 'discord.js';
 import GargoyleClient from '@classes/gargoyleClient.js';
 import GargoyleModule from '@classes/gargoyleModule.js';
@@ -23,14 +25,17 @@ import {
     createApplication,
     FactionRow,
     getActiveBlacklist,
+    getApplication,
     getCooldownDuration,
     getCooldownEnd,
     getFaction,
     getPendingApplication,
-    setCooldown
+    setCooldown,
+    updateApplication
 } from './_db.js';
 import { ApplicationAnswer } from '@src/system/backend/database/schema.js';
 import { applicationThreadMessage } from './_panels.js';
+import { isLeaderOfFactionOrAdmin } from './_permissions.js';
 
 export async function validateApplication(client: GargoyleClient, member: GuildMember, faction: FactionRow): Promise<string | null> {
     const blacklist = await getActiveBlacklist(client, GUILD_ID, member.id, faction.id);
@@ -246,4 +251,176 @@ export async function handleApplyModal(
     }
 
     await interaction.editReply({ content: `Application submitted! A faction leader has been notified in <#${thread.id}>.` });
+}
+
+export async function handleDecisionButton(
+    client: GargoyleClient,
+    module: GargoyleModule,
+    interaction: ButtonInteraction,
+    decision: 'accept' | 'deny',
+    applicationIdArg: string
+): Promise<void> {
+    const application = await getApplication(client, parseInt(applicationIdArg, 10));
+    if (!application || application.guild_id !== GUILD_ID) {
+        await interaction.reply({ content: 'Application not found.', flags: [MessageFlags.Ephemeral] });
+        return;
+    }
+    const faction = await getFaction(client, application.faction_id);
+    if (!faction) {
+        await interaction.reply({ content: 'Faction not found.', flags: [MessageFlags.Ephemeral] });
+        return;
+    }
+    const member = await interaction.guild!.members.fetch(interaction.user.id);
+    if (!(await isLeaderOfFactionOrAdmin(client, interaction.guild!, member, faction.id))) {
+        await interaction.reply({ content: 'You need to be a leader of this faction or an administrator.', flags: [MessageFlags.Ephemeral] });
+        return;
+    }
+    if (application.status !== 'pending') {
+        await interaction.reply({ content: 'This application has already been decided.', flags: [MessageFlags.Ephemeral] });
+        return;
+    }
+    await interaction
+        .showModal(
+            new GargoyleModalBuilder(module, decision, String(application.id))
+                .setTitle(decision === 'accept' ? 'Reason for Accepting' : 'Reason for Denying')
+                .setComponents(
+                    new ActionRowBuilder<ModalActionRowComponentBuilder>().setComponents(
+                        new TextInputBuilder()
+                            .setStyle(TextInputStyle.Paragraph)
+                            .setCustomId('reason')
+                            .setLabel(decision === 'accept' ? 'Reason for Accepting' : 'Reason for Denying')
+                            .setPlaceholder('Optional, but recommended.')
+                    )
+                )
+        )
+        .catch((err) => client.logger.error(`Failed to show decision modal: ${err}`));
+}
+
+export async function handleDecisionModal(
+    client: GargoyleClient,
+    module: GargoyleModule,
+    interaction: ModalSubmitInteraction,
+    decision: 'accept' | 'deny',
+    applicationIdArg: string
+): Promise<void> {
+    await interaction.deferUpdate();
+
+    const application = await getApplication(client, parseInt(applicationIdArg, 10));
+    if (!application || application.status !== 'pending') {
+        await interaction.followUp({ content: 'This application has already been decided.', flags: [MessageFlags.Ephemeral] });
+        return;
+    }
+    const faction = await getFaction(client, application.faction_id);
+    if (!faction) {
+        await interaction.followUp({ content: 'Faction not found.', flags: [MessageFlags.Ephemeral] });
+        return;
+    }
+
+    const reason = interaction.fields.getTextInputValue('reason').trim();
+    const status: 'accepted' | 'denied' = decision === 'accept' ? 'accepted' : 'denied';
+
+    await updateApplication(client, application.id, {
+        status,
+        decided_at: new Date(),
+        decided_by: interaction.user.id,
+        reason: reason || null
+    });
+
+    if (decision === 'deny') {
+        const duration = await getCooldownDuration(client, GUILD_ID);
+        if (duration > 0) {
+            await setCooldown(client, GUILD_ID, application.user_id, new Date(Date.now() + duration), duration);
+        }
+    }
+
+    const roleToAdd = decision === 'accept' ? faction.accept_role_id : faction.deny_role_id;
+    let roleNote = '';
+    if (roleToAdd) {
+        const applicant = await interaction.guild!.members.fetch(application.user_id).catch(() => null);
+        const role = interaction.guild!.roles.cache.get(roleToAdd);
+        if (applicant && role) {
+            await applicant.roles.add(role).catch(() => {
+                roleNote = `\n-# I could not add the <@&${roleToAdd}> role, please add it manually.`;
+            });
+        } else {
+            roleNote = '\n-# The configured role could not be found, please add it manually.';
+        }
+    }
+
+    if (application.thread_id) {
+        const thread = (await client.channels.fetch(application.thread_id).catch(() => null)) as ThreadChannel | null;
+        if (thread) {
+            const starterMessage = await thread.fetchStarterMessage().catch(() => null);
+            if (starterMessage) {
+                await starterMessage
+                    .edit(
+                        applicationThreadMessage(module, faction, application.id, application.user_id, application.answers, {
+                            status,
+                            decidedBy: interaction.user.id,
+                            reason
+                        }) as MessageEditOptions
+                    )
+                    .catch((err) => client.logger.error(`Failed to update application thread message: ${err}`));
+            }
+        }
+    }
+
+    const applicantUser = await client.users.fetch(application.user_id).catch(() => null);
+    if (applicantUser) {
+        await applicantUser
+            .send(
+                `Your application to **${faction.name}** has been ${status === 'accepted' ? 'accepted' : 'denied'} by <@!${interaction.user.id}>.${
+                    reason ? `\n> Reason: ${reason}` : ''
+                }${status === 'accepted' ? '\n\n> A faction leader will contact you soon.' : ''}`
+            )
+            .catch(() => {
+                client.logger.warning(`Could not DM ${application.user_id} about their ${faction.name} application, they may have DMs disabled.`);
+            });
+    }
+
+    await interaction.followUp({
+        content: `Application ${status === 'accepted' ? 'accepted' : 'denied'}.${roleNote}`,
+        flags: [MessageFlags.Ephemeral],
+        allowedMentions: { roles: [] }
+    });
+}
+
+export async function handleThreadMemberButton(
+    client: GargoyleClient,
+    _module: GargoyleModule,
+    interaction: ButtonInteraction,
+    add: boolean,
+    applicationIdArg: string
+): Promise<void> {
+    const application = await getApplication(client, parseInt(applicationIdArg, 10));
+    if (!application || application.guild_id !== GUILD_ID) {
+        await interaction.reply({ content: 'Application not found.', flags: [MessageFlags.Ephemeral] });
+        return;
+    }
+    const faction = await getFaction(client, application.faction_id);
+    if (!faction) {
+        await interaction.reply({ content: 'Faction not found.', flags: [MessageFlags.Ephemeral] });
+        return;
+    }
+    const member = await interaction.guild!.members.fetch(interaction.user.id);
+    if (!(await isLeaderOfFactionOrAdmin(client, interaction.guild!, member, faction.id))) {
+        await interaction.reply({ content: 'You need to be a leader of this faction or an administrator.', flags: [MessageFlags.Ephemeral] });
+        return;
+    }
+    if (!application.thread_id) {
+        await interaction.reply({ content: 'The application thread could not be found.', flags: [MessageFlags.Ephemeral] });
+        return;
+    }
+    const thread = (await client.channels.fetch(application.thread_id).catch(() => null)) as PrivateThreadChannel | null;
+    if (!thread) {
+        await interaction.reply({ content: 'The application thread could not be found.', flags: [MessageFlags.Ephemeral] });
+        return;
+    }
+    if (add) {
+        await thread.members.add(application.user_id).catch(() => {});
+        await interaction.reply({ content: `<@!${application.user_id}> has been added to the thread.`, flags: [MessageFlags.Ephemeral] });
+    } else {
+        await thread.members.remove(application.user_id).catch(() => {});
+        await interaction.reply({ content: `<@!${application.user_id}> has been removed from the thread.`, flags: [MessageFlags.Ephemeral] });
+    }
 }
