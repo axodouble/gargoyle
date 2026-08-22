@@ -3,7 +3,6 @@ import {
     AnySelectMenuInteraction,
     ButtonInteraction,
     ChatInputCommandInteraction,
-    MessageEditOptions,
     MessageFlags,
     ModalActionRowComponentBuilder,
     ModalSubmitInteraction,
@@ -106,7 +105,7 @@ export async function handleQuestionSelect(
     }
 
     await updateFaction(client, faction.id, { questions });
-    await interaction.message.edit(questionsPanel(module, { ...faction, questions }) as MessageEditOptions);
+    await interaction.editReply({ ...questionsPanel(module, { ...faction, questions }), flags: [MessageFlags.IsComponentsV2] });
 }
 
 export async function handleQuestionModal(

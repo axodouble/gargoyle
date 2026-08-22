@@ -297,8 +297,8 @@ export async function handleDecisionButton(
                             .setStyle(TextInputStyle.Paragraph)
                             .setCustomId('reason')
                             .setLabel(decision === 'accept' ? 'Reason for Accepting' : 'Reason for Denying')
-                            .setPlaceholder('Optional, but recommended.')
-                            .setRequired(false)
+                            .setPlaceholder('Explain your decision.')
+                            .setRequired(true)
                     )
                 )
         )
@@ -334,13 +334,17 @@ export async function handleDecisionModal(
     }
 
     const reason = interaction.fields.getTextInputValue('reason').trim();
+    if (!reason) {
+        await interaction.followUp({ content: 'A reason is required.', flags: [MessageFlags.Ephemeral] });
+        return;
+    }
     const status: 'accepted' | 'denied' = decision === 'accept' ? 'accepted' : 'denied';
 
     await updateApplication(client, application.id, {
         status,
         decided_at: new Date(),
         decided_by: interaction.user.id,
-        reason: reason || null
+        reason
     });
 
     if (decision === 'deny') {

@@ -40,17 +40,20 @@ export function questionsPanel(module: GargoyleModule, faction: FactionRow): Mes
                     .setLabel('Add Question')
                     .setStyle(ButtonStyle.Primary)
                     .setDisabled(faction.questions.length >= MAX_QUESTIONS)
-            ),
+            )
+        );
+
+    // Select menus require at least 1 option, so they can only be rendered when questions exist.
+    if (faction.questions.length > 0) {
+        container.addActionRowComponents(
             new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
                 new GargoyleStringSelectMenuBuilder(module, 'qedit', String(faction.id))
                     .setPlaceholder('Select a question to edit')
-                    .setDisabled(faction.questions.length === 0)
                     .setOptions(questionOptions)
             ),
             new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
                 new GargoyleStringSelectMenuBuilder(module, 'qdel', String(faction.id))
                     .setPlaceholder('Select a question to delete')
-                    .setDisabled(faction.questions.length === 0)
                     .setOptions(questionOptions)
             ),
             new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
@@ -66,6 +69,7 @@ export function questionsPanel(module: GargoyleModule, faction: FactionRow): Mes
                     .setOptions(questionOptions)
             )
         );
+    }
 
     return { components: [container], flags: [MessageFlags.IsComponentsV2] };
 }
