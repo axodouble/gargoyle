@@ -258,8 +258,12 @@ export default class Brads extends GargoyleModule {
 
         for (const row of results) {
             const connectDate = new Date(row.ConnectDate as string);
-            const disconnectDate = new Date(row.DisconnectDate as string);
-            const hoursWorked = (disconnectDate.getTime() - connectDate.getTime()) / (1000 * 60 * 60);
+            // A missing disconnect date means the session is still open, so count it up to now instead
+            const disconnectDate = row.DisconnectDate === null ? new Date() : new Date(row.DisconnectDate as string);
+            if (Number.isNaN(connectDate.getTime()) || Number.isNaN(disconnectDate.getTime())) {
+                continue;
+            }
+            const hoursWorked = Math.max(0, (disconnectDate.getTime() - connectDate.getTime()) / (1000 * 60 * 60));
 
             const discordUser = steamIdMessages.find((msg) => msg.content.includes(row.SteamId as string))?.author.id;
 
@@ -1067,7 +1071,7 @@ export default class Brads extends GargoyleModule {
         return {
             components: [container],
             flags: [MessageFlags.IsComponentsV2],
-            allowedMentions: { parse: [] } 
+            allowedMentions: { parse: [] }
         };
     }
 
