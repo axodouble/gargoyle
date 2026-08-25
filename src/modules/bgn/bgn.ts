@@ -1066,7 +1066,8 @@ export default class Brads extends GargoyleModule {
 
         return {
             components: [container],
-            flags: [MessageFlags.IsComponentsV2]
+            flags: [MessageFlags.IsComponentsV2],
+            allowedMentions: { parse: [] } 
         };
     }
 
