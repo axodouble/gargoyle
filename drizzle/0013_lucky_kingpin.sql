@@ -1,0 +1,1 @@
+ALTER TABLE "faction_panels" ADD COLUMN "faction_ids" jsonb DEFAULT '[]'::jsonb NOT NULL;

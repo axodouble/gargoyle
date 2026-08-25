@@ -5,6 +5,7 @@
     "": {
       "name": "gargoyle",
       "dependencies": {
+        "@discordjs/builders": "1.14.1",
         "@discordjs/voice": "^0.19.2",
         "@snazzah/davey": "^0.1.12",
         "canvas": "^3.2.3",

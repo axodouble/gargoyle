@@ -75,24 +75,27 @@ export function questionsPanel(module: GargoyleModule, faction: FactionRow): Mes
 }
 
 export function applyPanel(module: GargoyleModule, factions: FactionRow[]): MessageCreateOptions {
-    const enabled = factions.filter((faction) => faction.enabled);
+    const sorted = [...factions].sort((a, b) => Number(b.enabled) - Number(a.enabled));
     const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
             '# Faction Applications\n> Interested in joining a faction? Click one of the buttons below to apply.\n> Please make sure you have read the faction rules before applying.'
         )
     );
 
-    for (const faction of enabled) {
+    for (const faction of sorted) {
         container.addSectionComponents(
             new SectionBuilder()
                 .addTextDisplayComponents(new TextDisplayBuilder().setContent(`**${faction.name}**\n> ${faction.description || 'No description.'}`))
                 .setButtonAccessory(
-                    new GargoyleButtonBuilder(module, 'apply', String(faction.id)).setLabel(`Apply — ${faction.name}`).setStyle(ButtonStyle.Primary)
+                    new GargoyleButtonBuilder(module, 'apply', String(faction.id))
+                        .setLabel(faction.enabled ? `Apply — ${faction.name}` : `Closed — ${faction.name}`)
+                        .setStyle(ButtonStyle.Primary)
+                        .setDisabled(!faction.enabled)
                 )
         );
     }
 
-    if (enabled.length === 0) {
+    if (factions.length === 0) {
         container.addTextDisplayComponents(new TextDisplayBuilder().setContent('-# No applications are currently open. Check back later!'));
     }
 

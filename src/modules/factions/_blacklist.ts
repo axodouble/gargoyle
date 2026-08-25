@@ -1,3 +1,4 @@
+import { createRequire } from 'module';
 import {
     ActionRowBuilder,
     ButtonInteraction,
@@ -7,6 +8,7 @@ import {
     TextInputBuilder,
     TextInputStyle
 } from 'discord.js';
+import type { LabelBuilder as LabelBuilderInterface, UserSelectMenuBuilder as UserSelectMenuBuilderInterface } from '@discordjs/builders';
 import GargoyleClient from '@classes/gargoyleClient.js';
 import GargoyleModule from '@classes/gargoyleModule.js';
 import GargoyleModalBuilder from '@src/system/backend/builders/gargoyleModalBuilder.js';
@@ -18,6 +20,13 @@ const DURATION_PRESETS: Record<string, number> = {
     '1d': 1,
     '7d': 7,
     '30d': 30
+};
+
+// Loaded via CJS require so the classes are identical to the instance discord.js validates against (ESM import would fail instanceof checks).
+const nodeRequire = createRequire(import.meta.url);
+const { LabelBuilder, UserSelectMenuBuilder } = nodeRequire('@discordjs/builders') as {
+    LabelBuilder: typeof LabelBuilderInterface;
+    UserSelectMenuBuilder: typeof UserSelectMenuBuilderInterface;
 };
 
 export async function handleBlacklistButton(
@@ -36,13 +45,11 @@ export async function handleBlacklistButton(
             new GargoyleModalBuilder(module, 'blacklist', scope)
                 .setTitle(scope === 'all' ? 'Blacklist (All Factions)' : 'Blacklist')
                 .setComponents(
-                    new ActionRowBuilder<ModalActionRowComponentBuilder>().setComponents(
-                        new TextInputBuilder()
-                            .setLabel('User')
-                            .setCustomId('user')
-                            .setStyle(TextInputStyle.Short)
-                            .setPlaceholder('<@user> or user ID')
-                    ),
+                    new LabelBuilder()
+                        .setLabel('User')
+                        .setUserSelectMenuComponent(
+                            new UserSelectMenuBuilder().setCustomId('user').setPlaceholder('Select the user to blacklist').setRequired(true)
+                        ),
                     new ActionRowBuilder<ModalActionRowComponentBuilder>().setComponents(
                         new TextInputBuilder()
                             .setLabel('Duration')
@@ -77,13 +84,10 @@ export async function handleBlacklistModal(
         return;
     }
 
-    const rawUser = interaction.fields.getTextInputValue('user').trim();
-    const mentionPattern = /<@!?(\d+)>/;
-    const idPattern = /^\d{17,20}$/;
-    const mentionMatch = mentionPattern.exec(rawUser);
-    const userId = mentionMatch ? mentionMatch[1] : rawUser;
-    if (!idPattern.test(userId)) {
-        await interaction.editReply({ content: 'Could not resolve that user. Use a mention or a user ID.' });
+    const selected = interaction.fields.getSelectedUsers('user', true);
+    const userId = selected.first()?.id;
+    if (!userId) {
+        await interaction.editReply({ content: 'Could not resolve that user. Try again.' });
         return;
     }
 

@@ -6,6 +6,7 @@ import { ApplicationAnswer } from '@src/system/backend/database/schema.js';
 export type FactionRow = typeof schema.factionsTable.$inferSelect;
 export type ApplicationRow = typeof schema.applicationsTable.$inferSelect;
 export type BlacklistRow = typeof schema.blacklistsTable.$inferSelect;
+export type FactionPanelRow = typeof schema.factionPanelsTable.$inferSelect;
 
 function requireDb(client: GargoyleClient) {
     const db = client.db;
@@ -153,6 +154,42 @@ export function listActiveBlacklists(client: GargoyleClient, guildId: string, fa
             )
         )
         .execute();
+}
+
+export async function removeBlacklists(client: GargoyleClient, guildId: string, userId: string, factionId: number | null): Promise<number> {
+    const result = await requireDb(client)
+        .delete(schema.blacklistsTable)
+        .where(
+            and(
+                eq(schema.blacklistsTable.guild_id, guildId),
+                eq(schema.blacklistsTable.user_id, userId),
+                ...(factionId === null ? [] : [eq(schema.blacklistsTable.faction_id, factionId)])
+            )
+        )
+        .returning({ id: schema.blacklistsTable.id })
+        .execute();
+    return result.length;
+}
+
+export function createFactionPanel(
+    client: GargoyleClient,
+    data: { guild_id: string; channel_id: string; message_id: string; faction_ids: number[] }
+): Promise<FactionPanelRow> {
+    return requireDb(client)
+        .insert(schema.factionPanelsTable)
+        .values(data)
+        .onConflictDoNothing()
+        .returning()
+        .execute()
+        .then((rows) => rows[0]);
+}
+
+export function listFactionPanels(client: GargoyleClient, guildId: string): Promise<FactionPanelRow[]> {
+    return requireDb(client).select().from(schema.factionPanelsTable).where(eq(schema.factionPanelsTable.guild_id, guildId)).execute();
+}
+
+export async function deleteFactionPanel(client: GargoyleClient, panelId: number): Promise<void> {
+    await requireDb(client).delete(schema.factionPanelsTable).where(eq(schema.factionPanelsTable.id, panelId)).execute();
 }
 
 export async function getCooldownEnd(client: GargoyleClient, guildId: string, userId: string): Promise<Date | null> {

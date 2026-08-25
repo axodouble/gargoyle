@@ -104,6 +104,19 @@ export const blacklistsTable = p.pgTable(
     (t) => [p.index('blacklist_guild_user_idx').on(t.guild_id, t.user_id)]
 );
 
+export const factionPanelsTable = p.pgTable(
+    'faction_panels',
+    {
+        id: p.serial().primaryKey().notNull(),
+        guild_id: p.text().notNull(),
+        channel_id: p.text().notNull(),
+        message_id: p.text().notNull().unique(),
+        faction_ids: p.jsonb('faction_ids').$type<number[]>().notNull().default([]),
+        created_at: p.timestamp().notNull().defaultNow()
+    },
+    (t) => [p.index('faction_panel_guild_idx').on(t.guild_id)]
+);
+
 export const applicationCooldownsTable = p.pgTable(
     'application_cooldowns',
     {

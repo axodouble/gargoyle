@@ -2,27 +2,37 @@ import GargoyleClient from '@classes/gargoyleClient.js';
 import GargoyleModule from '@src/system/backend/classes/gargoyleModule.js';
 import GargoyleSlashCommandBuilder from '@src/system/backend/builders/gargoyleSlashCommandBuilder.js';
 import {
+    ActionRowBuilder,
     ApplicationIntegrationType,
     ButtonInteraction,
     ChannelType,
     ChatInputCommandInteraction,
+    ContainerBuilder,
     InteractionContextType,
+    MessageActionRowComponentBuilder,
     MessageEditOptions,
     MessageFlags,
     AnySelectMenuInteraction,
     ModalSubmitInteraction,
-    TextChannel
+    TextChannel,
+    TextDisplayBuilder
 } from 'discord.js';
+import { GargoyleStringSelectMenuBuilder } from '@src/system/backend/builders/gargoyleSelectMenuBuilders.js';
 import { GUILD_ID, parseDuration } from './_types.js';
 import {
     createFaction,
+    createFactionPanel,
+    deleteFactionPanel,
     getFaction,
     getFactionByName,
     listActiveBlacklists,
     listApplicationsByUser,
+    listFactionPanels,
     listFactions,
+    removeBlacklists,
     setCooldownDuration,
-    updateFaction
+    updateFaction,
+    type FactionRow
 } from './_db.js';
 import { isFactionLeaderOrAdmin, isLeaderOfFactionOrAdmin } from './_permissions.js';
 import { handleQuestionButton, handleQuestionModal, handleQuestionSelect, handleQuestionsCommand } from './_questions.js';
@@ -90,6 +100,15 @@ export default class Factions extends GargoyleModule {
                             .setDescription('List active blacklists')
                             .addStringOption((option) => option.setName('faction').setDescription('Faction name, or "all"').setRequired(true))
                     )
+                    .addSubcommand((subcommand) =>
+                        subcommand
+                            .setName('remove')
+                            .setDescription('Remove a blacklist')
+                            .addUserOption((option) => option.setName('user').setDescription('The user to unblacklist').setRequired(true))
+                            .addStringOption((option) =>
+                                option.setName('faction').setDescription('Faction name, or omit to remove from all factions')
+                            )
+                    )
             )
             .addSubcommandGroup((group) =>
                 group
@@ -127,15 +146,36 @@ export default class Factions extends GargoyleModule {
         }
 
         if (interaction.options.getSubcommandGroup() === 'blacklist') {
-            const factionName = interaction.options.getString('faction', true);
-            const isAll = factionName.toLowerCase() === 'all';
-            const faction = isAll ? null : await getFactionByName(client, GUILD_ID, factionName);
+            const subcommand = interaction.options.getSubcommand();
+            const factionName = interaction.options.getString('faction');
+            const isAll = subcommand === 'remove' ? !factionName : factionName!.toLowerCase() === 'all';
+            const faction = isAll ? null : await getFactionByName(client, GUILD_ID, factionName!);
             if (!isAll && !faction) {
                 await interaction.reply({ content: 'Faction not found.', flags: [MessageFlags.Ephemeral] });
                 return;
             }
-            const entries = await listActiveBlacklists(client, GUILD_ID, isAll ? null : faction!.id);
             const factions = await listFactions(client, GUILD_ID);
+
+            if (subcommand === 'remove') {
+                const user = interaction.options.getUser('user', true);
+                const active = await listActiveBlacklists(client, GUILD_ID, faction === null ? null : faction.id);
+                const relevant = active.filter((entry) => entry.user_id === user.id);
+                await removeBlacklists(client, GUILD_ID, user.id, faction === null ? null : faction.id);
+                if (relevant.length === 0) {
+                    await interaction.reply({
+                        content: `<@${user.id}> has no active blacklist ${isAll ? 'from all factions' : `from **${faction!.name}**`}.`,
+                        flags: [MessageFlags.Ephemeral]
+                    });
+                } else {
+                    await interaction.reply({
+                        content: `<@${user.id}> has been unblacklisted ${isAll ? 'from all factions' : `from **${faction!.name}**`}.`,
+                        flags: [MessageFlags.Ephemeral]
+                    });
+                }
+                return;
+            }
+
+            const entries = await listActiveBlacklists(client, GUILD_ID, isAll ? null : faction!.id);
             await interaction.reply({
                 ...blacklistListPanel(isAll ? 'All Factions' : faction!.name, entries, factions),
                 flags: [MessageFlags.IsComponentsV2]
@@ -196,7 +236,7 @@ export default class Factions extends GargoyleModule {
             await handleQuestionsCommand(client, this, interaction);
         }
 
-        if (subcommand === 'panel' || subcommand === 'leader-panel' || subcommand === 'blacklist-panel') {
+        if (subcommand === 'panel') {
             if (!interaction.channel || interaction.channel.type !== ChannelType.GuildText) {
                 await interaction.reply({ content: 'This can only be used in a text channel.', flags: [MessageFlags.Ephemeral] });
                 return;
@@ -206,12 +246,42 @@ export default class Factions extends GargoyleModule {
                 await interaction.reply({ content: 'No factions exist yet. Create one with /faction setup.', flags: [MessageFlags.Ephemeral] });
                 return;
             }
-            const panel =
-                subcommand === 'panel'
-                    ? applyPanel(this, factions)
-                    : subcommand === 'leader-panel'
-                      ? leaderPanel(this, factions)
-                      : blacklistPanel(this, factions);
+            const container = new ContainerBuilder()
+                .addTextDisplayComponents(
+                    new TextDisplayBuilder().setContent(
+                        '# Send Application Panel\n> Select which factions should appear on the panel, then it will be sent to this channel.'
+                    )
+                )
+                .addActionRowComponents(
+                    new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+                        new GargoyleStringSelectMenuBuilder(this, 'panelsend', interaction.channelId)
+                            .setPlaceholder('Select factions to include')
+                            .setMinValues(1)
+                            .setMaxValues(factions.length)
+                            .setOptions(
+                                factions.map((faction) => ({
+                                    label: faction.name,
+                                    value: String(faction.id),
+                                    ...(faction.description ? { description: faction.description.slice(0, 100) } : {})
+                                }))
+                            )
+                    )
+                );
+            await interaction.reply({ components: [container], flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2] });
+            return;
+        }
+
+        if (subcommand === 'leader-panel' || subcommand === 'blacklist-panel') {
+            if (!interaction.channel || interaction.channel.type !== ChannelType.GuildText) {
+                await interaction.reply({ content: 'This can only be used in a text channel.', flags: [MessageFlags.Ephemeral] });
+                return;
+            }
+            const factions = await listFactions(client, GUILD_ID);
+            if (factions.length === 0) {
+                await interaction.reply({ content: 'No factions exist yet. Create one with /faction setup.', flags: [MessageFlags.Ephemeral] });
+                return;
+            }
+            const panel = subcommand === 'leader-panel' ? leaderPanel(this, factions) : blacklistPanel(this, factions);
             try {
                 await (interaction.channel as TextChannel).send(panel);
                 await interaction.reply({ content: 'Panel sent to this channel.', flags: [MessageFlags.Ephemeral] });
@@ -265,6 +335,39 @@ export default class Factions extends GargoyleModule {
         if (args[0] === 'qedit' || args[0] === 'qdel' || args[0] === 'qmoveup' || args[0] === 'qmovedown') {
             await handleQuestionSelect(client, this, interaction, args[0], args[1]);
         }
+        if (args[0] === 'panelsend') {
+            await this.handlePanelSend(client, interaction, args[1]);
+        }
+    }
+
+    private async handlePanelSend(client: GargoyleClient, interaction: AnySelectMenuInteraction, channelIdArg: string): Promise<void> {
+        const selectedIds = interaction.values.map((value) => parseInt(value, 10));
+        const all = await listFactions(client, GUILD_ID);
+        const selected = selectedIds
+            .map((id) => all.find((faction) => faction.id === id))
+            .filter((faction): faction is FactionRow => Boolean(faction));
+        if (selected.length === 0) {
+            await interaction.update({ content: 'No valid factions were selected. Run /faction panel again.', components: [] });
+            return;
+        }
+        const channel = await client.channels.fetch(channelIdArg);
+        if (!channel || !channel.isTextBased()) {
+            await interaction.update({ content: 'The channel this panel was created in no longer exists.', components: [] });
+            return;
+        }
+        try {
+            const message = await (channel as TextChannel).send(applyPanel(this, selected));
+            await createFactionPanel(client, {
+                guild_id: GUILD_ID,
+                channel_id: channelIdArg,
+                message_id: message.id,
+                faction_ids: selected.map((faction) => faction.id)
+            });
+            await interaction.update({ content: `Panel sent to <#${channelIdArg}> with ${selected.length} faction(s).`, components: [] });
+        } catch (err) {
+            client.logger.error(`Failed to send faction panel: ${err}`);
+            await interaction.update({ content: 'Failed to send the panel.', components: [] });
+        }
     }
 
     public override async executeModalCommand(client: GargoyleClient, interaction: ModalSubmitInteraction, ...args: string[]): Promise<void> {
@@ -299,8 +402,30 @@ export default class Factions extends GargoyleModule {
         }
         await updateFaction(client, faction.id, { enabled: !faction.enabled });
         const factions = await listFactions(client, GUILD_ID);
-        await interaction.message.edit(leaderPanel(this, factions) as MessageEditOptions);
-        await interaction.reply({
+        await interaction.update(leaderPanel(this, factions) as MessageEditOptions);
+
+        const panels = await listFactionPanels(client, GUILD_ID);
+        for (const panel of panels) {
+            try {
+                const panelFactions =
+                    panel.faction_ids.length > 0
+                        ? panel.faction_ids.map((id) => factions.find((f) => f.id === id)).filter((f): f is (typeof factions)[number] => Boolean(f))
+                        : factions;
+                const channel = await client.channels.fetch(panel.channel_id);
+                if (!channel || !channel.isTextBased()) {
+                    throw new Error(`Channel ${panel.channel_id} is not text-based`);
+                }
+                const message = await channel.messages.fetch(panel.message_id);
+                await message.edit(applyPanel(this, panelFactions) as MessageEditOptions);
+            } catch (err) {
+                if ((err as { code?: number }).code === 10008) {
+                    await deleteFactionPanel(client, panel.id).catch(() => {});
+                }
+                client.logger.warning(`Failed to refresh faction apply panel ${panel.message_id}: ${err}`);
+            }
+        }
+
+        await interaction.followUp({
             content: `Applications for **${faction.name}** are now ${faction.enabled ? 'disabled' : 'enabled'}.`,
             flags: [MessageFlags.Ephemeral]
         });
