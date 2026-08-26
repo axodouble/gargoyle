@@ -60,6 +60,7 @@ export default class Factions extends GargoyleModule {
             .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
             .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
             .addGuild(GUILD_ID)
+            .addGuild('622843951329574942')
             .addSubcommand((subcommand) =>
                 subcommand
                     .setName('setup')
