@@ -15,7 +15,8 @@ import {
     AnySelectMenuInteraction,
     ModalSubmitInteraction,
     TextChannel,
-    TextDisplayBuilder
+    TextDisplayBuilder,
+    PermissionFlagsBits
 } from 'discord.js';
 import { GargoyleStringSelectMenuBuilder } from '@src/system/backend/builders/gargoyleSelectMenuBuilders.js';
 import { GUILD_ID, parseDuration } from './_types.js';
@@ -56,6 +57,7 @@ export default class Factions extends GargoyleModule {
             .setName('faction')
             .setDescription('Faction application management')
             .setContexts(InteractionContextType.Guild)
+            .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
             .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
             .addGuild(GUILD_ID)
             .addSubcommand((subcommand) =>
@@ -72,6 +74,27 @@ export default class Factions extends GargoyleModule {
                             .setRequired(true)
                     )
                     .addStringOption((option) => option.setName('description').setDescription('Shown on the apply button').setRequired(false))
+                    .addRoleOption((option) => option.setName('accept-role').setDescription('Role given on acceptance').setRequired(false))
+                    .addRoleOption((option) => option.setName('deny-role').setDescription('Role given on denial').setRequired(false))
+            )
+            .addSubcommand((subcommand) =>
+                subcommand
+                    .setName('edit')
+                    .setDescription('Edit an existing faction')
+                    .addStringOption((option) => option.setName('faction').setDescription('Faction name').setRequired(true))
+                    .addStringOption((option) => option.setName('new-name').setDescription('New faction name').setRequired(false))
+                    .addStringOption((option) => option.setName('description').setDescription('Shown on the apply button').setRequired(false))
+                    .addBooleanOption((option) =>
+                        option.setName('clear-description').setDescription('Remove the faction description').setRequired(false)
+                    )
+                    .addRoleOption((option) => option.setName('leader-role').setDescription('Role of the faction leaders').setRequired(false))
+                    .addChannelOption((option) =>
+                        option
+                            .setName('channel')
+                            .setDescription('Channel where application threads are created')
+                            .addChannelTypes(ChannelType.GuildText)
+                            .setRequired(false)
+                    )
                     .addRoleOption((option) => option.setName('accept-role').setDescription('Role given on acceptance').setRequired(false))
                     .addRoleOption((option) => option.setName('deny-role').setDescription('Role given on denial').setRequired(false))
             )
@@ -229,6 +252,89 @@ export default class Factions extends GargoyleModule {
                 content: `Faction **${name}** created. Add application questions with /faction questions ${name}.`,
                 flags: [MessageFlags.Ephemeral]
             });
+            return;
+        }
+
+        if (subcommand === 'edit') {
+            const faction = await getFactionByName(client, GUILD_ID, interaction.options.getString('faction', true));
+            if (!faction) {
+                await interaction.reply({ content: 'Faction not found.', flags: [MessageFlags.Ephemeral] });
+                return;
+            }
+            const member = await interaction.guild.members.fetch(interaction.user.id);
+            if (!(await isLeaderOfFactionOrAdmin(client, interaction.guild!, member, faction.id))) {
+                await interaction.reply({ content: 'You need to be a leader of this faction or an administrator.', flags: [MessageFlags.Ephemeral] });
+                return;
+            }
+
+            const updates: Parameters<typeof updateFaction>[2] = {};
+            const changed: string[] = [];
+
+            const newName = interaction.options.getString('new-name');
+            if (newName !== null && newName !== faction.name) {
+                const existing = await getFactionByName(client, GUILD_ID, newName);
+                if (existing) {
+                    await interaction.reply({ content: 'A faction with that name already exists.', flags: [MessageFlags.Ephemeral] });
+                    return;
+                }
+                updates.name = newName;
+                changed.push(`name → **${newName}**`);
+            }
+
+            const clearDescription = interaction.options.getBoolean('clear-description') ?? false;
+            if (clearDescription && interaction.options.getString('description') !== null) {
+                await interaction.reply({
+                    content: 'Use either `description` or `clear-description`, not both.',
+                    flags: [MessageFlags.Ephemeral]
+                });
+                return;
+            }
+
+            if (clearDescription || interaction.options.getString('description') !== null) {
+                updates.description = clearDescription ? '' : interaction.options.getString('description', true);
+                changed.push(`description → ${updates.description ? `**${updates.description}**` : '(cleared)'}`);
+            }
+
+            const leaderRole = interaction.options.getRole('leader-role');
+            if (leaderRole) {
+                updates.leader_role_id = leaderRole.id;
+                changed.push(`leader role → <@&${leaderRole.id}>`);
+            }
+
+            const channel = interaction.options.getChannel('channel');
+            if (channel) {
+                if (channel.type !== ChannelType.GuildText) {
+                    await interaction.reply({ content: 'The channel must be a text channel.', flags: [MessageFlags.Ephemeral] });
+                    return;
+                }
+                updates.application_channel_id = channel.id;
+                changed.push(`application channel → <#${channel.id}>`);
+            }
+
+            const acceptRole = interaction.options.getRole('accept-role');
+            if (acceptRole) {
+                updates.accept_role_id = acceptRole.id;
+                changed.push(`accept role → <@&${acceptRole.id}>`);
+            }
+
+            const denyRole = interaction.options.getRole('deny-role');
+            if (denyRole) {
+                updates.deny_role_id = denyRole.id;
+                changed.push(`deny role → <@&${denyRole.id}>`);
+            }
+
+            if (changed.length === 0) {
+                await interaction.reply({ content: 'Nothing to change — provide at least one option.', flags: [MessageFlags.Ephemeral] });
+                return;
+            }
+
+            await updateFaction(client, faction.id, updates);
+            const factions = await listFactions(client, GUILD_ID);
+            await interaction.reply({
+                content: `Updated **${updates.name ?? faction.name}**:\n${changed.map((entry) => `- ${entry}`).join('\n')}`,
+                flags: [MessageFlags.Ephemeral]
+            });
+            await this.refreshPanels(client, factions);
             return;
         }
 
@@ -404,6 +510,14 @@ export default class Factions extends GargoyleModule {
         const factions = await listFactions(client, GUILD_ID);
         await interaction.update(leaderPanel(this, factions) as MessageEditOptions);
 
+        await this.refreshPanels(client, factions);
+        await interaction.followUp({
+            content: `Applications for **${faction.name}** are now ${faction.enabled ? 'disabled' : 'enabled'}.`,
+            flags: [MessageFlags.Ephemeral]
+        });
+    }
+
+    private async refreshPanels(client: GargoyleClient, factions: FactionRow[]): Promise<void> {
         const panels = await listFactionPanels(client, GUILD_ID);
         for (const panel of panels) {
             try {
@@ -424,10 +538,5 @@ export default class Factions extends GargoyleModule {
                 client.logger.warning(`Failed to refresh faction apply panel ${panel.message_id}: ${err}`);
             }
         }
-
-        await interaction.followUp({
-            content: `Applications for **${faction.name}** are now ${faction.enabled ? 'disabled' : 'enabled'}.`,
-            flags: [MessageFlags.Ephemeral]
-        });
     }
 }
