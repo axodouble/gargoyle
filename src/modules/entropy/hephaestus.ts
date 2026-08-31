@@ -6,6 +6,7 @@ import GargoyleEmbedBuilder from '@src/system/backend/builders/gargoyleEmbedBuil
 import { access } from 'node:fs/promises';
 import { distance } from 'fastest-levenshtein';
 import {
+    HEPHAESTUS_BLACKLIST,
     HEPHAESTUS_CATEGORIES,
     HEPHAESTUS_LAUNCHER_CATEGORIES,
     HEPHAESTUS_WORKSHOP_ROOT,
@@ -14,7 +15,16 @@ import {
     HephaestusStore,
     loadHephaestusStore
 } from './_hephaestusData';
-import { HephaestusBuild, HephaestusObjective, HephaestusReferences, bestBuild, computeReferences, isLauncherLike } from './_hephaestusBuild';
+import {
+    HephaestusAxisScores,
+    HephaestusAxisStats,
+    HephaestusBuild,
+    HephaestusObjective,
+    axisScores,
+    bestBuild,
+    computeAxisStats,
+    isLauncherLike
+} from './_hephaestusBuild';
 import { renderRadarChart } from './_hephaestusRadar';
 
 // Main goal is to store all guns, all attachments, all ammo in memory
@@ -33,7 +43,7 @@ export default class Hephaestus extends GargoyleModule {
     public override name: string = 'hephaestus';
     public override category: string = 'entropy';
     private store: HephaestusStore | null = null;
-    private referencesCache: HephaestusReferences | null = null;
+    private statsCache: HephaestusAxisStats | null = null;
 
     public override slashCommands: GargoyleSlashCommandBuilder[] = [
         new GargoyleSlashCommandBuilder()
@@ -56,7 +66,8 @@ export default class Hephaestus extends GargoyleModule {
                                 { name: 'recoil', value: 'recoil' },
                                 { name: 'magazine', value: 'magazine' },
                                 { name: 'speed', value: 'speed' },
-                                { name: 'magdamage', value: 'magdamage' }
+                                { name: 'magdamage', value: 'magdamage' },
+                                { name: 'overall', value: 'overall' }
                             )
                     )
                     .addStringOption((o) =>
@@ -106,20 +117,22 @@ export default class Hephaestus extends GargoyleModule {
             if (!explicitLauncher) {
                 pool = pool.filter((candidate) => !isLauncherLike(store, candidate));
             }
+            pool = pool.filter((candidate) => !HEPHAESTUS_BLACKLIST.has(candidate.id));
         }
 
-        const build = bestBuild(store, objective, gun, pool);
+        const stats = await this.axisStats(store);
+        const build = bestBuild(store, objective, gun, pool, objective === 'overall' ? stats : undefined);
         if (build === null) {
             await interaction.editReply('No buildable gun found.');
             return;
         }
 
-        const references = await this.references(store);
-        const embed = this.formatBuild(store, build, objective, category);
+        const scores = axisScores(build, stats);
+        const embed = this.formatBuild(store, build, objective, category, scores);
         embed.setThumbnail('attachment://hephaestus-radar.png');
         await interaction.editReply({
             embeds: [embed],
-            files: [{ attachment: this.buildRadar(build, references), name: 'hephaestus-radar.png' }]
+            files: [{ attachment: this.buildRadar(scores), name: 'hephaestus-radar.png' }]
         });
     }
 
@@ -139,27 +152,21 @@ export default class Hephaestus extends GargoyleModule {
         return this.store;
     }
 
-    private async references(store: HephaestusStore): Promise<HephaestusReferences> {
-        if (this.referencesCache === null) {
-            const pool = [...store.guns.values()].filter((gun) => !isLauncherLike(store, gun));
-            this.referencesCache = computeReferences(store, pool);
+    private async axisStats(store: HephaestusStore): Promise<HephaestusAxisStats> {
+        if (this.statsCache === null) {
+            const pool = [...store.guns.values()].filter((gun) => !isLauncherLike(store, gun) && !HEPHAESTUS_BLACKLIST.has(gun.id));
+            this.statsCache = computeAxisStats(store, pool);
         }
-        return this.referencesCache;
+        return this.statsCache;
     }
 
-    private buildRadar(build: HephaestusBuild, references: HephaestusReferences): Buffer {
-        const clamp = (value: number) => Math.max(0, Math.min(100, value));
-        const recoilRange = references.maxRecoil - references.minRecoil;
-        const recoilValue = recoilRange > 0 ? ((references.maxRecoil - build.recoil) / recoilRange) * 100 : 100;
+    private buildRadar(scores: HephaestusAxisScores): Buffer {
         return renderRadarChart([
-            { label: 'DPS', value: clamp(references.maxDps > 0 ? (build.dps / references.maxDps) * 100 : 0) },
-            {
-                label: 'Capacity',
-                value: clamp(references.maxMagazineCapacity > 0 ? (build.magazineCapacity / references.maxMagazineCapacity) * 100 : 0)
-            },
-            { label: 'Speed', value: clamp(references.maxSpeed > 0 ? (build.speed / references.maxSpeed) * 100 : 0) },
-            { label: 'Recoil', value: recoilValue },
-            { label: 'Mag Damage', value: clamp(references.maxMagDamage > 0 ? (build.magDamage / references.maxMagDamage) * 100 : 0) }
+            { label: 'DPS', value: scores.dps },
+            { label: 'Capacity', value: scores.magazineCapacity },
+            { label: 'Speed', value: scores.speed },
+            { label: 'Recoil', value: scores.recoil },
+            { label: 'Mag Damage', value: scores.magDamage }
         ]);
     }
 
@@ -194,7 +201,8 @@ export default class Hephaestus extends GargoyleModule {
         store: HephaestusStore,
         build: HephaestusBuild,
         objective: HephaestusObjective,
-        category: string | null
+        category: string | null,
+        scores: HephaestusAxisScores
     ): GargoyleEmbedBuilder {
         const caliber = build.gun.cartridge ?? this.formatCalibers(store, build.gun.magazineCalibers);
         const description = `**${build.gun.name}** — \`${build.gun.id}\`${caliber !== '' ? ` — ${caliber}` : ''}${category !== null ? `\nCategory: ${category}` : ''}`;
@@ -220,7 +228,8 @@ export default class Hephaestus extends GargoyleModule {
             value:
                 `**DPS** ${build.dps.toFixed(1)} — **TTK** ${Number.isFinite(build.ttk) ? `${build.ttk.toFixed(2)}s` : '∞'}\n` +
                 `**Magazine** ${build.magazineCapacity} rounds — **Mag Damage** ${build.magDamage.toFixed(0)}\n` +
-                `**Speed** ${build.speed.toFixed(3)} — **Recoil** ${build.recoil.toFixed(3)}`
+                `**Speed** ${build.speed.toFixed(3)} — **Recoil** ${build.recoil.toFixed(3)}\n` +
+                `**Balance** DPS ${scores.dps.toFixed(0)} — Cap ${scores.magazineCapacity.toFixed(0)} — Spd ${scores.speed.toFixed(0)} — Rec ${scores.recoil.toFixed(0)} — Mag ${scores.magDamage.toFixed(0)}`
         });
 
         const notes = ['Recoil score weights horizontal recoil ×2.'];
@@ -249,7 +258,7 @@ export default class Hephaestus extends GargoyleModule {
         const exitCode = await process.exitCode;
         if (exitCode === 0) {
             this.store = null;
-            this.referencesCache = null;
+            this.statsCache = null;
             return 'actualized';
             // The files will now be located at:
             // /tmp/steam/steamapps/workshop/content/304930/1959614756/

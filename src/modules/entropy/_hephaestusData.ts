@@ -9,6 +9,20 @@ export type HephaestusAttachmentType = (typeof HEPHAESTUS_ATTACHMENT_TYPES)[numb
 export const HEPHAESTUS_CATEGORIES = ['AR', 'BR', 'AT', 'DMR', 'SR', 'AMR', 'GL', 'MG', 'Pistol', 'Revolver', 'SMG', 'Shotgun'] as const;
 export const HEPHAESTUS_LAUNCHER_CATEGORIES: ReadonlySet<string> = new Set(['AT', 'GL']);
 
+/**
+ * Server blacklist: item IDs that /hephaestus build ignores by default.
+ * Blacklisted guns are excluded from default and category searches, and from the
+ * radar percentile pool, but are still buildable when named explicitly (gun=...).
+ * Add an item's numeric ID below to blacklist it.
+ */
+export const HEPHAESTUS_BLACKLIST: ReadonlySet<number> = new Set<number>([
+    59521, // Lahti L-39
+    59526, // DIY Lahti L-39 Anti-Tryhard
+    59582, // Anzio 20mm
+    58900, // M93 Black Arrow
+    59075 // QBU-10 AMR
+]);
+
 export interface HephaestusMultipliers {
     recoilX: number;
     recoilY: number;

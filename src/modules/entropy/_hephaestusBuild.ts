@@ -10,7 +10,10 @@ import {
 export const HORIZONTAL_RECOIL_WEIGHT = 2;
 export const PLAYER_HEALTH = 100;
 
-export type HephaestusObjective = 'dps' | 'recoil' | 'ttk' | 'magazine' | 'speed' | 'magdamage';
+export type HephaestusObjective = 'dps' | 'recoil' | 'ttk' | 'magazine' | 'speed' | 'magdamage' | 'overall';
+
+export const HEPHAESTUS_AXES = ['dps', 'magazineCapacity', 'speed', 'recoil', 'magDamage'] as const;
+export type HephaestusAxis = (typeof HEPHAESTUS_AXES)[number];
 
 export interface HephaestusBuildSlot {
     slot: HephaestusAttachmentType;
@@ -28,13 +31,20 @@ export interface HephaestusBuild {
     magDamage: number;
 }
 
-export interface HephaestusReferences {
-    maxDps: number;
-    maxMagazineCapacity: number;
-    maxSpeed: number;
-    minRecoil: number;
-    maxRecoil: number;
-    maxMagDamage: number;
+export interface HephaestusAxisStats {
+    dps: number[];
+    magazineCapacity: number[];
+    speed: number[];
+    recoil: number[];
+    magDamage: number[];
+}
+
+export interface HephaestusAxisScores {
+    dps: number;
+    magazineCapacity: number;
+    speed: number;
+    recoil: number;
+    magDamage: number;
 }
 
 interface Accumulators {
@@ -163,11 +173,37 @@ export function bestBuild(
     store: HephaestusStore,
     objective: HephaestusObjective,
     gun?: HephaestusGun,
-    pool?: Iterable<HephaestusGun>
+    pool?: Iterable<HephaestusGun>,
+    stats?: HephaestusAxisStats
 ): HephaestusBuild | null {
+    const guns = gun !== undefined ? [gun] : (pool ?? store.guns.values());
+
+    if (objective === 'overall') {
+        if (stats === undefined) return null;
+        let best: HephaestusBuild | null = null;
+        let bestMin = Number.NEGATIVE_INFINITY;
+        let bestAvg = Number.NEGATIVE_INFINITY;
+        const buildObjectives: HephaestusObjective[] = ['dps', 'magazine', 'speed', 'recoil', 'magdamage'];
+        for (const candidate of guns) {
+            if (candidate.firerate <= 0 || candidate.damage <= 0) continue;
+            for (const buildObjective of buildObjectives) {
+                const build = buildForGun(store, candidate, buildObjective);
+                const scores = axisScores(build, stats);
+                const values = [scores.dps, scores.magazineCapacity, scores.speed, scores.recoil, scores.magDamage];
+                const min = Math.min(...values);
+                const avg = values.reduce((total, value) => total + value, 0) / values.length;
+                if (min > bestMin || (min === bestMin && avg > bestAvg)) {
+                    best = build;
+                    bestMin = min;
+                    bestAvg = avg;
+                }
+            }
+        }
+        return best;
+    }
+
     let best: HephaestusBuild | null = null;
     let bestValue = Number.NEGATIVE_INFINITY;
-    const guns = gun !== undefined ? [gun] : (pool ?? store.guns.values());
     for (const candidate of guns) {
         if (candidate.firerate <= 0 || candidate.damage <= 0) continue;
         const build = buildForGun(store, candidate, objective);
@@ -180,27 +216,72 @@ export function bestBuild(
     return best;
 }
 
-export function computeReferences(store: HephaestusStore, pool: Iterable<HephaestusGun>): HephaestusReferences {
-    let maxDps = 0;
-    let maxMagazineCapacity = 0;
-    let maxSpeed = 0;
-    let minRecoil = Number.POSITIVE_INFINITY;
-    let maxRecoil = 0;
-    let maxMagDamage = 0;
+function lowerBound(sorted: number[], value: number): number {
+    let low = 0;
+    let high = sorted.length;
+    while (low < high) {
+        const mid = (low + high) >> 1;
+        if (sorted[mid] < value) low = mid + 1;
+        else high = mid;
+    }
+    return low;
+}
+
+function upperBound(sorted: number[], value: number): number {
+    let low = 0;
+    let high = sorted.length;
+    while (low < high) {
+        const mid = (low + high) >> 1;
+        if (sorted[mid] <= value) low = mid + 1;
+        else high = mid;
+    }
+    return low;
+}
+
+function axisPercentile(sorted: number[], value: number, higherBetter: boolean): number {
+    const n = sorted.length;
+    if (n === 0) return 0;
+    const lower = lowerBound(sorted, value);
+    const upper = upperBound(sorted, value);
+    const base = higherBetter ? lower : n - upper;
+    return ((base + 0.5 * (upper - lower)) / n) * 100;
+}
+
+export function axisScores(build: HephaestusBuild, stats: HephaestusAxisStats): HephaestusAxisScores {
+    return {
+        dps: axisPercentile(stats.dps, build.dps, true),
+        magazineCapacity: axisPercentile(stats.magazineCapacity, build.magazineCapacity, true),
+        speed: axisPercentile(stats.speed, build.speed, true),
+        recoil: axisPercentile(stats.recoil, build.recoil, false),
+        magDamage: axisPercentile(stats.magDamage, build.magDamage, true)
+    };
+}
+
+export function computeAxisStats(store: HephaestusStore, pool: Iterable<HephaestusGun>): HephaestusAxisStats {
+    const dps: number[] = [];
+    const magazineCapacity: number[] = [];
+    const speed: number[] = [];
+    const recoil: number[] = [];
+    const magDamage: number[] = [];
 
     for (const gun of pool) {
         if (gun.firerate <= 0 || gun.damage <= 0) continue;
-        const dps = buildForGun(store, gun, 'dps');
-        maxDps = Math.max(maxDps, dps.dps);
-        maxMagDamage = Math.max(maxMagDamage, dps.magDamage);
-        maxMagazineCapacity = Math.max(maxMagazineCapacity, buildForGun(store, gun, 'magazine').magazineCapacity);
-        maxSpeed = Math.max(maxSpeed, buildForGun(store, gun, 'speed').speed);
-        const recoil = buildForGun(store, gun, 'recoil').recoil;
-        minRecoil = Math.min(minRecoil, recoil);
-        maxRecoil = Math.max(maxRecoil, recoil);
+        const dpsBuild = buildForGun(store, gun, 'dps');
+        dps.push(dpsBuild.dps);
+        magDamage.push(dpsBuild.magDamage);
+        magazineCapacity.push(buildForGun(store, gun, 'magazine').magazineCapacity);
+        speed.push(buildForGun(store, gun, 'speed').speed);
+        recoil.push(buildForGun(store, gun, 'recoil').recoil);
     }
 
-    return { maxDps, maxMagazineCapacity, maxSpeed, minRecoil, maxRecoil, maxMagDamage };
+    const sortAscending = (values: number[]) => values.sort((a, b) => a - b);
+    return {
+        dps: sortAscending(dps),
+        magazineCapacity: sortAscending(magazineCapacity),
+        speed: sortAscending(speed),
+        recoil: sortAscending(recoil),
+        magDamage: sortAscending(magDamage)
+    };
 }
 
 export function isLauncherLike(store: HephaestusStore, gun: HephaestusGun): boolean {
