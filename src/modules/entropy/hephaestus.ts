@@ -1,7 +1,21 @@
-import GargoyleSlashCommandBuilder from "@src/system/backend/builders/gargoyleSlashCommandBuilder";
-import GargoyleClient from "@src/system/backend/classes/gargoyleClient";
-import GargoyleModule from "@src/system/backend/classes/gargoyleModule";
-import { ChatInputCommandInteraction } from "discord.js";
+import GargoyleSlashCommandBuilder from '@src/system/backend/builders/gargoyleSlashCommandBuilder';
+import GargoyleClient from '@src/system/backend/classes/gargoyleClient';
+import GargoyleModule from '@src/system/backend/classes/gargoyleModule';
+import { ChatInputCommandInteraction } from 'discord.js';
+import GargoyleEmbedBuilder from '@src/system/backend/builders/gargoyleEmbedBuilder';
+import { access } from 'node:fs/promises';
+import { distance } from 'fastest-levenshtein';
+import {
+    HEPHAESTUS_CATEGORIES,
+    HEPHAESTUS_LAUNCHER_CATEGORIES,
+    HEPHAESTUS_WORKSHOP_ROOT,
+    HephaestusAttachmentType,
+    HephaestusGun,
+    HephaestusStore,
+    loadHephaestusStore
+} from './_hephaestusData';
+import { HephaestusBuild, HephaestusObjective, HephaestusReferences, bestBuild, computeReferences, isLauncherLike } from './_hephaestusBuild';
+import { renderRadarChart } from './_hephaestusRadar';
 
 // Main goal is to store all guns, all attachments, all ammo in memory
 // Automatically map all items downloaded over steamcmd
@@ -14,53 +28,233 @@ import { ChatInputCommandInteraction } from "discord.js";
 // Sight Assets: https://docs.smartlydressedgames.com/en/stable/items/sight-asset.html
 // Tactical Assets: https://docs.smartlydressedgames.com/en/stable/items/tactical-asset.html
 // Barrel Assets: https://docs.smartlydressedgames.com/en/stable/items/barrel-asset.html
-//
-// Eventually I want this:
-// /hephaestus build [optional gun] <dps|recoil|ttk>
-// Where it will build it based off of all compatibilities automatically, optimized for DPS, Recoil or TTK
-// And it gives you all the IDs of the things it chooses, names and calibers.
-//
-// So first things first is to ingest all .dat files to memory
 
 export default class Hephaestus extends GargoyleModule {
     public override name: string = 'hephaestus';
     public override category: string = 'entropy';
+    private store: HephaestusStore | null = null;
+    private referencesCache: HephaestusReferences | null = null;
 
     public override slashCommands: GargoyleSlashCommandBuilder[] = [
-        new GargoyleSlashCommandBuilder().setName('hephaestus').setDescription('Hephaestus Manager').addGuild('1009048008857493624').addSubcommand(s =>
-            s.setName('actualize').setDescription('Actualize Inventory')
-        ) as GargoyleSlashCommandBuilder
+        new GargoyleSlashCommandBuilder()
+            .setName('hephaestus')
+            .setDescription('Hephaestus Manager')
+            .addGuild('1009048008857493624')
+            .addSubcommand((s) => s.setName('actualize').setDescription('Actualize Inventory'))
+            .addSubcommand((s) =>
+                s
+                    .setName('build')
+                    .setDescription('Forge the mathematically best gun build')
+                    .addStringOption((o) =>
+                        o
+                            .setName('objective')
+                            .setDescription('What the build should be optimized for')
+                            .setRequired(true)
+                            .addChoices(
+                                { name: 'dps', value: 'dps' },
+                                { name: 'ttk', value: 'ttk' },
+                                { name: 'recoil', value: 'recoil' },
+                                { name: 'magazine', value: 'magazine' },
+                                { name: 'speed', value: 'speed' },
+                                { name: 'magdamage', value: 'magdamage' }
+                            )
+                    )
+                    .addStringOption((o) =>
+                        o
+                            .setName('category')
+                            .setDescription('Restrict to a weapon class (default: all non-launcher guns)')
+                            .addChoices(...HEPHAESTUS_CATEGORIES.map((category) => ({ name: category, value: category })))
+                    )
+                    .addStringOption((o) => o.setName('gun').setDescription('A specific gun to optimize for (overrides category)'))
+            ) as GargoyleSlashCommandBuilder
+    ];
 
-    ]
-
-    public override async executeSlashCommand(client: GargoyleClient, interaction: ChatInputCommandInteraction): Promise<void> {
+    public override async executeSlashCommand(_client: GargoyleClient, interaction: ChatInputCommandInteraction): Promise<void> {
         await interaction.deferReply();
-        if (interaction.options.getSubcommand() === "actualize") {
-            await interaction.editReply(await this.actualizeNordic())
+        if (interaction.options.getSubcommand() === 'actualize') {
+            await interaction.editReply(await this.actualizeNordic());
+            return;
         }
+
+        const objective = interaction.options.getString('objective', true) as HephaestusObjective;
+        const gunQuery = interaction.options.getString('gun');
+        const category = interaction.options.getString('category');
+
+        const store = await this.ensureStore();
+        if (store === null) {
+            await interaction.editReply('Failed to load item data. Run `/hephaestus actualize` first.');
+            return;
+        }
+
+        let gun: HephaestusGun | undefined;
+        if (gunQuery !== null) {
+            const match = this.findGun(store, gunQuery);
+            if (match === null) {
+                await interaction.editReply(`No gun found matching \`${gunQuery}\`.`);
+                return;
+            }
+            gun = match;
+        }
+
+        let pool: HephaestusGun[] | undefined;
+        if (gun === undefined) {
+            pool = [...store.guns.values()];
+            if (category !== null) {
+                pool = pool.filter((candidate) => candidate.categories.includes(category));
+            }
+            const explicitLauncher = category !== null && [...HEPHAESTUS_LAUNCHER_CATEGORIES].includes(category);
+            if (!explicitLauncher) {
+                pool = pool.filter((candidate) => !isLauncherLike(store, candidate));
+            }
+        }
+
+        const build = bestBuild(store, objective, gun, pool);
+        if (build === null) {
+            await interaction.editReply('No buildable gun found.');
+            return;
+        }
+
+        const references = await this.references(store);
+        const embed = this.formatBuild(store, build, objective, category);
+        embed.setThumbnail('attachment://hephaestus-radar.png');
+        await interaction.editReply({
+            embeds: [embed],
+            files: [{ attachment: this.buildRadar(build, references), name: 'hephaestus-radar.png' }]
+        });
+    }
+
+    private async ensureStore(): Promise<HephaestusStore | null> {
+        if (this.store !== null) return this.store;
+        try {
+            await access(HEPHAESTUS_WORKSHOP_ROOT);
+        } catch {
+            const result = await this.actualizeNordic();
+            if (result !== 'actualized') return null;
+        }
+        try {
+            this.store = await loadHephaestusStore();
+        } catch {
+            return null;
+        }
+        return this.store;
+    }
+
+    private async references(store: HephaestusStore): Promise<HephaestusReferences> {
+        if (this.referencesCache === null) {
+            const pool = [...store.guns.values()].filter((gun) => !isLauncherLike(store, gun));
+            this.referencesCache = computeReferences(store, pool);
+        }
+        return this.referencesCache;
+    }
+
+    private buildRadar(build: HephaestusBuild, references: HephaestusReferences): Buffer {
+        const clamp = (value: number) => Math.max(0, Math.min(100, value));
+        const recoilRange = references.maxRecoil - references.minRecoil;
+        const recoilValue = recoilRange > 0 ? ((references.maxRecoil - build.recoil) / recoilRange) * 100 : 100;
+        return renderRadarChart([
+            { label: 'DPS', value: clamp(references.maxDps > 0 ? (build.dps / references.maxDps) * 100 : 0) },
+            {
+                label: 'Capacity',
+                value: clamp(references.maxMagazineCapacity > 0 ? (build.magazineCapacity / references.maxMagazineCapacity) * 100 : 0)
+            },
+            { label: 'Speed', value: clamp(references.maxSpeed > 0 ? (build.speed / references.maxSpeed) * 100 : 0) },
+            { label: 'Recoil', value: recoilValue },
+            { label: 'Mag Damage', value: clamp(references.maxMagDamage > 0 ? (build.magDamage / references.maxMagDamage) * 100 : 0) }
+        ]);
+    }
+
+    private findGun(store: HephaestusStore, query: string): HephaestusGun | null {
+        const needle = query.trim().toLowerCase();
+        for (const gun of store.guns.values()) {
+            if (gun.name.toLowerCase() === needle) return gun;
+        }
+        let best: HephaestusGun | null = null;
+        let bestDistance = Number.POSITIVE_INFINITY;
+        for (const gun of store.guns.values()) {
+            const candidate = gun.name.toLowerCase();
+            if (!candidate.includes(needle)) continue;
+            const distanceToQuery = distance(candidate, needle);
+            if (distanceToQuery < bestDistance) {
+                bestDistance = distanceToQuery;
+                best = gun;
+            }
+        }
+        if (best !== null) return best;
+        for (const gun of store.guns.values()) {
+            const distanceToQuery = distance(gun.name.toLowerCase(), needle);
+            if (distanceToQuery < bestDistance) {
+                bestDistance = distanceToQuery;
+                best = gun;
+            }
+        }
+        return bestDistance <= 3 ? best : null;
+    }
+
+    private formatBuild(
+        store: HephaestusStore,
+        build: HephaestusBuild,
+        objective: HephaestusObjective,
+        category: string | null
+    ): GargoyleEmbedBuilder {
+        const caliber = build.gun.cartridge ?? this.formatCalibers(store, build.gun.magazineCalibers);
+        const description = `**${build.gun.name}** — \`${build.gun.id}\`${caliber !== '' ? ` — ${caliber}` : ''}${category !== null ? `\nCategory: ${category}` : ''}`;
+        const embed = new GargoyleEmbedBuilder().setTitle(`Hephaestus — ${objective.toUpperCase()} Build`).setDescription(description);
+
+        for (const slot of ['Magazine', 'Barrel', 'Grip', 'Sight', 'Tactical'] as HephaestusAttachmentType[]) {
+            const entry = build.slots.find((s) => s.slot === slot);
+            if (!entry) continue;
+            if (entry.item === null) {
+                embed.addFields({ name: slot, value: '*None*', inline: false });
+                continue;
+            }
+            const calibers = this.formatCalibers(store, entry.item.calibers);
+            embed.addFields({
+                name: slot,
+                value: `**${entry.item.name}** — \`${entry.item.id}\`${calibers !== '' ? ` — ${calibers}` : ''}`,
+                inline: false
+            });
+        }
+
+        embed.addFields({
+            name: 'Stats',
+            value:
+                `**DPS** ${build.dps.toFixed(1)} — **TTK** ${Number.isFinite(build.ttk) ? `${build.ttk.toFixed(2)}s` : '∞'}\n` +
+                `**Magazine** ${build.magazineCapacity} rounds — **Mag Damage** ${build.magDamage.toFixed(0)}\n` +
+                `**Speed** ${build.speed.toFixed(3)} — **Recoil** ${build.recoil.toFixed(3)}`
+        });
+
+        const notes = ['Recoil score weights horizontal recoil ×2.'];
+        if (category === null) notes.push('Launcher-type weapons are excluded by default.');
+        embed.setFooter({ text: notes.join(' ') });
+        return embed;
+    }
+
+    private formatCalibers(store: HephaestusStore, calibers: number[]): string {
+        return [...new Set(calibers.map((caliber) => store.caliberNames.get(caliber) ?? `#${caliber}`))].join(', ');
     }
 
     private async actualizeNordic() {
         const process = Bun.spawnSync({
-            cmd: ["/opt/steamcmd/steamcmd.sh",
-                "+force_install_dir \"/tmp/steam\"",
-                "+login anonymous",
-                "+workshop_download_item 304930 1959614756",
-                "+quit"
+            cmd: [
+                '/opt/steamcmd/steamcmd.sh',
+                '+force_install_dir "/tmp/steam"',
+                '+login anonymous',
+                '+workshop_download_item 304930 1959614756',
+                '+quit'
             ],
-            stdout: "pipe",
-            stderr: "pipe"
-        })
+            stdout: 'pipe',
+            stderr: 'pipe'
+        });
 
         const exitCode = await process.exitCode;
         if (exitCode === 0) {
-            return "actualized"
+            this.store = null;
+            this.referencesCache = null;
+            return 'actualized';
             // The files will now be located at:
             // /tmp/steam/steamapps/workshop/content/304930/1959614756/
         } else {
             return `SteamCMD failed with exit code: ${exitCode}`;
         }
     }
-
-
 }
