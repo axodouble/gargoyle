@@ -2,6 +2,21 @@ FROM oven/bun:debian
 
 WORKDIR /workspace/gargoyle
 
+# Install SteamCMD dependencies and curl
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    lib32gcc-s1 \
+    lib32stdc++6 \
+    && rm -rf /var/lib/apt-get/lists/*
+
+# Create SteamCMD directory
+RUN mkdir -p /opt/steamcmd && cd /opt/steamcmd \
+    && curl -sqL "https://client-update.steamstatic.com/installer/steamcmd_linux.tar.gz" | tar zxvf -
+
+# Add SteamCMD to the system PATH
+ENV PATH="/opt/steamcmd:${PATH}"
+
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 CMD curl --fail http://localhost:3000/health || exit 1
 
 EXPOSE 3001 
