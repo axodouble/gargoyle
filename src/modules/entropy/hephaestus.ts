@@ -19,11 +19,13 @@ import {
     HephaestusAxisScores,
     HephaestusAxisStats,
     HephaestusBuild,
+    HephaestusLeaderboardEntry,
     HephaestusObjective,
     axisScores,
     bestBuild,
     computeAxisStats,
-    isLauncherLike
+    isLauncherLike,
+    leaderboard
 } from './_hephaestusBuild';
 import { renderRadarChart } from './_hephaestusRadar';
 
@@ -77,6 +79,33 @@ export default class Hephaestus extends GargoyleModule {
                             .addChoices(...HEPHAESTUS_CATEGORIES.map((category) => ({ name: category, value: category })))
                     )
                     .addStringOption((o) => o.setName('gun').setDescription('A specific gun to optimize for (overrides category)'))
+            )
+            .addSubcommand((s) =>
+                s
+                    .setName('leaderboard')
+                    .setDescription('Show the top guns for a value')
+                    .addStringOption((o) =>
+                        o
+                            .setName('value')
+                            .setDescription('Which value to rank by')
+                            .setRequired(true)
+                            .addChoices(
+                                { name: 'dps', value: 'dps' },
+                                { name: 'ttk', value: 'ttk' },
+                                { name: 'recoil', value: 'recoil' },
+                                { name: 'magazine', value: 'magazine' },
+                                { name: 'speed', value: 'speed' },
+                                { name: 'magdamage', value: 'magdamage' },
+                                { name: 'overall', value: 'overall' }
+                            )
+                    )
+                    .addStringOption((o) =>
+                        o
+                            .setName('category')
+                            .setDescription('Restrict to a weapon class (default: all non-launcher guns)')
+                            .addChoices(...HEPHAESTUS_CATEGORIES.map((category) => ({ name: category, value: category })))
+                    )
+                    .addIntegerOption((o) => o.setName('limit').setDescription('How many to show (default 10)').setMinValue(1).setMaxValue(25))
             ) as GargoyleSlashCommandBuilder
     ];
 
@@ -87,15 +116,20 @@ export default class Hephaestus extends GargoyleModule {
             return;
         }
 
-        const objective = interaction.options.getString('objective', true) as HephaestusObjective;
-        const gunQuery = interaction.options.getString('gun');
-        const category = interaction.options.getString('category');
-
         const store = await this.ensureStore();
         if (store === null) {
             await interaction.editReply('Failed to load item data. Run `/hephaestus actualize` first.');
             return;
         }
+
+        if (interaction.options.getSubcommand() === 'leaderboard') {
+            await this.runLeaderboard(interaction, store);
+            return;
+        }
+
+        const objective = interaction.options.getString('objective', true) as HephaestusObjective;
+        const gunQuery = interaction.options.getString('gun');
+        const category = interaction.options.getString('category');
 
         let gun: HephaestusGun | undefined;
         if (gunQuery !== null) {
@@ -107,18 +141,7 @@ export default class Hephaestus extends GargoyleModule {
             gun = match;
         }
 
-        let pool: HephaestusGun[] | undefined;
-        if (gun === undefined) {
-            pool = [...store.guns.values()];
-            if (category !== null) {
-                pool = pool.filter((candidate) => candidate.categories.includes(category));
-            }
-            const explicitLauncher = category !== null && [...HEPHAESTUS_LAUNCHER_CATEGORIES].includes(category);
-            if (!explicitLauncher) {
-                pool = pool.filter((candidate) => !isLauncherLike(store, candidate));
-            }
-            pool = pool.filter((candidate) => !HEPHAESTUS_BLACKLIST.has(candidate.id));
-        }
+        const pool = gun === undefined ? this.searchPool(store, category) : undefined;
 
         const stats = await this.axisStats(store);
         const build = bestBuild(store, objective, gun, pool, objective === 'overall' ? stats : undefined);
@@ -134,6 +157,35 @@ export default class Hephaestus extends GargoyleModule {
             embeds: [embed],
             files: [{ attachment: this.buildRadar(scores), name: 'hephaestus-radar.png' }]
         });
+    }
+
+    private async runLeaderboard(interaction: ChatInputCommandInteraction, store: HephaestusStore): Promise<void> {
+        const objective = interaction.options.getString('value', true) as HephaestusObjective;
+        const category = interaction.options.getString('category');
+        const limit = interaction.options.getInteger('limit') ?? 10;
+
+        const pool = this.searchPool(store, category);
+        if (pool.length === 0) {
+            await interaction.editReply('No guns found in that category.');
+            return;
+        }
+
+        const stats = await this.axisStats(store);
+        const entries = leaderboard(store, objective, pool, stats, limit);
+        const embed = this.formatLeaderboard(objective, category, entries);
+        await interaction.editReply({ embeds: [embed] });
+    }
+
+    private searchPool(store: HephaestusStore, category: string | null): HephaestusGun[] {
+        let pool = [...store.guns.values()];
+        if (category !== null) {
+            pool = pool.filter((candidate) => candidate.categories.includes(category));
+        }
+        const explicitLauncher = category !== null && [...HEPHAESTUS_LAUNCHER_CATEGORIES].includes(category);
+        if (!explicitLauncher) {
+            pool = pool.filter((candidate) => !isLauncherLike(store, candidate));
+        }
+        return pool.filter((candidate) => !HEPHAESTUS_BLACKLIST.has(candidate.id));
     }
 
     private async ensureStore(): Promise<HephaestusStore | null> {
@@ -163,10 +215,10 @@ export default class Hephaestus extends GargoyleModule {
     private buildRadar(scores: HephaestusAxisScores): Buffer {
         return renderRadarChart([
             { label: 'DPS', value: scores.dps },
-            { label: 'Capacity', value: scores.magazineCapacity },
+            { label: 'Cap', value: scores.magazineCapacity },
             { label: 'Speed', value: scores.speed },
             { label: 'Recoil', value: scores.recoil },
-            { label: 'Mag Damage', value: scores.magDamage }
+            { label: ' DMG', value: scores.magDamage }
         ]);
     }
 
@@ -236,6 +288,39 @@ export default class Hephaestus extends GargoyleModule {
         if (category === null) notes.push('Launcher-type weapons are excluded by default.');
         embed.setFooter({ text: notes.join(' ') });
         return embed;
+    }
+
+    private formatLeaderboard(objective: HephaestusObjective, category: string | null, entries: HephaestusLeaderboardEntry[]): GargoyleEmbedBuilder {
+        const lines = entries.map((entry, index) => {
+            const gun = entry.build.gun;
+            return `${index + 1}. **${gun.name}** \`${gun.id}\` — ${this.formatLeaderboardValue(objective, entry)}`;
+        });
+        const description = `${category !== null ? `Category: ${category}\n\n` : ''}${lines.join('\n')}`;
+        const embed = new GargoyleEmbedBuilder().setTitle(`Hephaestus — ${objective.toUpperCase()} Leaderboard`).setDescription(description);
+        const notes = ['Recoil score weights horizontal recoil ×2.'];
+        if (category === null) notes.push('Launcher-type weapons are excluded by default.');
+        embed.setFooter({ text: notes.join(' ') });
+        return embed;
+    }
+
+    private formatLeaderboardValue(objective: HephaestusObjective, entry: HephaestusLeaderboardEntry): string {
+        const build = entry.build;
+        switch (objective) {
+            case 'ttk':
+                return `${build.ttk.toFixed(2)}s`;
+            case 'recoil':
+                return build.recoil.toFixed(3);
+            case 'magazine':
+                return `${build.magazineCapacity} rounds`;
+            case 'speed':
+                return build.speed.toFixed(3);
+            case 'magdamage':
+                return build.magDamage.toFixed(0);
+            case 'overall':
+                return `min ${entry.value.toFixed(1)} · avg ${entry.average.toFixed(1)}`;
+            default:
+                return build.dps.toFixed(1);
+        }
     }
 
     private formatCalibers(store: HephaestusStore, calibers: number[]): string {

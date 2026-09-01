@@ -1,4 +1,4 @@
-import { createCanvas } from 'canvas';
+import { CanvasTextAlign, createCanvas } from 'canvas';
 
 export interface HephaestusRadarAxis {
     label: string;
@@ -7,7 +7,7 @@ export interface HephaestusRadarAxis {
 
 const SIZE = 512;
 const RADIUS = 175;
-const BACKGROUND = '#232428';
+const BACKGROUND = '#23242800';
 const GRID_MAJOR = 'rgba(255, 255, 255, 0.4)';
 const GRID_MINOR = 'rgba(255, 255, 255, 0.12)';
 const SPOKE = 'rgba(255, 255, 255, 0.2)';
@@ -72,13 +72,26 @@ export function renderRadarChart(axes: HephaestusRadarAxis[]): Buffer {
     ctx.fillStyle = LABEL;
     ctx.font = 'bold 24px sans-serif';
     ctx.textBaseline = 'middle';
+    const margin = 12;
     for (let i = 0; i < count; i++) {
         const angle = startAngle + i * angleStep;
         const { x, y } = point(center, RADIUS + 36, angle);
-        if (angle === -Math.PI / 2 || angle === Math.PI / 2) ctx.textAlign = 'center';
-        else if (angle > -Math.PI / 2 && angle < Math.PI / 2) ctx.textAlign = 'left';
-        else ctx.textAlign = 'right';
-        ctx.fillText(axes[i].label, x, y);
+        const text = axes[i].label;
+        const width = ctx.measureText(text).width;
+        let align: CanvasTextAlign;
+        let labelX = x;
+        if (angle === -Math.PI / 2 || angle === Math.PI / 2) {
+            align = 'center';
+            labelX = Math.min(Math.max(x, margin + width / 2), SIZE - margin - width / 2);
+        } else if (angle > -Math.PI / 2 && angle < Math.PI / 2) {
+            align = 'left';
+            labelX = Math.min(x, SIZE - margin - width);
+        } else {
+            align = 'right';
+            labelX = Math.max(x, margin + width);
+        }
+        ctx.textAlign = align;
+        ctx.fillText(text, labelX, y);
     }
 
     return canvas.toBuffer('image/png');

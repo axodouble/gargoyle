@@ -20,7 +20,15 @@ export const HEPHAESTUS_BLACKLIST: ReadonlySet<number> = new Set<number>([
     59526, // DIY Lahti L-39 Anti-Tryhard
     59582, // Anzio 20mm
     58900, // M93 Black Arrow
-    59075 // QBU-10 AMR
+    59075, // QBU-10 AMR
+    58323, // PinkVAL
+    58240, // OSV-96
+    59478, // Hecate II
+    58892, // TAC-50 A1-R2
+    58222, // M107
+    58231, // GM6 Lynx
+    58645, // SenVU Virtuoso
+    58954 // AA-12
 ]);
 
 export interface HephaestusMultipliers {
@@ -43,6 +51,7 @@ export interface HephaestusAttachment {
     calibers: number[];
     multipliers: HephaestusMultipliers;
     capacity: number | null;
+    isBipod: boolean;
 }
 
 export interface HephaestusGun {
@@ -205,7 +214,8 @@ async function ingestItemFile(file: string, store: HephaestusStore, relativeDir:
         rarity: properties.get('Rarity') ?? 'Common',
         calibers,
         multipliers: neutralMultipliers(properties),
-        capacity: attachmentType === 'Magazine' ? num(properties, 'Amount', 0) || null : null
+        capacity: attachmentType === 'Magazine' ? num(properties, 'Amount', 0) || null : null,
+        isBipod: properties.has('Bipod')
     });
 
     const segments = relativeDir.split('/');

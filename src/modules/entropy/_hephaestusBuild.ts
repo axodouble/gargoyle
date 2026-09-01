@@ -87,7 +87,8 @@ function slotCandidates(store: HephaestusStore, gun: HephaestusGun, slot: Hephae
     }
 
     if (!gun.hooks[slot.toLowerCase() as keyof HephaestusGun['hooks']]) return [];
-    return compatibleAttachments(store, gun.attachmentCalibers, slot);
+    const candidates = compatibleAttachments(store, gun.attachmentCalibers, slot);
+    return slot === 'Grip' ? candidates.filter((candidate) => !candidate.isBipod) : candidates;
 }
 
 function pickSlot(
@@ -167,6 +168,48 @@ function objectiveValue(build: HephaestusBuild, objective: HephaestusObjective):
         default:
             return build.dps;
     }
+}
+
+export interface HephaestusLeaderboardEntry {
+    build: HephaestusBuild;
+    value: number;
+    average: number;
+}
+
+export function leaderboard(
+    store: HephaestusStore,
+    objective: HephaestusObjective,
+    pool: Iterable<HephaestusGun>,
+    stats: HephaestusAxisStats,
+    limit: number
+): HephaestusLeaderboardEntry[] {
+    const entries: HephaestusLeaderboardEntry[] = [];
+    for (const gun of pool) {
+        if (gun.firerate <= 0 || gun.damage <= 0) continue;
+        if (objective === 'overall') {
+            let best: HephaestusBuild | null = null;
+            let bestMin = Number.NEGATIVE_INFINITY;
+            let bestAverage = Number.NEGATIVE_INFINITY;
+            for (const buildObjective of ['dps', 'magazine', 'speed', 'recoil', 'magdamage'] as HephaestusObjective[]) {
+                const build = buildForGun(store, gun, buildObjective);
+                const scores = axisScores(build, stats);
+                const values = [scores.dps, scores.magazineCapacity, scores.speed, scores.recoil, scores.magDamage];
+                const min = Math.min(...values);
+                const average = values.reduce((total, value) => total + value, 0) / values.length;
+                if (min > bestMin || (min === bestMin && average > bestAverage)) {
+                    best = build;
+                    bestMin = min;
+                    bestAverage = average;
+                }
+            }
+            if (best !== null) entries.push({ build: best, value: bestMin, average: bestAverage });
+        } else {
+            const build = buildForGun(store, gun, objective);
+            entries.push({ build, value: objectiveValue(build, objective), average: 0 });
+        }
+    }
+    entries.sort((a, b) => b.value - a.value || b.average - a.average);
+    return entries.slice(0, limit);
 }
 
 export function bestBuild(
