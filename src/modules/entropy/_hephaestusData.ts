@@ -272,3 +272,10 @@ export function compatibleAttachments(store: HephaestusStore, calibers: number[]
     }
     return compatible;
 }
+
+export enum HephaestusEmoji {
+    t="<:hephaestus1:1544189939653148805><:hephaestus2:1544189933860823140>",
+    m="<:hephaestus3:1544189929129771018><:hephaestus4:1544189924192952370>",
+    b="<:hephaestus5:1544189951871029318><:hephaestus6:1544189945290293439>",
+    self="<:hephaestus:1544191228797521940>"
+}

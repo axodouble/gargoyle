@@ -1,7 +1,7 @@
 import GargoyleSlashCommandBuilder from '@src/system/backend/builders/gargoyleSlashCommandBuilder';
 import GargoyleClient from '@src/system/backend/classes/gargoyleClient';
 import GargoyleModule from '@src/system/backend/classes/gargoyleModule';
-import { ChatInputCommandInteraction } from 'discord.js';
+import { ApplicationIntegrationType, ChatInputCommandInteraction } from 'discord.js';
 import GargoyleEmbedBuilder from '@src/system/backend/builders/gargoyleEmbedBuilder';
 import { access } from 'node:fs/promises';
 import { distance } from 'fastest-levenshtein';
@@ -11,6 +11,7 @@ import {
     HEPHAESTUS_LAUNCHER_CATEGORIES,
     HEPHAESTUS_WORKSHOP_ROOT,
     HephaestusAttachmentType,
+    HephaestusEmoji,
     HephaestusGun,
     HephaestusStore,
     loadHephaestusStore
@@ -51,6 +52,7 @@ export default class Hephaestus extends GargoyleModule {
         new GargoyleSlashCommandBuilder()
             .setName('hephaestus')
             .setDescription('Hephaestus Manager')
+            .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
             .addGuild('1009048008857493624')
             .addSubcommand((s) => s.setName('actualize').setDescription('Actualize Inventory'))
             .addSubcommand((s) =>
@@ -258,7 +260,7 @@ export default class Hephaestus extends GargoyleModule {
     ): GargoyleEmbedBuilder {
         const caliber = build.gun.cartridge ?? this.formatCalibers(store, build.gun.magazineCalibers);
         const description = `**${build.gun.name}** — \`${build.gun.id}\`${caliber !== '' ? ` — ${caliber}` : ''}${category !== null ? `\nCategory: ${category}` : ''}`;
-        const embed = new GargoyleEmbedBuilder().setTitle(`Hephaestus — ${objective.toUpperCase()} Build`).setDescription(description);
+        const embed = new GargoyleEmbedBuilder().setColor(0x0a685a).setTitle(`${HephaestusEmoji.self} Hephaestus — ${objective.toUpperCase()} Build`).setDescription(description);
 
         for (const slot of ['Magazine', 'Barrel', 'Grip', 'Sight', 'Tactical'] as HephaestusAttachmentType[]) {
             const entry = build.slots.find((s) => s.slot === slot);
@@ -278,13 +280,13 @@ export default class Hephaestus extends GargoyleModule {
         embed.addFields({
             name: 'Stats',
             value:
-                `**DPS** ${build.dps.toFixed(1)} — **TTK** ${Number.isFinite(build.ttk) ? `${build.ttk.toFixed(2)}s` : '∞'}\n` +
-                `**Magazine** ${build.magazineCapacity} rounds — **Mag Damage** ${build.magDamage.toFixed(0)}\n` +
-                `**Speed** ${build.speed.toFixed(3)} — **Recoil** ${build.recoil.toFixed(3)}\n` +
+                `${HephaestusEmoji.t} **DPS** ${build.dps.toFixed(1)} — **TTK** ${Number.isFinite(build.ttk) ? `${build.ttk.toFixed(2)}s` : '∞'}\n` +
+                `${HephaestusEmoji.m} **Magazine** ${build.magazineCapacity} rounds — **Mag Damage** ${build.magDamage.toFixed(0)}\n` +
+                `${HephaestusEmoji.b} **Speed** ${build.speed.toFixed(3)} — **Recoil** ${build.recoil.toFixed(3)}\n` +
                 `**Balance** DPS ${scores.dps.toFixed(0)} — Cap ${scores.magazineCapacity.toFixed(0)} — Spd ${scores.speed.toFixed(0)} — Rec ${scores.recoil.toFixed(0)} — Mag ${scores.magDamage.toFixed(0)}`
         });
 
-        const notes = ['Recoil score weights horizontal recoil ×2.'];
+        const notes = [`Recoil score weights horizontal recoil ×2`];
         if (category === null) notes.push('Launcher-type weapons are excluded by default.');
         embed.setFooter({ text: notes.join(' ') });
         return embed;
@@ -296,7 +298,7 @@ export default class Hephaestus extends GargoyleModule {
             return `${index + 1}. **${gun.name}** \`${gun.id}\` — ${this.formatLeaderboardValue(objective, entry)}`;
         });
         const description = `${category !== null ? `Category: ${category}\n\n` : ''}${lines.join('\n')}`;
-        const embed = new GargoyleEmbedBuilder().setTitle(`Hephaestus — ${objective.toUpperCase()} Leaderboard`).setDescription(description);
+        const embed = new GargoyleEmbedBuilder().setColor(0x0a685a).setTitle(`${HephaestusEmoji.self} Hephaestus — ${objective.toUpperCase()} Leaderboard`).setDescription(description);
         const notes = ['Recoil score weights horizontal recoil ×2.'];
         if (category === null) notes.push('Launcher-type weapons are excluded by default.');
         embed.setFooter({ text: notes.join(' ') });

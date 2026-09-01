@@ -11,8 +11,8 @@ const BACKGROUND = '#23242800';
 const GRID_MAJOR = 'rgba(255, 255, 255, 0.4)';
 const GRID_MINOR = 'rgba(255, 255, 255, 0.12)';
 const SPOKE = 'rgba(255, 255, 255, 0.2)';
-const POLYGON_FILL = 'rgba(88, 101, 242, 0.35)';
-const POLYGON_STROKE = '#5865f2';
+const POLYGON_FILL = '#0a685a52';
+const POLYGON_STROKE = '#0a685a';
 const LABEL = '#ffffff';
 
 function point(center: number, radius: number, angle: number): { x: number; y: number } {
