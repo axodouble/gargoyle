@@ -47,6 +47,7 @@ import {
     handleThreadMemberButton
 } from './_application.js';
 import { handleBlacklistButton, handleBlacklistModal } from './_blacklist.js';
+import { handlePanelEmbedButton, handlePanelEmbedCommand, handlePanelEmbedModal, handlePanelEmbedSelect } from './_panel_embed.js';
 
 export default class Factions extends GargoyleModule {
     public override name: string = 'factions';
@@ -105,6 +106,9 @@ export default class Factions extends GargoyleModule {
                     .addStringOption((option) => option.setName('faction').setDescription('Faction name').setRequired(true))
             )
             .addSubcommand((subcommand) => subcommand.setName('panel').setDescription('Send the apply-here panel to this channel'))
+            .addSubcommand((subcommand) =>
+                subcommand.setName('panel-embed').setDescription('Configure the custom embed shown above an application panel')
+            )
             .addSubcommand((subcommand) => subcommand.setName('leader-panel').setDescription('Send the leader management panel to this channel'))
             .addSubcommand((subcommand) => subcommand.setName('blacklist-panel').setDescription('Send the blacklist panel to this channel'))
             .addSubcommand((subcommand) =>
@@ -377,6 +381,11 @@ export default class Factions extends GargoyleModule {
             return;
         }
 
+        if (subcommand === 'panel-embed') {
+            await handlePanelEmbedCommand(client, this, interaction);
+            return;
+        }
+
         if (subcommand === 'leader-panel' || subcommand === 'blacklist-panel') {
             if (!interaction.channel || interaction.channel.type !== ChannelType.GuildText) {
                 await interaction.reply({ content: 'This can only be used in a text channel.', flags: [MessageFlags.Ephemeral] });
@@ -431,6 +440,9 @@ export default class Factions extends GargoyleModule {
         if (args[0] === 'add' || args[0] === 'remove') {
             await handleThreadMemberButton(client, this, interaction, args[0] === 'add', args[1]);
         }
+        if (args[0] === 'embtitle' || args[0] === 'embdesc' || args[0] === 'embthumb' || args[0] === 'embcolor' || args[0] === 'embclear') {
+            await handlePanelEmbedButton(client, this, interaction, args[0], args[1]);
+        }
     }
 
     public override async executeSelectMenuCommand(client: GargoyleClient, interaction: AnySelectMenuInteraction, ...args: string[]): Promise<void> {
@@ -443,6 +455,9 @@ export default class Factions extends GargoyleModule {
         }
         if (args[0] === 'panelsend') {
             await this.handlePanelSend(client, interaction, args[1]);
+        }
+        if (args[0] === 'paneledit') {
+            await handlePanelEmbedSelect(client, this, interaction, args[1]);
         }
     }
 
@@ -493,6 +508,9 @@ export default class Factions extends GargoyleModule {
         if (args[0] === 'accept' || args[0] === 'deny') {
             await handleDecisionModal(client, this, interaction, args[0] as 'accept' | 'deny', args[1]);
         }
+        if (args[0] === 'embtitle' || args[0] === 'embdesc' || args[0] === 'embthumb' || args[0] === 'embcolor') {
+            await handlePanelEmbedModal(client, this, interaction, args[0], args[1]);
+        }
     }
 
     private async handleToggle(client: GargoyleClient, interaction: ButtonInteraction, factionIdArg: string): Promise<void> {
@@ -530,7 +548,7 @@ export default class Factions extends GargoyleModule {
                     throw new Error(`Channel ${panel.channel_id} is not text-based`);
                 }
                 const message = await channel.messages.fetch(panel.message_id);
-                await message.edit(applyPanel(this, panelFactions) as MessageEditOptions);
+                await message.edit(applyPanel(this, panelFactions, panel.embed) as MessageEditOptions);
             } catch (err) {
                 if ((err as { code?: number }).code === 10008) {
                     await deleteFactionPanel(client, panel.id).catch(() => {});

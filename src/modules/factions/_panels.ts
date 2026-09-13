@@ -2,6 +2,7 @@ import {
     ActionRowBuilder,
     ButtonStyle,
     ContainerBuilder,
+    EmbedBuilder,
     MessageActionRowComponentBuilder,
     MessageCreateOptions,
     MessageFlags,
@@ -12,9 +13,33 @@ import {
 import GargoyleModule from '@classes/gargoyleModule.js';
 import GargoyleButtonBuilder from '@src/system/backend/builders/gargoyleButtonBuilder.js';
 import { GargoyleStringSelectMenuBuilder } from '@src/system/backend/builders/gargoyleSelectMenuBuilders.js';
-import { ApplicationRow, BlacklistRow, FactionRow } from './_db.js';
-import { ApplicationAnswer } from '@src/system/backend/database/schema.js';
+import { ApplicationRow, BlacklistRow, FactionPanelRow, FactionRow } from './_db.js';
+import { ApplicationAnswer, PanelEmbed } from '@src/system/backend/database/schema.js';
 import { MAX_QUESTIONS } from './_types.js';
+
+export function buildPanelEmbed(embed: PanelEmbed | null | undefined): EmbedBuilder | null {
+    if (!embed) {
+        return null;
+    }
+    const { title, description, thumbnail, color } = embed;
+    if (!title && !description && !thumbnail && color === undefined) {
+        return null;
+    }
+    const builder = new EmbedBuilder();
+    if (title) {
+        builder.setTitle(title);
+    }
+    if (description) {
+        builder.setDescription(description);
+    }
+    if (thumbnail) {
+        builder.setThumbnail(thumbnail);
+    }
+    if (color !== undefined) {
+        builder.setColor(color);
+    }
+    return builder;
+}
 
 export function questionsPanel(module: GargoyleModule, faction: FactionRow): MessageCreateOptions {
     const list = faction.questions.length
@@ -74,7 +99,7 @@ export function questionsPanel(module: GargoyleModule, faction: FactionRow): Mes
     return { components: [container], flags: [MessageFlags.IsComponentsV2] };
 }
 
-export function applyPanel(module: GargoyleModule, factions: FactionRow[]): MessageCreateOptions {
+export function applyPanel(module: GargoyleModule, factions: FactionRow[], embed?: PanelEmbed | null): MessageCreateOptions {
     const sorted = [...factions].sort((a, b) => Number(b.enabled) - Number(a.enabled));
     const container = new ContainerBuilder().addTextDisplayComponents(
         new TextDisplayBuilder().setContent(
@@ -99,7 +124,56 @@ export function applyPanel(module: GargoyleModule, factions: FactionRow[]): Mess
         container.addTextDisplayComponents(new TextDisplayBuilder().setContent('-# No applications are currently open. Check back later!'));
     }
 
-    return { components: [container], flags: [MessageFlags.IsComponentsV2] };
+    const panelEmbed = buildPanelEmbed(embed);
+    return {
+        components: [container],
+        ...(panelEmbed ? { embeds: [panelEmbed] } : {}),
+        flags: [MessageFlags.IsComponentsV2]
+    };
+}
+
+const EMBED_DESCRIPTION_PREVIEW_LIMIT = 200;
+
+function embedFieldLine(label: string, value: string | undefined, previewLimit = 100): string {
+    if (!value) {
+        return `**${label}:** -# Not set`;
+    }
+    const display = value.length > previewLimit ? `${value.slice(0, previewLimit)}…` : value;
+    return `**${label}:** ${display}`;
+}
+
+export function panelEmbedPanel(module: GargoyleModule, panel: FactionPanelRow, channelName: string): MessageCreateOptions {
+    const embed = panel.embed ?? {};
+    const lines = [
+        embedFieldLine('Title', embed.title),
+        embedFieldLine('Description', embed.description, EMBED_DESCRIPTION_PREVIEW_LIMIT),
+        embedFieldLine('Thumbnail', embed.thumbnail),
+        `**Color:** ${embed.color !== undefined ? `#${embed.color.toString(16).padStart(6, '0')}` : '-# Not set'}`
+    ];
+
+    const container = new ContainerBuilder()
+        .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(
+                `# Application Panel Embed — <#${panel.channel_id}>\n> This embed is shown above the application panel in **${channelName}**. Click a button to edit a field; leave a field empty to clear it.`
+            ),
+            new TextDisplayBuilder().setContent(lines.join('\n'))
+        )
+        .addActionRowComponents(
+            new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+                new GargoyleButtonBuilder(module, 'embtitle', String(panel.id)).setLabel('Title').setStyle(ButtonStyle.Secondary),
+                new GargoyleButtonBuilder(module, 'embdesc', String(panel.id)).setLabel('Description').setStyle(ButtonStyle.Secondary),
+                new GargoyleButtonBuilder(module, 'embthumb', String(panel.id)).setLabel('Thumbnail').setStyle(ButtonStyle.Secondary),
+                new GargoyleButtonBuilder(module, 'embcolor', String(panel.id)).setLabel('Color').setStyle(ButtonStyle.Secondary),
+                new GargoyleButtonBuilder(module, 'embclear', String(panel.id)).setLabel('Clear All').setStyle(ButtonStyle.Danger)
+            )
+        );
+
+    const panelEmbed = buildPanelEmbed(embed);
+    return {
+        components: [container],
+        ...(panelEmbed ? { embeds: [panelEmbed] } : {}),
+        flags: [MessageFlags.IsComponentsV2]
+    };
 }
 
 export function leaderPanel(module: GargoyleModule, factions: FactionRow[]): MessageCreateOptions {

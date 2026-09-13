@@ -1,7 +1,7 @@
 import { and, desc, eq, gt, isNull, or } from 'drizzle-orm';
 import GargoyleClient from '@classes/gargoyleClient.js';
 import * as schema from '@src/system/backend/database/schema.js';
-import { ApplicationAnswer } from '@src/system/backend/database/schema.js';
+import { ApplicationAnswer, PanelEmbed } from '@src/system/backend/database/schema.js';
 
 export type FactionRow = typeof schema.factionsTable.$inferSelect;
 export type ApplicationRow = typeof schema.applicationsTable.$inferSelect;
@@ -186,6 +186,15 @@ export function createFactionPanel(
 
 export function listFactionPanels(client: GargoyleClient, guildId: string): Promise<FactionPanelRow[]> {
     return requireDb(client).select().from(schema.factionPanelsTable).where(eq(schema.factionPanelsTable.guild_id, guildId)).execute();
+}
+
+export async function getFactionPanel(client: GargoyleClient, panelId: number): Promise<FactionPanelRow | null> {
+    const rows = await requireDb(client).select().from(schema.factionPanelsTable).where(eq(schema.factionPanelsTable.id, panelId)).execute();
+    return rows[0] ?? null;
+}
+
+export async function updateFactionPanelEmbed(client: GargoyleClient, panelId: number, embed: PanelEmbed | null): Promise<void> {
+    await requireDb(client).update(schema.factionPanelsTable).set({ embed }).where(eq(schema.factionPanelsTable.id, panelId)).execute();
 }
 
 export async function deleteFactionPanel(client: GargoyleClient, panelId: number): Promise<void> {

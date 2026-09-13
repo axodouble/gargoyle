@@ -10,6 +10,13 @@ export interface ApplicationAnswer {
     value: string;
 }
 
+export interface PanelEmbed {
+    title?: string;
+    description?: string;
+    thumbnail?: string;
+    color?: number;
+}
+
 export const guildUsersTable = p.pgTable(
     'guild_users',
     {
@@ -112,6 +119,7 @@ export const factionPanelsTable = p.pgTable(
         channel_id: p.text().notNull(),
         message_id: p.text().notNull().unique(),
         faction_ids: p.jsonb('faction_ids').$type<number[]>().notNull().default([]),
+        embed: p.jsonb('embed').$type<PanelEmbed>(),
         created_at: p.timestamp().notNull().defaultNow()
     },
     (t) => [p.index('faction_panel_guild_idx').on(t.guild_id)]

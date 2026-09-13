@@ -1,0 +1,1 @@
+ALTER TABLE "faction_panels" ADD COLUMN "embed" jsonb;
