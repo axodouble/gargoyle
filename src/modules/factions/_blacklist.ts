@@ -12,7 +12,6 @@ import type { LabelBuilder as LabelBuilderInterface, UserSelectMenuBuilder as Us
 import GargoyleClient from '@classes/gargoyleClient.js';
 import GargoyleModule from '@classes/gargoyleModule.js';
 import GargoyleModalBuilder from '@src/system/backend/builders/gargoyleModalBuilder.js';
-import { GUILD_ID } from './_types.js';
 import { createBlacklist } from './_db.js';
 import { isFactionLeaderOrAdmin } from './_permissions.js';
 
@@ -106,7 +105,7 @@ export async function handleBlacklistModal(
 
     const reason = interaction.fields.getTextInputValue('reason').trim();
     await createBlacklist(client, {
-        guild_id: GUILD_ID,
+        guild_id: interaction.guildId!,
         user_id: userId,
         faction_id: scope === 'all' ? null : parseInt(scope, 10),
         reason: reason || null,

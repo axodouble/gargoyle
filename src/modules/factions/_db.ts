@@ -42,7 +42,7 @@ export async function createFaction(
         description: string;
         leader_role_id: string;
         application_channel_id: string;
-        accept_role_id: string | null;
+        accept_role_ids: string[];
         deny_role_id: string | null;
     }
 ): Promise<FactionRow> {
@@ -60,7 +60,7 @@ export async function updateFaction(
     data: Partial<
         Pick<
             FactionRow,
-            'name' | 'description' | 'leader_role_id' | 'application_channel_id' | 'accept_role_id' | 'deny_role_id' | 'enabled' | 'questions'
+            'name' | 'description' | 'leader_role_id' | 'application_channel_id' | 'accept_role_ids' | 'deny_role_id' | 'enabled' | 'questions'
         >
     >
 ): Promise<void> {

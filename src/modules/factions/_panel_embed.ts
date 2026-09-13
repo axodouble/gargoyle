@@ -31,7 +31,6 @@ import {
 import { PanelEmbed } from '@src/system/backend/database/schema.js';
 import { isFactionLeaderOrAdmin } from './_permissions.js';
 import { applyPanel, panelEmbedPanel } from './_panels.js';
-import { GUILD_ID } from './_types.js';
 
 type EmbedFieldAction = 'embtitle' | 'embdesc' | 'embthumb' | 'embcolor';
 
@@ -54,12 +53,12 @@ async function assertPanelAccess(
     interaction: { user: { id: string }; guild: Guild | null },
     panelIdArg: string
 ): Promise<{ panel: FactionPanelRow } | { error: string }> {
-    const panel = await getFactionPanel(client, parseInt(panelIdArg, 10));
-    if (!panel || panel.guild_id !== GUILD_ID) {
-        return { error: 'Panel not found.' };
-    }
     if (!interaction.guild) {
         return { error: 'This can only be used in a guild.' };
+    }
+    const panel = await getFactionPanel(client, parseInt(panelIdArg, 10));
+    if (!panel || panel.guild_id !== interaction.guild.id) {
+        return { error: 'Panel not found.' };
     }
     const member = await interaction.guild.members.fetch(interaction.user.id);
     if (!(await isFactionLeaderOrAdmin(client, interaction.guild, member))) {
@@ -73,7 +72,7 @@ export async function handlePanelEmbedCommand(
     module: GargoyleModule,
     interaction: ChatInputCommandInteraction
 ): Promise<void> {
-    const panels = await listFactionPanels(client, GUILD_ID);
+    const panels = await listFactionPanels(client, interaction.guildId!);
     if (panels.length === 0) {
         await interaction.reply({ content: 'No application panels exist yet. Send one with /faction panel first.', flags: [MessageFlags.Ephemeral] });
         return;
@@ -142,21 +141,26 @@ export async function handlePanelEmbedButton(
         return;
     }
     const config = FIELD_CONFIG[action as EmbedFieldAction];
-    await interaction.showModal(
-        new GargoyleModalBuilder(module, action, panelIdArg)
-            .setTitle(`Edit Embed ${config.label} — <#${panel.channel_id}>`)
-            .setComponents(
-                new ActionRowBuilder<ModalActionRowComponentBuilder>().setComponents(
-                    new TextInputBuilder()
-                        .setLabel(`${config.label} (leave empty to clear)`)
-                        .setCustomId('value')
-                        .setStyle(config.style)
-                        .setMaxLength(config.maxLength)
-                        .setPlaceholder(config.placeholder)
-                        .setRequired(false)
+    try {
+        await interaction.showModal(
+            new GargoyleModalBuilder(module, action, panelIdArg)
+                .setTitle(`Edit Embed ${config.label}`.slice(0, 45))
+                .setComponents(
+                    new ActionRowBuilder<ModalActionRowComponentBuilder>().setComponents(
+                        new TextInputBuilder()
+                            .setLabel(`${config.label} (leave empty to clear)`.slice(0, 45))
+                            .setCustomId('value')
+                            .setStyle(config.style)
+                            .setMaxLength(config.maxLength)
+                            .setPlaceholder(config.placeholder)
+                            .setRequired(false)
+                    )
                 )
-            )
-    );
+        );
+    } catch (err) {
+        client.logger.error(`Failed to show panel embed modal: ${err}`);
+        await interaction.reply({ content: 'Failed to open the modal. Please try again.', flags: [MessageFlags.Ephemeral] }).catch(() => {});
+    }
 }
 
 export async function handlePanelEmbedModal(
@@ -231,7 +235,7 @@ async function applyEmbedChange(
     await updateFactionPanelEmbed(client, panel.id, embed);
     const updated: FactionPanelRow = { ...panel, embed };
     try {
-        const all = await listFactions(client, GUILD_ID);
+        const all = await listFactions(client, panel.guild_id);
         const panelFactions =
             panel.faction_ids.length > 0
                 ? panel.faction_ids.map((id) => all.find((faction) => faction.id === id)).filter((faction): faction is FactionRow => Boolean(faction))

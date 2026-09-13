@@ -20,7 +20,7 @@ import GargoyleClient from '@classes/gargoyleClient.js';
 import GargoyleModule from '@classes/gargoyleModule.js';
 import GargoyleButtonBuilder from '@src/system/backend/builders/gargoyleButtonBuilder.js';
 import GargoyleModalBuilder from '@src/system/backend/builders/gargoyleModalBuilder.js';
-import { GUILD_ID, QUESTIONS_PER_PAGE } from './_types.js';
+import { QUESTIONS_PER_PAGE } from './_types.js';
 import {
     createApplication,
     FactionRow,
@@ -38,18 +38,18 @@ import { applicationThreadMessage } from './_panels.js';
 import { isLeaderOfFactionOrAdmin } from './_permissions.js';
 
 export async function validateApplication(client: GargoyleClient, member: GuildMember, faction: FactionRow): Promise<string | null> {
-    const blacklist = await getActiveBlacklist(client, GUILD_ID, member.id, faction.id);
+    const blacklist = await getActiveBlacklist(client, member.guild.id, member.id, faction.id);
     if (blacklist) {
         const expiry = blacklist.expires_at ? ` until <t:${Math.floor(new Date(blacklist.expires_at).getTime() / 1000)}:F>` : ' permanently';
         return `You are blacklisted from applying to **${faction.name}**${expiry}.`;
     }
 
-    const cooldownEnd = await getCooldownEnd(client, GUILD_ID, member.id);
+    const cooldownEnd = await getCooldownEnd(client, member.guild.id, member.id);
     if (cooldownEnd) {
         return `You are on a cooldown from applying. You can apply again <t:${Math.floor(cooldownEnd.getTime() / 1000)}:R>.`;
     }
 
-    const pending = await getPendingApplication(client, GUILD_ID, member.id, faction.id);
+    const pending = await getPendingApplication(client, member.guild.id, member.id, faction.id);
     if (pending) {
         return `You already have a pending application to **${faction.name}**${pending.thread_id ? `: <#${pending.thread_id}>` : ''}.`;
     }
@@ -92,7 +92,7 @@ export async function handleApplyButton(
     factionIdArg: string
 ): Promise<void> {
     const faction = await getFaction(client, parseInt(factionIdArg, 10));
-    if (!faction || faction.guild_id !== GUILD_ID || !faction.enabled) {
+    if (!faction || faction.guild_id !== interaction.guildId! || !faction.enabled) {
         await interaction.reply({ content: 'This application is not available.', flags: [MessageFlags.Ephemeral] });
         return;
     }
@@ -243,7 +243,7 @@ export async function handleApplyModal(
     }
 
     const application = await createApplication(client, {
-        guild_id: GUILD_ID,
+        guild_id: interaction.guildId!,
         faction_id: faction.id,
         user_id: member.id,
         answers,
@@ -253,9 +253,9 @@ export async function handleApplyModal(
     const panelMessage = await thread.send(applicationThreadMessage(module, faction, application.id, member.id, answers));
     await updateApplication(client, application.id, { message_id: panelMessage.id });
 
-    const duration = await getCooldownDuration(client, GUILD_ID);
+    const duration = await getCooldownDuration(client, interaction.guildId!);
     if (duration > 0) {
-        await setCooldown(client, GUILD_ID, member.id, new Date(Date.now() + duration), duration);
+        await setCooldown(client, interaction.guildId!, member.id, new Date(Date.now() + duration), duration);
     }
 
     await interaction.editReply({ content: `✅ Application submitted! Faction leaders have been notified — you can follow it in <#${thread.id}>.` });
@@ -269,7 +269,7 @@ export async function handleDecisionButton(
     applicationIdArg: string
 ): Promise<void> {
     const application = await getApplication(client, parseInt(applicationIdArg, 10));
-    if (!application || application.guild_id !== GUILD_ID) {
+    if (!application || application.guild_id !== interaction.guildId!) {
         await interaction.reply({ content: 'Application not found.', flags: [MessageFlags.Ephemeral] });
         return;
     }
@@ -348,25 +348,28 @@ export async function handleDecisionModal(
     });
 
     if (decision === 'deny') {
-        const duration = await getCooldownDuration(client, GUILD_ID);
+        const duration = await getCooldownDuration(client, interaction.guildId!);
         if (duration > 0) {
-            await setCooldown(client, GUILD_ID, application.user_id, new Date(Date.now() + duration), duration);
+            await setCooldown(client, interaction.guildId!, application.user_id, new Date(Date.now() + duration), duration);
         }
     }
 
-    const roleToAdd = decision === 'accept' ? faction.accept_role_id : faction.deny_role_id;
-    let roleNote = '';
-    if (roleToAdd) {
+    const roleIdsToAdd = decision === 'accept' ? [...faction.accept_role_ids] : faction.deny_role_id ? [faction.deny_role_id] : [];
+    const roleNotes: string[] = [];
+    if (roleIdsToAdd.length > 0) {
         const applicant = await interaction.guild!.members.fetch(application.user_id).catch(() => null);
-        const role = interaction.guild!.roles.cache.get(roleToAdd);
-        if (applicant && role) {
-            await applicant.roles.add(role).catch(() => {
-                roleNote = `\n-# I could not add the <@&${roleToAdd}> role, please add it manually.`;
-            });
-        } else {
-            roleNote = '\n-# The configured role could not be found, please add it manually.';
+        for (const roleId of roleIdsToAdd) {
+            const role = interaction.guild!.roles.cache.get(roleId);
+            if (applicant && role) {
+                await applicant.roles.add(role).catch(() => {
+                    roleNotes.push(`-# I could not add the <@&${roleId}> role, please add it manually.`);
+                });
+            } else {
+                roleNotes.push('-# A configured role could not be found, please add it manually.');
+            }
         }
     }
+    const roleNote = roleNotes.map((note) => `\n${note}`).join('');
 
     if (application.thread_id) {
         const thread = (await client.channels.fetch(application.thread_id).catch(() => null)) as ThreadChannel | null;
@@ -420,7 +423,7 @@ export async function handleThreadMemberButton(
     applicationIdArg: string
 ): Promise<void> {
     const application = await getApplication(client, parseInt(applicationIdArg, 10));
-    if (!application || application.guild_id !== GUILD_ID) {
+    if (!application || application.guild_id !== interaction.guildId!) {
         await interaction.reply({ content: 'Application not found.', flags: [MessageFlags.Ephemeral] });
         return;
     }

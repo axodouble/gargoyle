@@ -66,7 +66,7 @@ export const factionsTable = p.pgTable(
         description: p.text().notNull().default(''),
         leader_role_id: p.text().notNull(),
         application_channel_id: p.text().notNull(),
-        accept_role_id: p.text(),
+        accept_role_ids: p.jsonb('accept_role_ids').$type<string[]>().notNull().default([]),
         deny_role_id: p.text(),
         enabled: p.boolean().notNull().default(true),
         questions: p.jsonb('questions').$type<FactionQuestion[]>().notNull().default([])

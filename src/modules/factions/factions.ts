@@ -18,8 +18,8 @@ import {
     TextDisplayBuilder,
     PermissionFlagsBits
 } from 'discord.js';
-import { GargoyleStringSelectMenuBuilder } from '@src/system/backend/builders/gargoyleSelectMenuBuilders.js';
-import { GUILD_ID, parseDuration } from './_types.js';
+import { GargoyleRoleSelectMenuBuilder, GargoyleStringSelectMenuBuilder } from '@src/system/backend/builders/gargoyleSelectMenuBuilders.js';
+import { FACTION_GUILD_IDS, parseDuration } from './_types.js';
 import {
     createFaction,
     createFactionPanel,
@@ -60,7 +60,7 @@ export default class Factions extends GargoyleModule {
             .setContexts(InteractionContextType.Guild)
             .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
             .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
-            .addGuilds(GUILD_ID, '622843951329574942')
+            .addGuilds(...FACTION_GUILD_IDS)
             .addSubcommand((subcommand) =>
                 subcommand
                     .setName('setup')
@@ -75,7 +75,6 @@ export default class Factions extends GargoyleModule {
                             .setRequired(true)
                     )
                     .addStringOption((option) => option.setName('description').setDescription('Shown on the apply button').setRequired(false))
-                    .addRoleOption((option) => option.setName('accept-role').setDescription('Role given on acceptance').setRequired(false))
                     .addRoleOption((option) => option.setName('deny-role').setDescription('Role given on denial').setRequired(false))
             )
             .addSubcommand((subcommand) =>
@@ -96,8 +95,13 @@ export default class Factions extends GargoyleModule {
                             .addChannelTypes(ChannelType.GuildText)
                             .setRequired(false)
                     )
-                    .addRoleOption((option) => option.setName('accept-role').setDescription('Role given on acceptance').setRequired(false))
                     .addRoleOption((option) => option.setName('deny-role').setDescription('Role given on denial').setRequired(false))
+            )
+            .addSubcommand((subcommand) =>
+                subcommand
+                    .setName('roles')
+                    .setDescription('Set the roles given on acceptance')
+                    .addStringOption((option) => option.setName('faction').setDescription('Faction name').setRequired(true))
             )
             .addSubcommand((subcommand) =>
                 subcommand
@@ -151,8 +155,9 @@ export default class Factions extends GargoyleModule {
     ] as GargoyleSlashCommandBuilder[];
 
     public override async executeSlashCommand(client: GargoyleClient, interaction: ChatInputCommandInteraction): Promise<void> {
-        if (interaction.guildId !== GUILD_ID) {
-            await interaction.reply({ content: 'This command can only be used in Brads Faction Discord.', flags: [MessageFlags.Ephemeral] });
+        const guildId = interaction.guildId;
+        if (!guildId || !FACTION_GUILD_IDS.includes(guildId)) {
+            await interaction.reply({ content: 'This command is not available in this server.', flags: [MessageFlags.Ephemeral] });
             return;
         }
         if (!client.db) {
@@ -176,18 +181,18 @@ export default class Factions extends GargoyleModule {
             const subcommand = interaction.options.getSubcommand();
             const factionName = interaction.options.getString('faction');
             const isAll = subcommand === 'remove' ? !factionName : factionName!.toLowerCase() === 'all';
-            const faction = isAll ? null : await getFactionByName(client, GUILD_ID, factionName!);
+            const faction = isAll ? null : await getFactionByName(client, guildId, factionName!);
             if (!isAll && !faction) {
                 await interaction.reply({ content: 'Faction not found.', flags: [MessageFlags.Ephemeral] });
                 return;
             }
-            const factions = await listFactions(client, GUILD_ID);
+            const factions = await listFactions(client, guildId);
 
             if (subcommand === 'remove') {
                 const user = interaction.options.getUser('user', true);
-                const active = await listActiveBlacklists(client, GUILD_ID, faction === null ? null : faction.id);
+                const active = await listActiveBlacklists(client, guildId, faction === null ? null : faction.id);
                 const relevant = active.filter((entry) => entry.user_id === user.id);
-                await removeBlacklists(client, GUILD_ID, user.id, faction === null ? null : faction.id);
+                await removeBlacklists(client, guildId, user.id, faction === null ? null : faction.id);
                 if (relevant.length === 0) {
                     await interaction.reply({
                         content: `<@${user.id}> has no active blacklist ${isAll ? 'from all factions' : `from **${faction!.name}**`}.`,
@@ -202,7 +207,7 @@ export default class Factions extends GargoyleModule {
                 return;
             }
 
-            const entries = await listActiveBlacklists(client, GUILD_ID, isAll ? null : faction!.id);
+            const entries = await listActiveBlacklists(client, guildId, isAll ? null : faction!.id);
             await interaction.reply({
                 ...blacklistListPanel(isAll ? 'All Factions' : faction!.name, entries, factions),
                 flags: [MessageFlags.IsComponentsV2]
@@ -220,7 +225,7 @@ export default class Factions extends GargoyleModule {
                 });
                 return;
             }
-            await setCooldownDuration(client, GUILD_ID, ms);
+            await setCooldownDuration(client, guildId, ms);
             await interaction.reply({
                 content: ms === 0 ? 'Application cooldown disabled.' : `Application cooldown set to ${durationInput}.`,
                 flags: [MessageFlags.Ephemeral]
@@ -232,7 +237,7 @@ export default class Factions extends GargoyleModule {
 
         if (subcommand === 'setup') {
             const name = interaction.options.getString('name', true);
-            const existing = await getFactionByName(client, GUILD_ID, name);
+            const existing = await getFactionByName(client, guildId, name);
             if (existing) {
                 await interaction.reply({ content: 'A faction with that name already exists.', flags: [MessageFlags.Ephemeral] });
                 return;
@@ -244,12 +249,12 @@ export default class Factions extends GargoyleModule {
             }
             const leaderRole = interaction.options.getRole('leader-role', true);
             await createFaction(client, {
-                guild_id: GUILD_ID,
+                guild_id: guildId,
                 name,
                 description: interaction.options.getString('description') ?? '',
                 leader_role_id: leaderRole.id,
                 application_channel_id: channel.id,
-                accept_role_id: interaction.options.getRole('accept-role')?.id ?? null,
+                accept_role_ids: [],
                 deny_role_id: interaction.options.getRole('deny-role')?.id ?? null
             });
             await interaction.reply({
@@ -260,7 +265,7 @@ export default class Factions extends GargoyleModule {
         }
 
         if (subcommand === 'edit') {
-            const faction = await getFactionByName(client, GUILD_ID, interaction.options.getString('faction', true));
+            const faction = await getFactionByName(client, guildId, interaction.options.getString('faction', true));
             if (!faction) {
                 await interaction.reply({ content: 'Faction not found.', flags: [MessageFlags.Ephemeral] });
                 return;
@@ -276,7 +281,7 @@ export default class Factions extends GargoyleModule {
 
             const newName = interaction.options.getString('new-name');
             if (newName !== null && newName !== faction.name) {
-                const existing = await getFactionByName(client, GUILD_ID, newName);
+                const existing = await getFactionByName(client, guildId, newName);
                 if (existing) {
                     await interaction.reply({ content: 'A faction with that name already exists.', flags: [MessageFlags.Ephemeral] });
                     return;
@@ -315,12 +320,6 @@ export default class Factions extends GargoyleModule {
                 changed.push(`application channel → <#${channel.id}>`);
             }
 
-            const acceptRole = interaction.options.getRole('accept-role');
-            if (acceptRole) {
-                updates.accept_role_id = acceptRole.id;
-                changed.push(`accept role → <@&${acceptRole.id}>`);
-            }
-
             const denyRole = interaction.options.getRole('deny-role');
             if (denyRole) {
                 updates.deny_role_id = denyRole.id;
@@ -333,12 +332,37 @@ export default class Factions extends GargoyleModule {
             }
 
             await updateFaction(client, faction.id, updates);
-            const factions = await listFactions(client, GUILD_ID);
+            const factions = await listFactions(client, guildId);
             await interaction.reply({
                 content: `Updated **${updates.name ?? faction.name}**:\n${changed.map((entry) => `- ${entry}`).join('\n')}`,
                 flags: [MessageFlags.Ephemeral]
             });
-            await this.refreshPanels(client, factions);
+            await this.refreshPanels(client, guildId, factions);
+            return;
+        }
+
+        if (subcommand === 'roles') {
+            const faction = await getFactionByName(client, guildId, interaction.options.getString('faction', true));
+            if (!faction) {
+                await interaction.reply({ content: 'Faction not found.', flags: [MessageFlags.Ephemeral] });
+                return;
+            }
+            const currentRoles = faction.accept_role_ids.length > 0 ? faction.accept_role_ids.map((roleId) => `<@&${roleId}>`).join(' ') : '*(none)*';
+            const container = new ContainerBuilder()
+                .addTextDisplayComponents(
+                    new TextDisplayBuilder().setContent(
+                        `# Accept Roles — ${faction.name}\n> Current: ${currentRoles}\nSelect the roles to give on acceptance (leave empty and submit to clear).`
+                    )
+                )
+                .addActionRowComponents(
+                    new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+                        new GargoyleRoleSelectMenuBuilder(this, 'roleset', String(faction.id))
+                            .setPlaceholder('Select roles given on acceptance')
+                            .setMinValues(0)
+                            .setMaxValues(10)
+                    )
+                );
+            await interaction.reply({ components: [container], flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2] });
             return;
         }
 
@@ -351,7 +375,7 @@ export default class Factions extends GargoyleModule {
                 await interaction.reply({ content: 'This can only be used in a text channel.', flags: [MessageFlags.Ephemeral] });
                 return;
             }
-            const factions = await listFactions(client, GUILD_ID);
+            const factions = await listFactions(client, guildId);
             if (factions.length === 0) {
                 await interaction.reply({ content: 'No factions exist yet. Create one with /faction setup.', flags: [MessageFlags.Ephemeral] });
                 return;
@@ -391,7 +415,7 @@ export default class Factions extends GargoyleModule {
                 await interaction.reply({ content: 'This can only be used in a text channel.', flags: [MessageFlags.Ephemeral] });
                 return;
             }
-            const factions = await listFactions(client, GUILD_ID);
+            const factions = await listFactions(client, guildId);
             if (factions.length === 0) {
                 await interaction.reply({ content: 'No factions exist yet. Create one with /faction setup.', flags: [MessageFlags.Ephemeral] });
                 return;
@@ -408,8 +432,8 @@ export default class Factions extends GargoyleModule {
 
         if (subcommand === 'history') {
             const user = interaction.options.getUser('user', true);
-            const applications = await listApplicationsByUser(client, GUILD_ID, user.id);
-            const factions = await listFactions(client, GUILD_ID);
+            const applications = await listApplicationsByUser(client, guildId, user.id);
+            const factions = await listFactions(client, guildId);
             await interaction.reply({ ...historyPanel(user, applications, factions), flags: [MessageFlags.IsComponentsV2] });
         }
     }
@@ -459,11 +483,14 @@ export default class Factions extends GargoyleModule {
         if (args[0] === 'paneledit') {
             await handlePanelEmbedSelect(client, this, interaction, args[1]);
         }
+        if (args[0] === 'roleset') {
+            await this.handleRolesSelect(client, interaction, args[1]);
+        }
     }
 
     private async handlePanelSend(client: GargoyleClient, interaction: AnySelectMenuInteraction, channelIdArg: string): Promise<void> {
         const selectedIds = interaction.values.map((value) => parseInt(value, 10));
-        const all = await listFactions(client, GUILD_ID);
+        const all = await listFactions(client, interaction.guildId!);
         const selected = selectedIds
             .map((id) => all.find((faction) => faction.id === id))
             .filter((faction): faction is FactionRow => Boolean(faction));
@@ -479,7 +506,7 @@ export default class Factions extends GargoyleModule {
         try {
             const message = await (channel as TextChannel).send(applyPanel(this, selected));
             await createFactionPanel(client, {
-                guild_id: GUILD_ID,
+                guild_id: interaction.guildId!,
                 channel_id: channelIdArg,
                 message_id: message.id,
                 faction_ids: selected.map((faction) => faction.id)
@@ -489,6 +516,21 @@ export default class Factions extends GargoyleModule {
             client.logger.error(`Failed to send faction panel: ${err}`);
             await interaction.update({ content: 'Failed to send the panel.', components: [] });
         }
+    }
+
+    private async handleRolesSelect(client: GargoyleClient, interaction: AnySelectMenuInteraction, factionIdArg: string): Promise<void> {
+        const faction = await getFaction(client, parseInt(factionIdArg, 10));
+        if (!faction || faction.guild_id !== interaction.guildId!) {
+            await interaction.update({ content: 'Faction not found.', components: [] });
+            return;
+        }
+        const roleIds = interaction.values as string[];
+        await updateFaction(client, faction.id, { accept_role_ids: roleIds });
+        const roleList = roleIds.length > 0 ? roleIds.map((roleId) => `<@&${roleId}>`).join(' ') : '*(none — acceptance gives no roles)*';
+        await interaction.update({
+            content: `Acceptance roles for **${faction.name}** updated:\n${roleList}`,
+            components: []
+        });
     }
 
     public override async executeModalCommand(client: GargoyleClient, interaction: ModalSubmitInteraction, ...args: string[]): Promise<void> {
@@ -515,7 +557,7 @@ export default class Factions extends GargoyleModule {
 
     private async handleToggle(client: GargoyleClient, interaction: ButtonInteraction, factionIdArg: string): Promise<void> {
         const faction = await getFaction(client, parseInt(factionIdArg, 10));
-        if (!faction || faction.guild_id !== GUILD_ID) {
+        if (!faction || faction.guild_id !== interaction.guildId!) {
             await interaction.reply({ content: 'Faction not found.', flags: [MessageFlags.Ephemeral] });
             return;
         }
@@ -525,18 +567,18 @@ export default class Factions extends GargoyleModule {
             return;
         }
         await updateFaction(client, faction.id, { enabled: !faction.enabled });
-        const factions = await listFactions(client, GUILD_ID);
+        const factions = await listFactions(client, interaction.guildId!);
         await interaction.update(leaderPanel(this, factions) as MessageEditOptions);
 
-        await this.refreshPanels(client, factions);
+        await this.refreshPanels(client, interaction.guildId!, factions);
         await interaction.followUp({
             content: `Applications for **${faction.name}** are now ${faction.enabled ? 'disabled' : 'enabled'}.`,
             flags: [MessageFlags.Ephemeral]
         });
     }
 
-    private async refreshPanels(client: GargoyleClient, factions: FactionRow[]): Promise<void> {
-        const panels = await listFactionPanels(client, GUILD_ID);
+    private async refreshPanels(client: GargoyleClient, guildId: string, factions: FactionRow[]): Promise<void> {
+        const panels = await listFactionPanels(client, guildId);
         for (const panel of panels) {
             try {
                 const panelFactions =
