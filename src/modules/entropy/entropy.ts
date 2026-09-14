@@ -106,7 +106,7 @@ class RolePrefix extends GargoyleEvent {
     private lastChanged = new Map<string, number>();
 
     public async execute(_client: GargoyleClient, member: GuildMember): Promise<void> {
-        if (member.guild.id !== '1009048008857493624') return;
+        if (member.guild.id !== '1009048008857493624' && member.guild.id !== '1039152052644880435') return;
 
         if (this.lastChanged.has(member.id) && Date.now() - this.lastChanged.get(member.id)! < 10000) return;
 
