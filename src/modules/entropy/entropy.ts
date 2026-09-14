@@ -121,7 +121,7 @@ class RolePrefix extends GargoyleEvent {
             if (role.name.match(/^[a-zA-Z0-9] /)) namePrefix += role.name.split('')[0].toUpperCase();
         });
 
-        let username = updatedMember.nickname?.split(' ').slice(1).join(' ') || updatedMember.user.username;
+        let username = updatedMember.nickname?.split(' ').slice(1).join(' ') || updatedMember.user.displayName;
 
         namePrefix += `] ${username}`;
 
