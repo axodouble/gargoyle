@@ -33,8 +33,10 @@ import {
     deleteTreeRow,
     getEnabledTreeRoles,
     getTreeRow,
+    getTreeRowById,
     invalidateInviteMessage,
     listPendingTreeRows,
+    markInviteDecided,
     resolveInviteRole,
     setInviteTreeRoles,
     setTreeMessage,
@@ -448,7 +450,7 @@ export default class RoleCommand extends GargoyleModule {
         }
     }
 
-    public override async executeButtonCommand(_client: GargoyleClient, interaction: ButtonInteraction, ...args: string[]): Promise<void> {
+    public override async executeButtonCommand(client: GargoyleClient, interaction: ButtonInteraction, ...args: string[]): Promise<void> {
         if (args[0] === 'addrole') {
             const role = await interaction.guild?.roles.fetch(args[1]);
             if (!role) return;
@@ -480,6 +482,58 @@ export default class RoleCommand extends GargoyleModule {
                         interaction.reply({ content: `Added role ${role.name}`, flags: MessageFlags.Ephemeral });
                     });
             }
+        } else if (args[0] === 'inviteaccept' || args[0] === 'invitedeny') {
+            if (!client.db) {
+                await interaction.reply({ content: 'Database not connected. Please try again later.', flags: MessageFlags.Ephemeral });
+                return;
+            }
+
+            const row = await getTreeRowById(client, Number(args[1]));
+            if (!row) {
+                await interaction.reply({ content: 'This invite no longer exists.', flags: MessageFlags.Ephemeral });
+                return;
+            }
+
+            if (interaction.guildId !== row.guild_id) {
+                await interaction.reply({ content: 'This invite is not for you.', flags: MessageFlags.Ephemeral });
+                return;
+            }
+
+            if (interaction.user.id !== row.user_id) {
+                await interaction.reply({ content: 'This invite is not for you.', flags: MessageFlags.Ephemeral });
+                return;
+            }
+
+            if (row.status !== 'pending') {
+                await interaction.reply({ content: 'This invite has already been decided.', flags: MessageFlags.Ephemeral });
+                return;
+            }
+
+            const role = await interaction.guild?.roles.fetch(row.role_id).catch(() => null);
+            if (!role) {
+                await interaction.reply({ content: 'The role no longer exists.', flags: MessageFlags.Ephemeral });
+                return;
+            }
+
+            if (args[0] === 'invitedeny') {
+                await markInviteDecided(client, row.id, 'denied');
+                await invalidateInviteMessage(client, this, row);
+                await interaction.reply({ content: `You have denied the invite for <@&${row.role_id}>.`, flags: MessageFlags.Ephemeral });
+                return;
+            }
+
+            const member = await interaction.guild!.members.fetch(interaction.user.id).catch(() => null);
+            if (member && !member.roles.cache.has(role.id)) {
+                const granted = await member.roles.add(role).catch(() => null);
+                if (!granted) {
+                    await interaction.reply({ content: 'I could not grant the role, I may lack permissions.', flags: MessageFlags.Ephemeral });
+                    return;
+                }
+            }
+
+            await markInviteDecided(client, row.id, 'accepted');
+            await invalidateInviteMessage(client, this, row);
+            await interaction.reply({ content: `You have accepted the invite for <@&${row.role_id}>.`, flags: MessageFlags.Ephemeral });
         }
     }
 
