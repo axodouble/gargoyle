@@ -38,6 +38,7 @@ import {
     listPendingTreeRows,
     markInviteDecided,
     resolveInviteRole,
+    resolveManagerRole,
     setInviteTreeRoles,
     setTreeMessage,
     upsertTreeRow
@@ -96,6 +97,18 @@ export default class RoleCommand extends GargoyleModule {
                             .addUserOption((option) => option.setRequired(true).setName('user').setDescription('The member to invite'))
                             .addRoleOption((option) =>
                                 option.setName('role').setDescription('The invite-enabled role (required when you hold multiple)')
+                            )
+                    )
+                    .addSubcommand((subcommand) =>
+                        subcommand
+                            .setName('adopt')
+                            .setDescription('Force-adopt a member into an invite-enabled role (no offer)')
+                            .addUserOption((option) => option.setRequired(true).setName('user').setDescription('The member to adopt'))
+                            .addUserOption((option) =>
+                                option.setRequired(true).setName('parent').setDescription('The member who becomes their parent in the tree')
+                            )
+                            .addRoleOption((option) =>
+                                option.setName('role').setDescription('The invite-enabled role (required when multiple are enabled)')
                             )
                     )
             )
@@ -357,6 +370,87 @@ export default class RoleCommand extends GargoyleModule {
 
                 await interaction.reply({
                     content: `Invite sent to <@${target.id}> for <@&${roleId}>.`,
+                    flags: MessageFlags.Ephemeral
+                });
+            } else if (interaction.options.getSubcommand() === 'adopt') {
+                if (!interaction.memberPermissions?.has('ManageRoles')) {
+                    await interaction.reply({
+                        content: 'You do not have the required permissions to use this command.',
+                        flags: MessageFlags.Ephemeral
+                    });
+                    return;
+                }
+
+                if (!client.db) {
+                    await interaction.reply({ content: 'Database not connected. Please try again later.', flags: MessageFlags.Ephemeral });
+                    return;
+                }
+
+                const guild = interaction.guild!;
+                const enabled = await getEnabledTreeRoles(client, guild.id);
+
+                const explicit = interaction.options.getRole('role');
+                const resolved = resolveManagerRole(enabled, explicit?.id);
+                if (resolved.error) {
+                    await interaction.reply({ content: resolved.error, flags: MessageFlags.Ephemeral });
+                    return;
+                }
+                const roleId = resolved.roleId!;
+
+                const target = interaction.options.getUser('user', true);
+                if (!interaction.options.getMember('user')) {
+                    await interaction.reply({ content: 'That user is not a member of this guild.', flags: MessageFlags.Ephemeral });
+                    return;
+                }
+
+                const parent = interaction.options.getUser('parent', true);
+                const parentMember = await guild.members.fetch(parent.id).catch(() => null);
+                if (!parentMember || !parentMember.roles.cache.has(roleId)) {
+                    await interaction.reply({ content: 'The parent does not hold that role.', flags: MessageFlags.Ephemeral });
+                    return;
+                }
+
+                const role = await guild.roles.fetch(roleId).catch(() => null);
+                if (!role) {
+                    await interaction.reply({ content: 'The role no longer exists.', flags: MessageFlags.Ephemeral });
+                    return;
+                }
+
+                const existing = await getTreeRow(client, guild.id, roleId, target.id);
+                if (existing?.status === 'accepted') {
+                    await interaction.reply({ content: 'They are already in the role tree. Forget them first.', flags: MessageFlags.Ephemeral });
+                    return;
+                }
+                if (existing?.status === 'pending') {
+                    await invalidateInviteMessage(client, this, existing);
+                }
+
+                const targetMember = await guild.members.fetch(target.id).catch(() => null);
+                if (!targetMember) {
+                    await interaction.reply({ content: 'Could not fetch that member.', flags: MessageFlags.Ephemeral });
+                    return;
+                }
+
+                if (!targetMember.roles.cache.has(roleId)) {
+                    const granted = await targetMember.roles.add(role).catch(() => null);
+                    if (!granted) {
+                        await interaction.reply({ content: 'I could not grant the role, I may lack permissions.', flags: MessageFlags.Ephemeral });
+                        return;
+                    }
+                }
+
+                await upsertTreeRow(client, {
+                    guild_id: guild.id,
+                    role_id: roleId,
+                    user_id: target.id,
+                    parent_user_id: parent.id,
+                    status: 'accepted',
+                    channel_id: null,
+                    message_id: null
+                });
+
+                await interaction.reply({
+                    content: `Adopted <@${target.id}> into <@&${roleId}> under <@${parent.id}>.`,
                     flags: MessageFlags.Ephemeral
                 });
             }
