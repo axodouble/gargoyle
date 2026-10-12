@@ -1,17 +1,20 @@
 import GargoyleClient from '@classes/gargoyleClient.js';
 import GargoyleModule from '@src/system/backend/classes/gargoyleModule.js';
-import GargoyleButtonBuilder from '@builders/gargoyleButtonBuilder.js';
+import GargoyleButtonBuilder, { GargoyleURLButtonBuilder } from '@builders/gargoyleButtonBuilder.js';
 import {
+    ActionRowBuilder,
     ApplicationIntegrationType,
     ButtonInteraction,
     ButtonStyle,
     ChatInputCommandInteraction,
     ContainerBuilder,
+    GuildMember,
     HexColorString,
     InteractionContextType,
     LabelBuilder,
     MediaGalleryBuilder,
     MediaGalleryItemBuilder,
+    MessageActionRowComponentBuilder,
     MessageFlags,
     ModalSubmitInteraction,
     Role,
@@ -25,7 +28,18 @@ import {
 import GargoyleSlashCommandBuilder from '@src/system/backend/builders/gargoyleSlashCommandBuilder.js';
 import client from '@src/system/botClient.js';
 import GargoyleModalBuilder from '@src/system/backend/builders/gargoyleModalBuilder.js';
-import { getEnabledTreeRoles, invalidateInviteMessage, listPendingTreeRows, setInviteTreeRoles } from './_inviteTree.js';
+import {
+    buildInviteJumpLink,
+    deleteTreeRow,
+    getEnabledTreeRoles,
+    getTreeRow,
+    invalidateInviteMessage,
+    listPendingTreeRows,
+    resolveInviteRole,
+    setInviteTreeRoles,
+    setTreeMessage,
+    upsertTreeRow
+} from './_inviteTree.js';
 
 export default class RoleCommand extends GargoyleModule {
     public override name: string = 'role';
@@ -72,6 +86,15 @@ export default class RoleCommand extends GargoyleModule {
                             .setName('disable')
                             .setDescription('Disable the invite tree for a role')
                             .addRoleOption((option) => option.setRequired(true).setName('role').setDescription('The role to disable'))
+                    )
+                    .addSubcommand((subcommand) =>
+                        subcommand
+                            .setName('invite')
+                            .setDescription('Invite a member into an invite-enabled role')
+                            .addUserOption((option) => option.setRequired(true).setName('user').setDescription('The member to invite'))
+                            .addRoleOption((option) =>
+                                option.setName('role').setDescription('The invite-enabled role (required when you hold multiple)')
+                            )
                     )
             )
             .addSubcommand((subcommand) =>
@@ -230,6 +253,110 @@ export default class RoleCommand extends GargoyleModule {
                 }
 
                 await interaction.reply({ content: `Disabled the invite tree for <@&${role.id}>.`, flags: MessageFlags.Ephemeral });
+            } else if (interaction.options.getSubcommand() === 'invite') {
+                if (!client.db) {
+                    await interaction.reply({ content: 'Database not connected. Please try again later.', flags: MessageFlags.Ephemeral });
+                    return;
+                }
+
+                const guild = interaction.guild!;
+                const enabled = await getEnabledTreeRoles(client, guild.id);
+                const member = interaction.member as GuildMember | null;
+                const held = [...(member?.roles.cache.keys() ?? [])].filter((id) => enabled.includes(id));
+
+                const explicit = interaction.options.getRole('role');
+                const resolved = resolveInviteRole(held, enabled, explicit?.id);
+                if (resolved.error) {
+                    await interaction.reply({ content: resolved.error, flags: MessageFlags.Ephemeral });
+                    return;
+                }
+                const roleId = resolved.roleId!;
+
+                const target = interaction.options.getUser('user', true);
+                if (!interaction.options.getMember('user')) {
+                    await interaction.reply({ content: 'That user is not a member of this guild.', flags: MessageFlags.Ephemeral });
+                    return;
+                }
+
+                const targetMember = await guild.members.fetch(target.id).catch(() => null);
+                if (!targetMember) {
+                    await interaction.reply({ content: 'Could not fetch that member.', flags: MessageFlags.Ephemeral });
+                    return;
+                }
+
+                if (targetMember.roles.cache.has(roleId)) {
+                    await interaction.reply({ content: 'They already have that role.', flags: MessageFlags.Ephemeral });
+                    return;
+                }
+
+                const existing = await getTreeRow(client, guild.id, roleId, target.id);
+                if (existing?.status === 'accepted') {
+                    await interaction.reply({ content: 'They are already in the role tree.', flags: MessageFlags.Ephemeral });
+                    return;
+                }
+                if (existing?.status === 'pending') {
+                    await invalidateInviteMessage(client, this, existing);
+                }
+
+                const row = await upsertTreeRow(client, {
+                    guild_id: guild.id,
+                    role_id: roleId,
+                    user_id: target.id,
+                    parent_user_id: interaction.user.id,
+                    status: 'pending',
+                    channel_id: null,
+                    message_id: null
+                });
+
+                const container = new ContainerBuilder()
+                    .addTextDisplayComponents(
+                        new TextDisplayBuilder().setContent(
+                            `<@${interaction.user.id}> invited <@${target.id}> to <@&${roleId}> — accept or deny below.`
+                        )
+                    )
+                    .addActionRowComponents(
+                        new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+                            new GargoyleButtonBuilder(this, 'inviteaccept', String(row.id)).setLabel('Accept').setStyle(ButtonStyle.Success),
+                            new GargoyleButtonBuilder(this, 'invitedeny', String(row.id)).setLabel('Deny').setStyle(ButtonStyle.Danger)
+                        )
+                    );
+
+                const message = await (interaction.channel as SendableChannels)
+                    .send({ components: [container], flags: [MessageFlags.IsComponentsV2] })
+                    .catch(() => {
+                        client.logger.error('Failed to send role invite message');
+                        return null;
+                    });
+
+                if (!message) {
+                    await deleteTreeRow(client, guild.id, roleId, target.id);
+                    await interaction.reply({ content: 'I could not post the invite message in this channel.', flags: MessageFlags.Ephemeral });
+                    return;
+                }
+
+                await setTreeMessage(client, row.id, message.channelId, message.id);
+
+                const targetUser = await client.users.fetch(target.id).catch(() => null);
+                if (targetUser) {
+                    await targetUser
+                        .send({
+                            content: `<@${interaction.user.id}> invited you to the role <@&${roleId}> in **${guild.name}**. Accept or deny:`,
+                            components: [
+                                new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+                                    new GargoyleURLButtonBuilder(buildInviteJumpLink(guild.id, message.channelId, message.id)).setLabel('Respond')
+                                )
+                            ],
+                            flags: [MessageFlags.IsComponentsV2]
+                        })
+                        .catch(() => {
+                            client.logger.warning(`Could not DM ${target.id} for an invite; they may have DMs disabled.`);
+                        });
+                }
+
+                await interaction.reply({
+                    content: `Invite sent to <@${target.id}> for <@&${roleId}>.`,
+                    flags: MessageFlags.Ephemeral
+                });
             }
         } else if (interaction.options.getSubcommandGroup(false) == null) {
             if (interaction.options.getSubcommand() === 'delete') {
