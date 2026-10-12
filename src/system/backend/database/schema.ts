@@ -41,6 +41,7 @@ export const guildsTable = p.pgTable(
         guild_id: p.text().primaryKey().unique().notNull(),
         prefix: p.text().notNull().default(','),
         auto_roles: p.text().array().notNull().default([]),
+        invite_tree_roles: p.text().array().notNull().default([]),
         experience: p.boolean().notNull().default(true),
         cooldown_ms: p.bigint({ mode: 'number' }).notNull().default(259200000)
     },
@@ -134,4 +135,24 @@ export const applicationCooldownsTable = p.pgTable(
         duration_ms: p.bigint({ mode: 'number' }).notNull().default(0)
     },
     (t) => [p.primaryKey({ columns: [t.guild_id, t.user_id], name: 'application_cooldowns_pkey' })]
+);
+
+export const roleInviteTreeTable = p.pgTable(
+    'role_invite_tree',
+    {
+        id: p.serial().primaryKey().notNull(),
+        guild_id: p.text().notNull(),
+        role_id: p.text().notNull(),
+        user_id: p.text().notNull(),
+        parent_user_id: p.text(),
+        status: p.text().notNull().default('pending'),
+        channel_id: p.text(),
+        message_id: p.text(),
+        created_at: p.timestamp().notNull().defaultNow(),
+        updated_at: p.timestamp().notNull().defaultNow()
+    },
+    (t) => [
+        p.unique('role_invite_tree_guild_role_user_idx').on(t.guild_id, t.role_id, t.user_id),
+        p.index('role_invite_tree_guild_role_idx').on(t.guild_id, t.role_id)
+    ]
 );
