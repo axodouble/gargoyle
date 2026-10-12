@@ -25,6 +25,7 @@ import {
 import GargoyleSlashCommandBuilder from '@src/system/backend/builders/gargoyleSlashCommandBuilder.js';
 import client from '@src/system/botClient.js';
 import GargoyleModalBuilder from '@src/system/backend/builders/gargoyleModalBuilder.js';
+import { getEnabledTreeRoles, invalidateInviteMessage, listPendingTreeRows, setInviteTreeRoles } from './_inviteTree.js';
 
 export default class RoleCommand extends GargoyleModule {
     public override name: string = 'role';
@@ -56,6 +57,23 @@ export default class RoleCommand extends GargoyleModule {
                             .addStringOption((option) => option.setRequired(true).setName('color').setDescription('The color of the role'))
                     )
             )
+            .addSubcommandGroup((group) =>
+                group
+                    .setName('invite')
+                    .setDescription('Invite tree role management')
+                    .addSubcommand((subcommand) =>
+                        subcommand
+                            .setName('enable')
+                            .setDescription('Enable the invite tree for a role')
+                            .addRoleOption((option) => option.setRequired(true).setName('role').setDescription('The role to enable'))
+                    )
+                    .addSubcommand((subcommand) =>
+                        subcommand
+                            .setName('disable')
+                            .setDescription('Disable the invite tree for a role')
+                            .addRoleOption((option) => option.setRequired(true).setName('role').setDescription('The role to disable'))
+                    )
+            )
             .addSubcommand((subcommand) =>
                 subcommand
                     .setName('delete')
@@ -66,7 +84,7 @@ export default class RoleCommand extends GargoyleModule {
             .setContexts([InteractionContextType.Guild]) as GargoyleSlashCommandBuilder
     ];
 
-    public override async executeSlashCommand(_client: GargoyleClient, interaction: ChatInputCommandInteraction) {
+    public override async executeSlashCommand(client: GargoyleClient, interaction: ChatInputCommandInteraction) {
         if (interaction.options.getSubcommandGroup() === 'give') {
             if (interaction.options.getSubcommand() === 'all') {
                 const role = interaction.options.getRole('role', true) as Role;
@@ -151,6 +169,67 @@ export default class RoleCommand extends GargoyleModule {
                     content: `Created role ${role} with color ${colorName}`,
                     flags: MessageFlags.Ephemeral
                 });
+            }
+        } else if (interaction.options.getSubcommandGroup() === 'invite') {
+            if (interaction.options.getSubcommand() === 'enable') {
+                if (!interaction.memberPermissions?.has('ManageRoles')) {
+                    await interaction.reply({
+                        content: 'You do not have the required permissions to use this command.',
+                        flags: MessageFlags.Ephemeral
+                    });
+                    return;
+                }
+
+                if (!client.db) {
+                    await interaction.reply({ content: 'Database not connected. Please try again later.', flags: MessageFlags.Ephemeral });
+                    return;
+                }
+
+                const role = interaction.options.getRole('role', true) as Role;
+                const guild = interaction.guild!;
+
+                const list = await getEnabledTreeRoles(client, guild.id);
+                if (list.includes(role.id)) {
+                    await interaction.reply({ content: 'This role is already enabled for invites.', flags: MessageFlags.Ephemeral });
+                    return;
+                }
+
+                await setInviteTreeRoles(client, guild.id, [...list, role.id]);
+                await interaction.reply({ content: `Enabled the invite tree for <@&${role.id}>.`, flags: MessageFlags.Ephemeral });
+            } else if (interaction.options.getSubcommand() === 'disable') {
+                if (!interaction.memberPermissions?.has('ManageRoles')) {
+                    await interaction.reply({
+                        content: 'You do not have the required permissions to use this command.',
+                        flags: MessageFlags.Ephemeral
+                    });
+                    return;
+                }
+
+                if (!client.db) {
+                    await interaction.reply({ content: 'Database not connected. Please try again later.', flags: MessageFlags.Ephemeral });
+                    return;
+                }
+
+                const role = interaction.options.getRole('role', true) as Role;
+                const guild = interaction.guild!;
+
+                const list = await getEnabledTreeRoles(client, guild.id);
+                if (!list.includes(role.id)) {
+                    await interaction.reply({ content: 'This role is not enabled for invites.', flags: MessageFlags.Ephemeral });
+                    return;
+                }
+
+                await setInviteTreeRoles(
+                    client,
+                    guild.id,
+                    list.filter((id) => id !== role.id)
+                );
+
+                for (const row of await listPendingTreeRows(client, guild.id, role.id)) {
+                    await invalidateInviteMessage(client, this, row);
+                }
+
+                await interaction.reply({ content: `Disabled the invite tree for <@&${role.id}>.`, flags: MessageFlags.Ephemeral });
             }
         } else if (interaction.options.getSubcommandGroup(false) == null) {
             if (interaction.options.getSubcommand() === 'delete') {
