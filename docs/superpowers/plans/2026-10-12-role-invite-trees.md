@@ -468,6 +468,86 @@ git commit -m "feat: add /role invite forget"
 
 ---
 
+### Task 7: `/role invite tree` (tree view)
+
+Added after user request (2026-10-13): "a tree view so that you can see who invited whom, potentially render it as an image or as an ASCII tree."
+
+Design (controller's calls, user approved the feature request in chat):
+
+- **ASCII tree in a code block** (reliable, copy-pasteable, no rendering failure modes). Image rendering via the existing `canvas` dependency is a possible follow-up, not built now.
+- Command: `/role invite tree [role]` — added to the existing `invite` group. `role` is optional with the manager-style resolution (`resolveManagerRole`): required when multiple roles are enabled.
+- **No `ManageRoles` gate**: any guild member may view it. The tree only shows guild members' names (public info in a guild) and who invited whom.
+- The tree contains **`accepted` rows only** — pending and denied offers are not part of the tree.
+- **Orphan guard**: a row whose `parent_user_id` has no row of its own (e.g. the parent was forgotten) is rendered as a root. Links are permanent history; the view must not drop or crash on orphans.
+- Output cap: if the rendered tree exceeds ~1800 characters, truncate at a node boundary and append a `… (N more members not shown)` line, so the whole reply stays under Discord's 2000-char message limit.
+
+**Files:**
+
+- Modify: `src/modules/utilities/_inviteTree.ts` (two new exports)
+- Modify: `src/modules/utilities/role.ts` (subcommand + dispatch branch)
+
+**Interfaces:**
+
+- Consumes (Tasks 1–2): `getEnabledTreeRoles`, `resolveManagerRole`.
+- Produces:
+    - `getAcceptedTreeRows(client: GargoyleClient, guildId: string, roleId: string): Promise<InviteTreeRow[]>` — select where the (guild, role) triple matches and `status = 'accepted'`.
+    - `renderInviteTree(rows: Array<{ user_id: string; parent_user_id: string | null }>, names: Record<string, string>): string` — pure function, the tree renderer (spec below).
+
+- [ ] **Step 1: Add `getAcceptedTreeRows` to `src/modules/utilities/_inviteTree.ts`**
+
+Select from `roleInviteTreeTable` where `guild_id` and `role_id` match and `status = 'accepted'` (same `eq`/`and` house style as the existing queries).
+
+- [ ] **Step 2: Add the pure `renderInviteTree` to `src/modules/utilities/_inviteTree.ts`**
+
+Behavior (this is its spec — no test suite exists to pin it):
+
+- Build a children map: `parent_user_id → rows[]`. A row is a **root** when its `parent_user_id` is null **or** when no row in the set has `user_id === parent_user_id` (orphan guard). Children are ordered by `created_at` ascending (the rows passed in are DB-order; accept either `created_at` sort or input order — pick one, document in a comment).
+- Render classic box-drawing indentation:
+
+```text
+Alice
+├── Bob
+│   └── Carol
+└── Dave
+```
+
+i.e. each child line is prefixed with `├── ` (more siblings follow) or `└── ` (last sibling), and each ancestor level contributes a `│   ` or 4-space prefix. Use `names[user_id]` for display; if a name is missing from the map, use `@${user_id}`.
+
+- Truncation: if the full rendering would exceed 1800 characters, stop at the last node boundary that fits and append one final line `… (N more members not shown)` where N is the number of rows not rendered.
+
+- [ ] **Step 3: Add the `tree` subcommand to the `invite` group in `role.ts`**
+
+```ts
+.addSubcommand((subcommand) =>
+    subcommand
+        .setName('tree')
+        .setDescription('Show the invite tree for a role (who invited whom)')
+        .addRoleOption((option) => option.setName('role').setDescription('The invite-enabled role (required when multiple are enabled)'))
+)
+```
+
+- [ ] **Step 4: Add the dispatch branch in `executeSlashCommand`** (inside the `invite` group branch, no ManageRoles check):
+
+1. DB guard (exact house text).
+2. `const resolved = resolveManagerRole(await getEnabledTreeRoles(client, guild.id), explicit?.id);` error → ephemeral, return.
+3. `const rows = await getAcceptedTreeRows(client, guild.id, resolved.roleId);` if `rows.length === 0` → ephemeral `No accepted members in the <@&${resolved.roleId}> tree yet.`, return.
+4. Name map: unique `user_id`s → `const fetched = await client.users.fetch(ids).catch(() => new Map());` then `names[id] = guild.members.cache.get(id)?.displayName ?? (fetched as any).get?.(id)?.username ?? \`@${id}\``(discord.js`users.fetch`accepts an array and returns a`Collection`; adapt to its actual typing).
+5. Reply **non-ephemeral** (the tree is for everyone to see): content `` `**<@&${resolved.roleId}> invite tree** (${rows.length} members)\n\`\`\`\n${renderInviteTree(rows, names)}\n\`\`\`` ``.
+
+- [ ] **Step 5: Verify**
+
+Run: `bun run check`
+Expected: PASS.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add src/modules/utilities/_inviteTree.ts src/modules/utilities/role.ts
+git commit -m "feat: add /role invite tree view"
+```
+
+---
+
 ## Manual verification checklist (after all tasks, in a dev guild)
 
 No automated tests exist; before considering this done, walk these in a test guild (bot via `bun run dev`, Postgres via `bun run aux:on`, migration applied with `bun run db:migrate`):
@@ -482,3 +562,4 @@ No automated tests exist; before considering this done, walk these in a test gui
 8. `/role invite forget <user>` → row deleted; if the user still holds the role they can invite again as a new root; their former children's rows are intact.
 9. `/role invite disable <role>` → live pending offers' buttons disable; new invites rejected.
 10. `SELECT user_id, parent_user_id, status FROM role_invite_tree WHERE guild_id = '<guild>' AND role_id = '<role>';` → the full tree, roots = NULL parents.
+11. `/role invite tree` as a regular member → non-ephemeral ASCII tree in a code block showing roots and indentation; pending/denied members absent; a forgotten parent's children appear as roots.
