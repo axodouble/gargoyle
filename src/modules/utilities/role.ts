@@ -111,6 +111,15 @@ export default class RoleCommand extends GargoyleModule {
                                 option.setName('role').setDescription('The invite-enabled role (required when multiple are enabled)')
                             )
                     )
+                    .addSubcommand((subcommand) =>
+                        subcommand
+                            .setName('forget')
+                            .setDescription('Remove a member from an invite tree (severs their link)')
+                            .addUserOption((option) => option.setRequired(true).setName('user').setDescription('The member to remove from the tree'))
+                            .addRoleOption((option) =>
+                                option.setName('role').setDescription('The invite-enabled role (required when multiple are enabled)')
+                            )
+                    )
             )
             .addSubcommand((subcommand) =>
                 subcommand
@@ -451,6 +460,53 @@ export default class RoleCommand extends GargoyleModule {
 
                 await interaction.reply({
                     content: `Adopted <@${target.id}> into <@&${roleId}> under <@${parent.id}>.`,
+                    flags: MessageFlags.Ephemeral
+                });
+            } else if (interaction.options.getSubcommand() === 'forget') {
+                if (!interaction.memberPermissions?.has('ManageRoles')) {
+                    await interaction.reply({
+                        content: 'You do not have the required permissions to use this command.',
+                        flags: MessageFlags.Ephemeral
+                    });
+                    return;
+                }
+
+                if (!client.db) {
+                    await interaction.reply({ content: 'Database not connected. Please try again later.', flags: MessageFlags.Ephemeral });
+                    return;
+                }
+
+                const guild = interaction.guild!;
+                const enabled = await getEnabledTreeRoles(client, guild.id);
+
+                const explicit = interaction.options.getRole('role');
+                const resolved = resolveManagerRole(enabled, explicit?.id);
+                if (resolved.error) {
+                    await interaction.reply({ content: resolved.error, flags: MessageFlags.Ephemeral });
+                    return;
+                }
+                const roleId = resolved.roleId!;
+
+                const target = interaction.options.getUser('user', true);
+
+                const row = await getTreeRow(client, guild.id, roleId, target.id);
+                if (!row) {
+                    await interaction.reply({ content: 'They are not in the role tree.', flags: MessageFlags.Ephemeral });
+                    return;
+                }
+
+                if (row.status === 'pending') {
+                    await invalidateInviteMessage(client, this, row);
+                }
+
+                const deleted = await deleteTreeRow(client, guild.id, roleId, target.id);
+                if (!deleted) {
+                    await interaction.reply({ content: 'Something went wrong, try again.', flags: MessageFlags.Ephemeral });
+                    return;
+                }
+
+                await interaction.reply({
+                    content: `Removed <@${target.id}> from the role tree for <@&${roleId}>. They keep the role itself if they have it.`,
                     flags: MessageFlags.Ephemeral
                 });
             }
