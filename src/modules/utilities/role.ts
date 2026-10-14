@@ -33,6 +33,7 @@ import client from '@src/system/botClient.js';
 import GargoyleModalBuilder from '@src/system/backend/builders/gargoyleModalBuilder.js';
 import {
     buildInviteJumpLink,
+    buildInviteTreeUrl,
     deleteTreeRow,
     getEnabledTreeRoles,
     getInviteTreeView,
@@ -705,8 +706,21 @@ export default class RoleCommand extends GargoyleModule {
                     return;
                 }
 
+                // Render without the 1800-char cap and fall back to the plaintext URL when the full
+                // tree no longer fits in a Discord message (2000 chars).
+                const tree = renderInviteTree(view.nodes, view.names, Number.MAX_SAFE_INTEGER);
+                const content = `**<@&${roleId}> invite tree** (${view.nodes.length} members)\n\`\`\`\n${tree}\n\`\`\``;
+
+                if (content.length > 2000) {
+                    await interaction.reply({
+                        content: `**<@&${roleId}> invite tree** (${view.nodes.length} members)\nThe tree is too long to fit in a message: ${buildInviteTreeUrl(guild.id, roleId)}`,
+                        flags: isPublic ? undefined : MessageFlags.Ephemeral
+                    });
+                    return;
+                }
+
                 await interaction.reply({
-                    content: `**<@&${roleId}> invite tree** (${view.nodes.length} members)\n\`\`\`\n${renderInviteTree(view.nodes, view.names)}\n\`\`\``,
+                    content,
                     flags: isPublic ? undefined : MessageFlags.Ephemeral
                 });
             } else if (interaction.options.getSubcommand() === 'panel') {
@@ -1141,6 +1155,61 @@ export default class RoleCommand extends GargoyleModule {
             });
         }
     }
+
+    public override async executeApiRequest(client: GargoyleClient, request: Request): Promise<Response> {
+        // https://gargoyle.jas.pe/api/role/tree?guild=<guildId>&role=<roleId>
+        // Serves the full, untruncated invite tree as plaintext when it is too large for a message.
+        const url = new URL(request.url);
+        const guildId = url.searchParams.get('guild');
+        const roleId = url.searchParams.get('role');
+
+        const plain = { 'Content-Type': 'text/plain; charset=utf-8' };
+
+        if (!guildId || !roleId) {
+            return new Response('Missing guild or role parameter.', { status: 400, headers: plain });
+        }
+
+        if (!client.db) {
+            return new Response('Database not connected. Please try again later.', { status: 503, headers: plain });
+        }
+
+        const guild = await client.guilds.fetch(guildId).catch(() => null);
+        if (!guild) {
+            return new Response('Guild not found.', { status: 404, headers: plain });
+        }
+
+        const view = await getInviteTreeView(client, guild, roleId);
+        if (!view) {
+            return new Response('Role not found.', { status: 404, headers: plain });
+        }
+
+        if (view.nodes.length === 0) {
+            return new Response('The invite tree is empty.', { headers: plain });
+        }
+
+        const tree = renderInviteTree(view.nodes, view.names, Number.MAX_SAFE_INTEGER);
+        const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Invite tree</title>
+<style>
+body { background: #1e1f22; color: #dbdee1; margin: 0; font-family: monospace; }
+pre { padding: 16px; overflow-x: auto; }
+</style>
+</head>
+<body>
+<pre>${escapeHtml(tree)}</pre>
+</body>
+</html>`;
+
+        return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+    }
+}
+
+function escapeHtml(unsafe: string): string {
+    return unsafe.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 }
 
 function averageRoleColor(roles: Role[]) {

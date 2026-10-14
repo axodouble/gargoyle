@@ -284,8 +284,20 @@ export function buildInviteJumpLink(guildId: string, channelId: string, messageI
     return `https://discord.com/channels/${guildId}/${channelId}/${messageId}`;
 }
 
-export function renderInviteTree(rows: Array<{ user_id: string; parent_user_id: string | null }>, names: Record<string, string>): string {
-    const LIMIT = 1800;
+/**
+ * URL of the full, untruncated tree, served by the role module's executeApiRequest as plaintext.
+ * Used when the tree is too large to fit in a Discord message.
+ */
+export function buildInviteTreeUrl(guildId: string, roleId: string): string {
+    return `https://gargoyle.jas.pe/api/role/tree?guild=${guildId}&role=${roleId}`;
+}
+
+export function renderInviteTree(
+    rows: Array<{ user_id: string; parent_user_id: string | null }>,
+    names: Record<string, string>,
+    limit = 1800
+): string {
+    const LIMIT = limit;
 
     // Children are rendered in the order rows are passed in; callers pass rows in created_at-ascending
     // DB order, which preserves invite order. A row is a root when its parent_user_id is null or when no
