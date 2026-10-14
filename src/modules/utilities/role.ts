@@ -547,8 +547,28 @@ export default class RoleCommand extends GargoyleModule {
                 const roleId = resolved.roleId!;
 
                 const rows = await getAcceptedTreeRows(client, guild.id, roleId);
-                if (rows.length === 0) {
-                    await interaction.reply({ content: `No accepted members in the <@&${roleId}> tree yet.`, flags: MessageFlags.Ephemeral });
+
+                // Founding fathers: holders of the role with no tree row are roots of their own, so
+                // members adopted under them nest below them instead of flattening to the top level.
+                const role = await guild.roles.fetch(roleId).catch(() => null);
+                const holders = role ? await role.members.fetch().catch(() => null) : null;
+                const rowIds = new Set(rows.map((row) => row.user_id));
+                const nodes: Array<{ user_id: string; parent_user_id: string | null }> = [];
+                const names: Record<string, string> = {};
+                if (holders) {
+                    for (const [id, member] of holders) {
+                        names[id] = member.displayName;
+                        if (!rowIds.has(id)) {
+                            nodes.push({ user_id: id, parent_user_id: null });
+                        }
+                    }
+                }
+                for (const row of rows) {
+                    nodes.push({ user_id: row.user_id, parent_user_id: row.parent_user_id });
+                }
+
+                if (nodes.length === 0) {
+                    await interaction.reply({ content: `The <@&${roleId}> tree is empty.`, flags: MessageFlags.Ephemeral });
                     return;
                 }
 
@@ -557,9 +577,9 @@ export default class RoleCommand extends GargoyleModule {
                 // renders at most 1800 chars, so names past this cap are mostly truncated away, and
                 // fetching every member of a large tree would exceed Discord's interaction deadline.
                 // Uncapped ids fall back to @id in the rendered tree.
-                const names: Record<string, string> = {};
                 const toFetch: string[] = [];
                 for (const id of ids) {
+                    if (names[id]) continue;
                     const displayName = guild.members.cache.get(id)?.displayName;
                     if (displayName) {
                         names[id] = displayName;
@@ -573,7 +593,7 @@ export default class RoleCommand extends GargoyleModule {
                 });
 
                 await interaction.reply({
-                    content: `**<@&${roleId}> invite tree** (${rows.length} members)\n\`\`\`\n${renderInviteTree(rows, names)}\n\`\`\``
+                    content: `**<@&${roleId}> invite tree** (${nodes.length} members)\n\`\`\`\n${renderInviteTree(nodes, names)}\n\`\`\``
                 });
             }
         } else if (interaction.options.getSubcommandGroup(false) == null) {
