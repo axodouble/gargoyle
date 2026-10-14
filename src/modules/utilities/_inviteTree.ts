@@ -237,7 +237,8 @@ export async function invalidateInviteMessage(client: GargoyleClient, module: Ga
                         )
                     )
             ],
-            flags: [MessageFlags.IsComponentsV2]
+            flags: [MessageFlags.IsComponentsV2],
+            allowedMentions: { parse: ['users'] }
         })
         .catch((err: unknown) => {
             client.logger.warning(`Failed to invalidate invite tree message ${row.message_id} in channel ${row.channel_id}: ${err}`);
