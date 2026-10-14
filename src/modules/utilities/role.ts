@@ -332,6 +332,16 @@ export default class RoleCommand extends GargoyleModule {
                     await invalidateInviteMessage(client, this, existing);
                 }
 
+                const role = await guild.roles.fetch(roleId).catch(() => null);
+                if (!role) {
+                    await interaction.reply({ content: 'The role no longer exists.', flags: MessageFlags.Ephemeral });
+                    return;
+                }
+                if (!role.editable) {
+                    await interaction.reply({ content: 'I cannot manage that role.', flags: MessageFlags.Ephemeral });
+                    return;
+                }
+
                 const row = await upsertTreeRow(client, {
                     guild_id: guild.id,
                     role_id: roleId,
@@ -713,6 +723,17 @@ export default class RoleCommand extends GargoyleModule {
             if (row.status !== 'pending') {
                 await interaction.reply({ content: 'This invite has already been decided.', flags: MessageFlags.Ephemeral });
                 return;
+            }
+
+            if (args[0] === 'inviteaccept') {
+                const enabled = await getEnabledTreeRoles(client, row.guild_id);
+                if (!enabled.includes(row.role_id)) {
+                    await interaction.reply({
+                        content: 'This role is no longer enabled for invites, so this invite is no longer valid.',
+                        flags: MessageFlags.Ephemeral
+                    });
+                    return;
+                }
             }
 
             const role = await interaction.guild?.roles.fetch(row.role_id).catch(() => null);
