@@ -31,12 +31,14 @@ import GargoyleModalBuilder from '@src/system/backend/builders/gargoyleModalBuil
 import {
     buildInviteJumpLink,
     deleteTreeRow,
+    getAcceptedTreeRows,
     getEnabledTreeRoles,
     getTreeRow,
     getTreeRowById,
     invalidateInviteMessage,
     listPendingTreeRows,
     markInviteDecided,
+    renderInviteTree,
     resolveInviteRole,
     resolveManagerRole,
     setInviteTreeRoles,
@@ -116,6 +118,14 @@ export default class RoleCommand extends GargoyleModule {
                             .setName('forget')
                             .setDescription('Remove a member from an invite tree (severs their link)')
                             .addUserOption((option) => option.setRequired(true).setName('user').setDescription('The member to remove from the tree'))
+                            .addRoleOption((option) =>
+                                option.setName('role').setDescription('The invite-enabled role (required when multiple are enabled)')
+                            )
+                    )
+                    .addSubcommand((subcommand) =>
+                        subcommand
+                            .setName('tree')
+                            .setDescription('Show the invite tree for a role (who invited whom)')
                             .addRoleOption((option) =>
                                 option.setName('role').setDescription('The invite-enabled role (required when multiple are enabled)')
                             )
@@ -508,6 +518,39 @@ export default class RoleCommand extends GargoyleModule {
                 await interaction.reply({
                     content: `Removed <@${target.id}> from the role tree for <@&${roleId}>. They keep the role itself if they have it.`,
                     flags: MessageFlags.Ephemeral
+                });
+            } else if (interaction.options.getSubcommand() === 'tree') {
+                if (!client.db) {
+                    await interaction.reply({ content: 'Database not connected. Please try again later.', flags: MessageFlags.Ephemeral });
+                    return;
+                }
+
+                const guild = interaction.guild!;
+                const enabled = await getEnabledTreeRoles(client, guild.id);
+
+                const explicit = interaction.options.getRole('role');
+                const resolved = resolveManagerRole(enabled, explicit?.id);
+                if (resolved.error) {
+                    await interaction.reply({ content: resolved.error, flags: MessageFlags.Ephemeral });
+                    return;
+                }
+                const roleId = resolved.roleId!;
+
+                const rows = await getAcceptedTreeRows(client, guild.id, roleId);
+                if (rows.length === 0) {
+                    await interaction.reply({ content: `No accepted members in the <@&${roleId}> tree yet.`, flags: MessageFlags.Ephemeral });
+                    return;
+                }
+
+                const ids = [...new Set(rows.map((row) => row.user_id))];
+                const fetched = await Promise.all(ids.map((id) => client.users.fetch(id).catch(() => null)));
+                const names: Record<string, string> = {};
+                ids.forEach((id, i) => {
+                    names[id] = guild.members.cache.get(id)?.displayName ?? fetched[i]?.username ?? `@${id}`;
+                });
+
+                await interaction.reply({
+                    content: `**<@&${roleId}> invite tree** (${rows.length} members)\n\`\`\`\n${renderInviteTree(rows, names)}\n\`\`\``
                 });
             }
         } else if (interaction.options.getSubcommandGroup(false) == null) {

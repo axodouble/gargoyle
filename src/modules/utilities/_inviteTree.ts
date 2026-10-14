@@ -68,6 +68,20 @@ export function listPendingTreeRows(client: GargoyleClient, guildId: string, rol
         .execute();
 }
 
+export async function getAcceptedTreeRows(client: GargoyleClient, guildId: string, roleId: string): Promise<InviteTreeRow[]> {
+    return requireDb(client)
+        .select()
+        .from(schema.roleInviteTreeTable)
+        .where(
+            and(
+                eq(schema.roleInviteTreeTable.guild_id, guildId),
+                eq(schema.roleInviteTreeTable.role_id, roleId),
+                eq(schema.roleInviteTreeTable.status, 'accepted')
+            )
+        )
+        .execute();
+}
+
 export async function upsertTreeRow(
     client: GargoyleClient,
     data: {
@@ -214,4 +228,70 @@ export function resolveManagerRole(enabledRoleIds: string[], explicitRoleId?: st
 
 export function buildInviteJumpLink(guildId: string, channelId: string, messageId: string): string {
     return `https://discord.com/channels/${guildId}/${channelId}/${messageId}`;
+}
+
+export function renderInviteTree(rows: Array<{ user_id: string; parent_user_id: string | null }>, names: Record<string, string>): string {
+    const LIMIT = 1800;
+
+    // Children are rendered in the order rows are passed in; callers pass rows in created_at-ascending
+    // DB order, which preserves invite order. A row is a root when its parent_user_id is null or when no
+    // row in the set has that user_id (orphan guard: e.g. the parent was forgotten).
+    const known = new Set(rows.map((row) => row.user_id));
+    const children = new Map<string, Array<{ user_id: string; parent_user_id: string | null }>>();
+    const roots: Array<{ user_id: string; parent_user_id: string | null }> = [];
+    for (const row of rows) {
+        if (row.parent_user_id === null || !known.has(row.parent_user_id)) {
+            roots.push(row);
+        } else {
+            const siblings = children.get(row.parent_user_id);
+            if (siblings) {
+                siblings.push(row);
+            } else {
+                children.set(row.parent_user_id, [row]);
+            }
+        }
+    }
+
+    const nameOf = (row: { user_id: string }): string => names[row.user_id] ?? `@${row.user_id}`;
+    const lines: string[] = [];
+    let length = 0;
+    let rendered = 0;
+    let truncated = false;
+
+    // Appends a line if the tree so far still fits under the limit; returns false once the limit would
+    // be exceeded, so rendering stops at a node boundary.
+    const push = (line: string): boolean => {
+        const next = lines.length > 0 ? length + 1 + line.length : line.length;
+        if (next > LIMIT) {
+            truncated = true;
+            return false;
+        }
+        lines.push(line);
+        length = next;
+        rendered++;
+        return true;
+    };
+
+    // Roots render as bare names; their subtrees start with no ancestor prefix.
+    const walk = (nodes: Array<{ user_id: string; parent_user_id: string | null }>, prefix: string, depth: number): boolean => {
+        for (let i = 0; i < nodes.length; i++) {
+            const node = nodes[i];
+            const isLast = i === nodes.length - 1;
+            const line = depth === 0 ? nameOf(node) : `${prefix}${isLast ? '└── ' : '├── '}${nameOf(node)}`;
+            if (!push(line)) {
+                return false;
+            }
+            const kids = children.get(node.user_id);
+            if (kids && !walk(kids, depth === 0 ? '' : prefix + (isLast ? '    ' : '│   '), depth + 1)) {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    walk(roots, '', 0);
+    if (truncated) {
+        lines.push(`… (${rows.length - rendered} more members not shown)`);
+    }
+    return lines.join('\n');
 }
