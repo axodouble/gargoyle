@@ -543,10 +543,23 @@ export default class RoleCommand extends GargoyleModule {
                 }
 
                 const ids = [...new Set(rows.map((row) => row.user_id))];
-                const fetched = await Promise.all(ids.map((id) => client.users.fetch(id).catch(() => null)));
+                // Skip ids already resolvable from the member cache and cap the fetch set: the tree
+                // renders at most 1800 chars, so names past this cap are mostly truncated away, and
+                // fetching every member of a large tree would exceed Discord's interaction deadline.
+                // Uncapped ids fall back to @id in the rendered tree.
                 const names: Record<string, string> = {};
-                ids.forEach((id, i) => {
-                    names[id] = guild.members.cache.get(id)?.displayName ?? fetched[i]?.username ?? `@${id}`;
+                const toFetch: string[] = [];
+                for (const id of ids) {
+                    const displayName = guild.members.cache.get(id)?.displayName;
+                    if (displayName) {
+                        names[id] = displayName;
+                    } else if (toFetch.length < 100) {
+                        toFetch.push(id);
+                    }
+                }
+                const fetched = await Promise.all(toFetch.map((id) => client.users.fetch(id).catch(() => null)));
+                toFetch.forEach((id, i) => {
+                    names[id] = fetched[i]?.username ?? `@${id}`;
                 });
 
                 await interaction.reply({
