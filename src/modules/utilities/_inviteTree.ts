@@ -363,9 +363,16 @@ export function renderInviteTree(
 }
 
 /**
- * Builds the full tree view for a role: accepted rows plus founding fathers (holders of the role
- * with no tree row) rendered as roots, and a display-name map. Returns null when the role no
- * longer exists. Shared by the tree command and the auto-updating tree panels.
+ * Builds the full tree view for a role: accepted rows plus founding fathers rendered as roots,
+ * and a display-name map. Returns null when the role no longer exists. Shared by the tree
+ * command, the auto-updating tree panels, and the plaintext API view.
+ *
+ * Roots come from two sources:
+ * 1. Parents referenced by rows but having no row of their own. These are derived from the rows
+ *    themselves, so they render even when the parent is not in the member cache (e.g. right
+ *    after a bot restart).
+ * 2. Holders of the role with no tree row (founding fathers who have adopted no one yet), which
+ *    can only be discovered via the cache-backed member collection.
  */
 export async function getInviteTreeView(client: GargoyleClient, guild: Guild, roleId: string): Promise<InviteTreeView | null> {
     const rows = await getAcceptedTreeRows(client, guild.id, roleId);
@@ -374,17 +381,30 @@ export async function getInviteTreeView(client: GargoyleClient, guild: Guild, ro
         return null;
     }
 
-    // role.members is a cache-backed collection; with the full GuildMembers intent the cache is
-    // complete, so no REST call is needed for founding-father roots.
     const nodes: Array<{ user_id: string; parent_user_id: string | null }> = [];
     const names: Record<string, string> = {};
     const rowIds = new Set(rows.map((row) => row.user_id));
+
+    // Parents referenced by rows but having no row of their own are roots of the tree.
+    const parentRoots = new Set<string>();
+    for (const row of rows) {
+        if (row.parent_user_id !== null && !rowIds.has(row.parent_user_id)) {
+            parentRoots.add(row.parent_user_id);
+        }
+    }
+    for (const parentId of parentRoots) {
+        nodes.push({ user_id: parentId, parent_user_id: null });
+    }
+
+    // role.members is a cache-backed collection; holders without a row are roots as well (founding
+    // fathers who have adopted no one yet), so long as they are in the cache.
     for (const [id, member] of role.members) {
         names[id] = member.displayName;
-        if (!rowIds.has(id)) {
+        if (!rowIds.has(id) && !parentRoots.has(id)) {
             nodes.push({ user_id: id, parent_user_id: null });
         }
     }
+
     for (const row of rows) {
         nodes.push({ user_id: row.user_id, parent_user_id: row.parent_user_id });
     }
@@ -392,7 +412,7 @@ export async function getInviteTreeView(client: GargoyleClient, guild: Guild, ro
     // Skip ids already resolvable from the member cache and cap the fetch set: the tree renders at
     // most 1800 chars, so names past this cap are mostly truncated away, and fetching every member
     // of a large tree would exceed Discord's interaction deadline. Uncapped ids fall back to @id.
-    const ids = [...new Set(rows.map((row) => row.user_id))];
+    const ids = [...new Set([...rows.map((row) => row.user_id), ...parentRoots])];
     const toFetch: string[] = [];
     for (const id of ids) {
         if (names[id]) continue;
