@@ -551,7 +551,9 @@ export default class RoleCommand extends GargoyleModule {
                 // Founding fathers: holders of the role with no tree row are roots of their own, so
                 // members adopted under them nest below them instead of flattening to the top level.
                 const role = await guild.roles.fetch(roleId).catch(() => null);
-                const holders = role ? await role.members.fetch().catch(() => null) : null;
+                // role.members is a cache-backed collection; with the full GuildMembers intent the
+                // cache is complete, so no REST call is needed for founding-father roots.
+                const holders = role?.members ?? null;
                 const rowIds = new Set(rows.map((row) => row.user_id));
                 const nodes: Array<{ user_id: string; parent_user_id: string | null }> = [];
                 const names: Record<string, string> = {};
