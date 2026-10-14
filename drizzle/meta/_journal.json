@@ -127,6 +127,13 @@
       "when": 1791778052130,
       "tag": "0017_majestic_mephistopheles",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1791947578017,
+      "tag": "0018_colossal_silver_fox",
+      "breakpoints": true
     }
   ]
 }

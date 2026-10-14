@@ -137,6 +137,21 @@ export const applicationCooldownsTable = p.pgTable(
     (t) => [p.primaryKey({ columns: [t.guild_id, t.user_id], name: 'application_cooldowns_pkey' })]
 );
 
+export const roleInviteTreePanelTable = p.pgTable(
+    'role_invite_tree_panels',
+    {
+        id: p.serial().primaryKey().notNull(),
+        guild_id: p.text().notNull(),
+        role_id: p.text().notNull(),
+        channel_id: p.text().notNull(),
+        message_id: p.text().notNull(),
+        tree_hash: p.text().notNull(),
+        created_at: p.timestamp().notNull().defaultNow(),
+        updated_at: p.timestamp().notNull().defaultNow()
+    },
+    (t) => [p.unique('role_invite_tree_panels_guild_role_idx').on(t.guild_id, t.role_id)]
+);
+
 export const roleInviteTreeTable = p.pgTable(
     'role_invite_tree',
     {

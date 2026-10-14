@@ -1,8 +1,10 @@
 import GargoyleClient from '@classes/gargoyleClient.js';
 import GargoyleModule from '@src/system/backend/classes/gargoyleModule.js';
 import GargoyleButtonBuilder, { GargoyleURLButtonBuilder } from '@builders/gargoyleButtonBuilder.js';
+import { GargoyleUserSelectMenuBuilder } from '@builders/gargoyleSelectMenuBuilders.js';
 import {
     ActionRowBuilder,
+    AnySelectMenuInteraction,
     ApplicationIntegrationType,
     ButtonInteraction,
     ButtonStyle,
@@ -21,6 +23,7 @@ import {
     RoleSelectMenuBuilder,
     SectionBuilder,
     SendableChannels,
+    TextBasedChannel,
     TextDisplayBuilder,
     TextInputBuilder,
     TextInputStyle
@@ -31,18 +34,24 @@ import GargoyleModalBuilder from '@src/system/backend/builders/gargoyleModalBuil
 import {
     buildInviteJumpLink,
     deleteTreeRow,
-    getAcceptedTreeRows,
     getEnabledTreeRoles,
+    getInviteTreeView,
+    getTreePanel,
     getTreeRow,
     getTreeRowById,
+    hashTreeContent,
     invalidateInviteMessage,
     listPendingTreeRows,
+    listTreePanels,
     markInviteDecided,
     renderInviteTree,
+    renderTreePanelContent,
     resolveInviteRole,
     resolveManagerRole,
     setInviteTreeRoles,
     setTreeMessage,
+    syncTreePanel,
+    upsertTreePanel,
     upsertTreeRow
 } from './_inviteTree.js';
 
@@ -107,8 +116,16 @@ export default class RoleCommand extends GargoyleModule {
                             .setDescription('Force-adopt a member into an invite-enabled role (no offer)')
                             .addUserOption((option) => option.setRequired(true).setName('user').setDescription('The member to adopt'))
                             .addUserOption((option) =>
-                                option.setRequired(true).setName('parent').setDescription('The member who becomes their parent in the tree')
+                                option.setName('parent').setDescription('The member who becomes their parent in the tree (defaults to you)')
                             )
+                            .addRoleOption((option) =>
+                                option.setName('role').setDescription('The invite-enabled role (required when multiple are enabled)')
+                            )
+                    )
+                    .addSubcommand((subcommand) =>
+                        subcommand
+                            .setName('adoptpanel')
+                            .setDescription('Post a panel to multi-select members and adopt them at once')
                             .addRoleOption((option) =>
                                 option.setName('role').setDescription('The invite-enabled role (required when multiple are enabled)')
                             )
@@ -129,6 +146,17 @@ export default class RoleCommand extends GargoyleModule {
                             .addRoleOption((option) =>
                                 option.setName('role').setDescription('The invite-enabled role (required when multiple are enabled)')
                             )
+                            .addBooleanOption((option) =>
+                                option.setName('public').setDescription('Show the tree to everyone (by default only you can see it)')
+                            )
+                    )
+                    .addSubcommand((subcommand) =>
+                        subcommand
+                            .setName('panel')
+                            .setDescription('Create an auto-updating tree panel for a role (one per role)')
+                            .addRoleOption((option) =>
+                                option.setName('role').setDescription('The invite-enabled role (required when multiple are enabled)')
+                            )
                     )
             )
             .addSubcommand((subcommand) =>
@@ -140,6 +168,39 @@ export default class RoleCommand extends GargoyleModule {
             .addSubcommand((subcommand) => subcommand.setName('panel').setDescription('Create a role panel'))
             .setContexts([InteractionContextType.Guild]) as GargoyleSlashCommandBuilder
     ];
+
+    public override init(client: GargoyleClient): void {
+        // Periodic sweep for auto-updating tree panels: heals drift the in-band refreshes can miss
+        // (deleted panel messages, shard hiccups, role membership changes made outside the invite
+        // commands). Only edits a panel message when the rendered tree actually differs.
+        setInterval(
+            async () => {
+                if (!client.db) return;
+                try {
+                    const panels = await listTreePanels(client);
+                    for (const panel of panels) {
+                        await syncTreePanel(client, panel).catch((error: unknown) => {
+                            client.logger.error(`Failed to sync invite tree panel for role ${panel.role_id}: ${error}`);
+                        });
+                    }
+                } catch (error: unknown) {
+                    client.logger.error(`Error in invite tree panel sweep: ${error}`);
+                }
+            },
+            5 * 60 * 1000
+        );
+    }
+
+    private async refreshTreePanel(client: GargoyleClient, guildId: string, roleId: string): Promise<void> {
+        try {
+            const panel = await getTreePanel(client, guildId, roleId);
+            if (panel) {
+                await syncTreePanel(client, panel);
+            }
+        } catch (error: unknown) {
+            client.logger.error(`Failed to refresh invite tree panel for role ${roleId}: ${error}`);
+        }
+    }
 
     public override async executeSlashCommand(client: GargoyleClient, interaction: ChatInputCommandInteraction) {
         if (interaction.options.getSubcommandGroup() === 'give') {
@@ -427,12 +488,12 @@ export default class RoleCommand extends GargoyleModule {
                 const roleId = resolved.roleId!;
 
                 const target = interaction.options.getUser('user', true);
-                if (!interaction.options.getMember('user')) {
-                    await interaction.reply({ content: 'That user is not a member of this guild.', flags: MessageFlags.Ephemeral });
+                if (target.id === interaction.user.id && !interaction.options.getUser('parent')) {
+                    await interaction.reply({ content: 'You cannot be adopted under yourself.', flags: MessageFlags.Ephemeral });
                     return;
                 }
 
-                const parent = interaction.options.getUser('parent', true);
+                const parent = interaction.options.getUser('parent') ?? interaction.user;
                 const parentMember = await guild.members.fetch(parent.id).catch(() => null);
                 if (!parentMember || !parentMember.roles.cache.has(roleId)) {
                     await interaction.reply({ content: 'The parent does not hold that role.', flags: MessageFlags.Ephemeral });
@@ -442,6 +503,10 @@ export default class RoleCommand extends GargoyleModule {
                 const role = await guild.roles.fetch(roleId).catch(() => null);
                 if (!role) {
                     await interaction.reply({ content: 'The role no longer exists.', flags: MessageFlags.Ephemeral });
+                    return;
+                }
+                if (!role.editable) {
+                    await interaction.reply({ content: 'I cannot manage that role.', flags: MessageFlags.Ephemeral });
                     return;
                 }
 
@@ -480,6 +545,84 @@ export default class RoleCommand extends GargoyleModule {
 
                 await interaction.reply({
                     content: `Adopted <@${target.id}> into <@&${roleId}> under <@${parent.id}>.`,
+                    flags: MessageFlags.Ephemeral
+                });
+
+                void this.refreshTreePanel(client, guild.id, roleId);
+            } else if (interaction.options.getSubcommand() === 'adoptpanel') {
+                if (!interaction.memberPermissions?.has('ManageRoles')) {
+                    await interaction.reply({
+                        content: 'You do not have the required permissions to use this command.',
+                        flags: MessageFlags.Ephemeral
+                    });
+                    return;
+                }
+
+                if (!client.db) {
+                    await interaction.reply({ content: 'Database not connected. Please try again later.', flags: MessageFlags.Ephemeral });
+                    return;
+                }
+
+                const guild = interaction.guild!;
+                const enabled = await getEnabledTreeRoles(client, guild.id);
+
+                const explicit = interaction.options.getRole('role');
+                const resolved = resolveManagerRole(enabled, explicit?.id);
+                if (resolved.error) {
+                    await interaction.reply({ content: resolved.error, flags: MessageFlags.Ephemeral });
+                    return;
+                }
+                const roleId = resolved.roleId!;
+
+                const role = await guild.roles.fetch(roleId).catch(() => null);
+                if (!role) {
+                    await interaction.reply({ content: 'The role no longer exists.', flags: MessageFlags.Ephemeral });
+                    return;
+                }
+
+                // The select menu can offer at most 25 explicit options; the newest members are the
+                // ones most in need of adopting, so they fill the pool.
+                const pool = [...guild.members.cache.values()]
+                    .filter((member) => !member.user.bot)
+                    .sort((a, b) => (b.joinedTimestamp ?? 0) - (a.joinedTimestamp ?? 0))
+                    .slice(0, 25);
+                if (pool.length === 0) {
+                    await interaction.reply({ content: 'No members to offer in the panel.', flags: MessageFlags.Ephemeral });
+                    return;
+                }
+
+                const menu = new GargoyleUserSelectMenuBuilder(this, 'adoptmenu', roleId)
+                    .setPlaceholder('Select members to adopt (max 25)')
+                    .setMinValues(1)
+                    .setMaxValues(25);
+                // This builders version has no addOptions for user select menus; set the raw API options.
+                (menu as unknown as { data: { options: Array<{ user_id: string; label: string }> } }).data.options = pool.map((member) => ({
+                    user_id: member.id,
+                    label: member.displayName
+                }));
+
+                const container = new ContainerBuilder()
+                    .addTextDisplayComponents(
+                        new TextDisplayBuilder().setContent(
+                            `**Multi-adopt for <@&${roleId}>**\n-# Select members below; each one is adopted under you immediately when selected. Deselecting does not un-adopt.`
+                        )
+                    )
+                    .addActionRowComponents(new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(menu));
+
+                const message = await (interaction.channel as SendableChannels)
+                    .send({ components: [container], flags: [MessageFlags.IsComponentsV2] })
+                    .catch(() => {
+                        client.logger.error('Failed to send multi-adopt panel message');
+                        return null;
+                    });
+
+                if (!message) {
+                    await interaction.reply({ content: 'I could not post the panel in this channel.', flags: MessageFlags.Ephemeral });
+                    return;
+                }
+
+                await interaction.reply({
+                    content: `Multi-adopt panel for <@&${roleId}> posted.`,
                     flags: MessageFlags.Ephemeral
                 });
             } else if (interaction.options.getSubcommand() === 'forget') {
@@ -529,6 +672,7 @@ export default class RoleCommand extends GargoyleModule {
                     content: `Removed <@${target.id}> from the role tree for <@&${roleId}>. They keep the role itself if they have it.`,
                     flags: MessageFlags.Ephemeral
                 });
+                void this.refreshTreePanel(client, guild.id, roleId);
             } else if (interaction.options.getSubcommand() === 'tree') {
                 if (!client.db) {
                     await interaction.reply({ content: 'Database not connected. Please try again later.', flags: MessageFlags.Ephemeral });
@@ -546,56 +690,81 @@ export default class RoleCommand extends GargoyleModule {
                 }
                 const roleId = resolved.roleId!;
 
-                const rows = await getAcceptedTreeRows(client, guild.id, roleId);
+                const isPublic = interaction.options.getBoolean('public') ?? false;
 
-                // Founding fathers: holders of the role with no tree row are roots of their own, so
-                // members adopted under them nest below them instead of flattening to the top level.
-                const role = await guild.roles.fetch(roleId).catch(() => null);
-                // role.members is a cache-backed collection; with the full GuildMembers intent the
-                // cache is complete, so no REST call is needed for founding-father roots.
-                const holders = role?.members ?? null;
-                const rowIds = new Set(rows.map((row) => row.user_id));
-                const nodes: Array<{ user_id: string; parent_user_id: string | null }> = [];
-                const names: Record<string, string> = {};
-                if (holders) {
-                    for (const [id, member] of holders) {
-                        names[id] = member.displayName;
-                        if (!rowIds.has(id)) {
-                            nodes.push({ user_id: id, parent_user_id: null });
-                        }
-                    }
+                const view = await getInviteTreeView(client, guild, roleId);
+                if (!view) {
+                    await interaction.reply({ content: 'The role no longer exists.', flags: MessageFlags.Ephemeral });
+                    return;
                 }
-                for (const row of rows) {
-                    nodes.push({ user_id: row.user_id, parent_user_id: row.parent_user_id });
-                }
-
-                if (nodes.length === 0) {
+                if (view.nodes.length === 0) {
                     await interaction.reply({ content: `The <@&${roleId}> tree is empty.`, flags: MessageFlags.Ephemeral });
                     return;
                 }
 
-                const ids = [...new Set(rows.map((row) => row.user_id))];
-                // Skip ids already resolvable from the member cache and cap the fetch set: the tree
-                // renders at most 1800 chars, so names past this cap are mostly truncated away, and
-                // fetching every member of a large tree would exceed Discord's interaction deadline.
-                // Uncapped ids fall back to @id in the rendered tree.
-                const toFetch: string[] = [];
-                for (const id of ids) {
-                    if (names[id]) continue;
-                    const displayName = guild.members.cache.get(id)?.displayName;
-                    if (displayName) {
-                        names[id] = displayName;
-                    } else if (toFetch.length < 100) {
-                        toFetch.push(id);
-                    }
+                await interaction.reply({
+                    content: `**<@&${roleId}> invite tree** (${view.nodes.length} members)\n\`\`\`\n${renderInviteTree(view.nodes, view.names)}\n\`\`\``,
+                    flags: isPublic ? undefined : MessageFlags.Ephemeral
+                });
+            } else if (interaction.options.getSubcommand() === 'panel') {
+                if (!interaction.memberPermissions?.has('ManageRoles')) {
+                    await interaction.reply({
+                        content: 'You do not have the required permissions to use this command.',
+                        flags: MessageFlags.Ephemeral
+                    });
+                    return;
                 }
-                const fetched = await Promise.all(toFetch.map((id) => client.users.fetch(id).catch(() => null)));
-                toFetch.forEach((id, i) => {
-                    names[id] = fetched[i]?.username ?? `@${id}`;
+
+                if (!client.db) {
+                    await interaction.reply({ content: 'Database not connected. Please try again later.', flags: MessageFlags.Ephemeral });
+                    return;
+                }
+
+                const guild = interaction.guild!;
+                const enabled = await getEnabledTreeRoles(client, guild.id);
+
+                const explicit = interaction.options.getRole('role');
+                const resolved = resolveManagerRole(enabled, explicit?.id);
+                if (resolved.error) {
+                    await interaction.reply({ content: resolved.error, flags: MessageFlags.Ephemeral });
+                    return;
+                }
+                const roleId = resolved.roleId!;
+
+                const view = await getInviteTreeView(client, guild, roleId);
+                if (!view) {
+                    await interaction.reply({ content: 'The role no longer exists.', flags: MessageFlags.Ephemeral });
+                    return;
+                }
+
+                const content = renderTreePanelContent(roleId, view);
+                const hash = hashTreeContent(content);
+
+                // One panel per role: drop the old message before posting the replacement.
+                const existingPanel = await getTreePanel(client, guild.id, roleId);
+                if (existingPanel) {
+                    const oldChannel = (await client.channels.fetch(existingPanel.channel_id).catch(() => null)) as TextBasedChannel | null;
+                    const oldMessage = await oldChannel?.messages.fetch(existingPanel.message_id).catch(() => null);
+                    await oldMessage?.delete().catch(() => null);
+                }
+
+                const message = await (interaction.channel as SendableChannels).send({ content }).catch(() => null);
+                if (!message) {
+                    await interaction.reply({ content: 'I could not post the panel in this channel.', flags: MessageFlags.Ephemeral });
+                    return;
+                }
+
+                await upsertTreePanel(client, {
+                    guild_id: guild.id,
+                    role_id: roleId,
+                    channel_id: message.channelId,
+                    message_id: message.id,
+                    tree_hash: hash
                 });
 
                 await interaction.reply({
-                    content: `**<@&${roleId}> invite tree** (${nodes.length} members)\n\`\`\`\n${renderInviteTree(nodes, names)}\n\`\`\``
+                    content: `Tree panel for <@&${roleId}> created. It updates automatically when the tree changes.`,
+                    flags: MessageFlags.Ephemeral
                 });
             }
         } else if (interaction.options.getSubcommandGroup(false) == null) {
@@ -783,7 +952,99 @@ export default class RoleCommand extends GargoyleModule {
             await markInviteDecided(client, row.id, 'accepted');
             await invalidateInviteMessage(client, this, row);
             await interaction.reply({ content: `You have accepted the invite for <@&${row.role_id}>.`, flags: MessageFlags.Ephemeral });
+            void this.refreshTreePanel(client, row.guild_id, row.role_id);
         }
+    }
+
+    public override async executeSelectMenuCommand(client: GargoyleClient, interaction: AnySelectMenuInteraction, ...args: string[]): Promise<void> {
+        if (args[0] !== 'adoptmenu' || !interaction.isUserSelectMenu()) return;
+
+        const guild = interaction.guild;
+        if (!guild) {
+            await interaction.reply({ content: 'This panel only works in a guild.', flags: MessageFlags.Ephemeral });
+            return;
+        }
+
+        if (!interaction.memberPermissions?.has('ManageRoles')) {
+            await interaction.reply({ content: 'You do not have the required permissions to use this panel.', flags: MessageFlags.Ephemeral });
+            return;
+        }
+
+        if (!client.db) {
+            await interaction.reply({ content: 'Database not connected. Please try again later.', flags: MessageFlags.Ephemeral });
+            return;
+        }
+
+        const roleId = args[1];
+        // "Adopt under me": the person operating the panel becomes the parent.
+        const parent = interaction.user;
+        const parentMember = await guild.members.fetch(parent.id).catch(() => null);
+        if (!parentMember || !parentMember.roles.cache.has(roleId)) {
+            await interaction.reply({
+                content: `You need to hold <@&${roleId}> to adopt members under yourself.`,
+                flags: MessageFlags.Ephemeral
+            });
+            return;
+        }
+
+        const role = await guild.roles.fetch(roleId).catch(() => null);
+        if (!role) {
+            await interaction.reply({ content: 'The role no longer exists.', flags: MessageFlags.Ephemeral });
+            return;
+        }
+        if (!role.editable) {
+            await interaction.reply({ content: 'I cannot manage that role.', flags: MessageFlags.Ephemeral });
+            return;
+        }
+
+        const selected = interaction.values;
+        const skipped: string[] = [];
+        let adopted = 0;
+        for (const userId of selected) {
+            if (userId === parent.id) {
+                skipped.push(`<@${userId}> (cannot be adopted under themselves)`);
+                continue;
+            }
+            const targetMember = await guild.members.fetch(userId).catch(() => null);
+            if (!targetMember) {
+                skipped.push(`<@${userId}> (not a member of this guild)`);
+                continue;
+            }
+            const existing = await getTreeRow(client, guild.id, roleId, userId);
+            if (existing?.status === 'accepted') {
+                skipped.push(`<@${userId}> (already in the role tree)`);
+                continue;
+            }
+            if (existing?.status === 'pending') {
+                await invalidateInviteMessage(client, this, existing);
+            }
+            if (!targetMember.roles.cache.has(roleId)) {
+                const granted = await targetMember.roles.add(role).catch(() => null);
+                if (!granted) {
+                    skipped.push(`<@${userId}> (could not grant the role)`);
+                    continue;
+                }
+            }
+            await upsertTreeRow(client, {
+                guild_id: guild.id,
+                role_id: roleId,
+                user_id: userId,
+                parent_user_id: parent.id,
+                status: 'accepted',
+                channel_id: null,
+                message_id: null
+            });
+            adopted++;
+        }
+
+        let summary = `Adopted ${adopted} of ${selected.length} into <@&${roleId}> under <@${parent.id}>.`;
+        if (skipped.length > 0) {
+            summary += `\nSkipped: ${skipped.slice(0, 5).join(', ')}${skipped.length > 5 ? ` (+${skipped.length - 5} more)` : ''}`;
+        }
+
+        await interaction.reply({ content: summary, flags: MessageFlags.Ephemeral });
+
+        void this.refreshTreePanel(client, guild.id, roleId);
     }
 
     public override async executeModalCommand(_client: GargoyleClient, interaction: ModalSubmitInteraction, ...args: string[]): Promise<void> {
