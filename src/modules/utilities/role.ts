@@ -173,18 +173,21 @@ export default class RoleCommand extends GargoyleModule {
         // Periodic sweep for auto-updating tree panels: heals drift the in-band refreshes can miss
         // (deleted panel messages, shard hiccups, role membership changes made outside the invite
         // commands). Only edits a panel message when the rendered tree actually differs.
+        let sweeping = false;
         setInterval(
             async () => {
-                if (!client.db) return;
+                // Skip the tick if the previous sweep is still running so slow runs do not stack.
+                if (sweeping || !client.db) return;
+                sweeping = true;
                 try {
                     const panels = await listTreePanels(client);
                     for (const panel of panels) {
-                        await syncTreePanel(client, panel).catch((error: unknown) => {
-                            client.logger.error(`Failed to sync invite tree panel for role ${panel.role_id}: ${error}`);
-                        });
+                        await syncTreePanel(client, panel);
                     }
                 } catch (error: unknown) {
                     client.logger.error(`Error in invite tree panel sweep: ${error}`);
+                } finally {
+                    sweeping = false;
                 }
             },
             5 * 60 * 1000
@@ -975,25 +978,31 @@ export default class RoleCommand extends GargoyleModule {
             return;
         }
 
+        // Adopting a full selection can exceed the 3-second interaction deadline, so defer first.
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
         const roleId = args[1];
+        const enabled = await getEnabledTreeRoles(client, guild.id);
+        if (!enabled.includes(roleId)) {
+            await interaction.editReply({ content: `The invite tree for <@&${roleId}> is no longer enabled.` });
+            return;
+        }
+
         // "Adopt under me": the person operating the panel becomes the parent.
         const parent = interaction.user;
         const parentMember = await guild.members.fetch(parent.id).catch(() => null);
         if (!parentMember || !parentMember.roles.cache.has(roleId)) {
-            await interaction.reply({
-                content: `You need to hold <@&${roleId}> to adopt members under yourself.`,
-                flags: MessageFlags.Ephemeral
-            });
+            await interaction.editReply({ content: `You need to hold <@&${roleId}> to adopt members under yourself.` });
             return;
         }
 
         const role = await guild.roles.fetch(roleId).catch(() => null);
         if (!role) {
-            await interaction.reply({ content: 'The role no longer exists.', flags: MessageFlags.Ephemeral });
+            await interaction.editReply({ content: 'The role no longer exists.' });
             return;
         }
         if (!role.editable) {
-            await interaction.reply({ content: 'I cannot manage that role.', flags: MessageFlags.Ephemeral });
+            await interaction.editReply({ content: 'I cannot manage that role.' });
             return;
         }
 
@@ -1042,7 +1051,7 @@ export default class RoleCommand extends GargoyleModule {
             summary += `\nSkipped: ${skipped.slice(0, 5).join(', ')}${skipped.length > 5 ? ` (+${skipped.length - 5} more)` : ''}`;
         }
 
-        await interaction.reply({ content: summary, flags: MessageFlags.Ephemeral });
+        await interaction.editReply({ content: summary });
 
         void this.refreshTreePanel(client, guild.id, roleId);
     }

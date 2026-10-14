@@ -411,12 +411,34 @@ export function renderTreePanelContent(roleId: string, view: InviteTreeView): st
     return `**<@&${roleId}> invite tree** (${view.nodes.length} members)\n\`\`\`\n${renderInviteTree(view.nodes, view.names)}\n\`\`\`\n${footer}`;
 }
 
+// Per-(guild, role) lock: the periodic sweep and the in-band refreshes can run at the same time,
+// and without serialization two syncs that both see a deleted message would both re-post it.
+const panelSyncLocks = new Map<string, Promise<void>>();
+
+export function syncTreePanel(client: GargoyleClient, panel: InviteTreePanel): Promise<void> {
+    const key = `${panel.guild_id}:${panel.role_id}`;
+    const run = (panelSyncLocks.get(key) ?? Promise.resolve())
+        .then(async () => {
+            // Re-read the row under the lock: a sync that just finished may have re-posted the
+            // message, so the caller's snapshot of message_id can be stale.
+            const current = await getTreePanel(client, panel.guild_id, panel.role_id);
+            if (current) {
+                await syncTreePanelLocked(client, current);
+            }
+        })
+        .catch((error: unknown) => {
+            client.logger.error(`Failed to sync invite tree panel for role ${panel.role_id}: ${error}`);
+        });
+    panelSyncLocks.set(key, run);
+    return run;
+}
+
 /**
  * Re-renders a stored tree panel in place: edits the message only when the rendered tree differs
- * from the stored hash, re-posts the message if it was deleted, and drops the panel row (and the
- * message, best-effort) if the role no longer exists.
+ * from what is currently posted, re-posts the message if it was deleted, and drops the panel row
+ * (and the message, best-effort) if the role no longer exists.
  */
-export async function syncTreePanel(client: GargoyleClient, panel: InviteTreePanel): Promise<void> {
+async function syncTreePanelLocked(client: GargoyleClient, panel: InviteTreePanel): Promise<void> {
     const guild = await client.guilds.fetch(panel.guild_id).catch(() => null);
     if (!guild) {
         return;
@@ -425,7 +447,7 @@ export async function syncTreePanel(client: GargoyleClient, panel: InviteTreePan
     const role = await guild.roles.fetch(panel.role_id).catch(() => null);
     if (!role) {
         const channel = (await client.channels.fetch(panel.channel_id).catch(() => null)) as TextBasedChannel | null;
-        const message = await channel?.messages.fetch(panel.message_id).catch(() => null);
+        const message = await channel?.messages?.fetch(panel.message_id).catch(() => null);
         await message?.delete().catch(() => null);
         await deleteTreePanel(client, panel.guild_id, panel.role_id);
         return;
