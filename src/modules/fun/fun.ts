@@ -70,6 +70,7 @@ export default class Fun extends GargoyleModule {
                             )
                     )
             )
+            .addSubcommand((subcommand)=>subcommand.setName('dice').setDescription('Roll the dice.').addIntegerOption((option)=>option.setName('sides').setDescription('The number of sides on the dice.').setRequired(false).setMinValue(2).setMaxValue(100)))
             .addSubcommand((subcommand) => subcommand.setName('truth-or-dare').setDescription('Truth or dare related commands.'))
             .addSubcommand((subcommand) =>
                 subcommand
@@ -105,6 +106,10 @@ export default class Fun extends GargoyleModule {
 
         if (subcommand === 'truth-or-dare') {
             return truthDare(interaction);
+        }
+
+        if (subcommand === 'dice') {
+            return rollDice(interaction);
         }
 
         if (subcommand === '8ball') {
@@ -315,6 +320,12 @@ function transformText(subcommand: string, text: string): string {
     }
 
     return text;
+}
+
+function rollDice(interaction: ChatInputCommandInteraction): Promise<InteractionResponse<boolean>> {
+    const sides = interaction.options.getInteger('sides') || 6;
+    const result = Math.floor(Math.random() * sides) + 1;
+    return interaction.reply(`You rolled a ${result} on a ${sides}-sided die.`);
 }
 
 function truthDare(interaction: ChatInputCommandInteraction): Promise<InteractionResponse<boolean>> {
